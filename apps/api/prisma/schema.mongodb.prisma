@@ -1,0 +1,79 @@
+// =============================================================================
+// OmniChat — Prisma Schema (MongoDB variant)
+// =============================================================================
+// Activated by: scripts/use-provider.sh mongodb
+// Key differences from SQL variants:
+//   - provider = "mongodb"
+//   - All @id fields use @map("_id") to align with MongoDB's native _id field
+//   - No @@index directives needed for _id (MongoDB indexes _id automatically)
+//   - No @db.Text — MongoDB stores strings without length limits natively
+//   - No onDelete: Cascade — MongoDB doesn't enforce referential integrity;
+//     cascade deletion must be handled in application code (ChatService)
+//   - Relations are purely "virtual" (Prisma-level only) — no foreign key
+//     constraints exist in MongoDB
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  visitorId String
+  status    String   @default("active")
+  agentId   String?  @db.ObjectId
+  metadata  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent    AdminUser? @relation(fields: [agentId], references: [id])
+  messages Message[]
+
+  @@index([status])
+  @@index([agentId])
+  @@index([visitorId])
+}
+
+model Message {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  senderType     String
+  senderId       String?
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model AdminUser {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         String   @default("agent")
+  isOnline     Boolean  @default(false)
+  lastSeenAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  conversations Conversation[]
+}
+
+model SiteConfig {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  siteName       String   @unique
+  bubbleColor    String   @default("#4F46E5")
+  welcomeMessage String   @default("Hello! How can we help you today?")
+  allowedOrigins String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

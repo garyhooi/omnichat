@@ -1,0 +1,74 @@
+// =============================================================================
+// OmniChat — Prisma Schema (MySQL variant)
+// =============================================================================
+// Activated by: scripts/use-provider.sh mysql
+// Differences from base:
+//   - provider = "mysql"
+//   - Uses @db.Text for long string fields
+//   - Standard relational indexes and foreign keys
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  visitorId String
+  status    String   @default("active")
+  agentId   String?
+  metadata  String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent    AdminUser? @relation(fields: [agentId], references: [id])
+  messages Message[]
+
+  @@index([status])
+  @@index([agentId])
+  @@index([visitorId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderType     String
+  senderId       String?
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         String   @default("agent")
+  isOnline     Boolean  @default(false)
+  lastSeenAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  conversations Conversation[]
+}
+
+model SiteConfig {
+  id             String   @id @default(cuid())
+  siteName       String   @unique
+  bubbleColor    String   @default("#4F46E5")
+  welcomeMessage String   @default("Hello! How can we help you today?") @db.Text
+  allowedOrigins String   @db.Text
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

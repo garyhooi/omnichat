@@ -1,0 +1,24 @@
+{
+  "name": "omnichat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "High-performance self-hosted open-source live chat system",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:admin": "npm run build:admin --workspace=apps/web",
+    "build:client": "npm run build:client --workspace=apps/web",
+    "prisma:generate": "npm run prisma:generate --workspace=apps/api",
+    "prisma:push": "npm run prisma:push --workspace=apps/api",
+    "use-provider": "./scripts/use-provider.sh"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

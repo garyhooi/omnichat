@@ -1,0 +1,26 @@
+{
+  "name": "@omnichat/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OmniChat Vue 3 Web Components (Admin Portal & Visitor Widget)",
+  "scripts": {
+    "dev": "vite",
+    "build:admin": "vite build --config vite.config.admin.ts",
+    "build:client": "vite build --config vite.config.client.ts",
+    "build": "npm run build:admin && npm run build:client",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "socket.io-client": "^4.7.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vue-tsc": "^1.8.27"
+  }
+}
