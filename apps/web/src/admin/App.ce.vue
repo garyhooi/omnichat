@@ -18,12 +18,18 @@ const props = defineProps({
 interface Message {
   id: string
   conversationId: string
-  senderType: 'visitor' | 'agent'
+  senderType: 'visitor' | 'agent' | 'system'
   senderId?: string
   content: string
   senderDisplayName?: string
   createdAt: string
   readAt?: string
+}
+
+interface QuickReply {
+  id: string
+  title: string
+  content: string
 }
 
 interface Conversation {
@@ -77,6 +83,14 @@ const websitePosition = ref('bottom-right')
 const bubbleIcon = ref('💬')
 const siteConfigId = ref<string | null>(null)
 const enableReadReceipts = ref(true)
+
+// Quick Replies state
+const settingsTab = ref<'widget' | 'quick-replies'>('widget')
+const quickReplies = ref<QuickReply[]>([])
+const showQuickReplyPopover = ref(false)
+const editingQuickReplyId = ref<string | null>(null)
+const qrDraftTitle = ref('')
+const qrDraftContent = ref('')
 
 const emit = defineEmits(['omnichat:logout'])
 
@@ -152,6 +166,30 @@ function connect() {
       scrollToBottom()
       markUnreadVisitorMessagesAsRead()
     })
+  })
+
+  s.on('inactivity_warning', (data: { conversationId: string; message: string }) => {
+    if (data.conversationId === activeConversationId.value) {
+      messages.value.push({
+        id: 'sys_' + Date.now(),
+        conversationId: data.conversationId,
+        senderType: 'system',
+        content: data.message,
+        createdAt: new Date().toISOString()
+      })
+      nextTick(() => scrollToBottom())
+    }
+    // Update the preview message in the sidebar
+    const conv = conversations.value.find((c) => c.id === data.conversationId)
+    if (conv) {
+      conv.messages = [{
+        id: 'sys_' + Date.now(),
+        conversationId: data.conversationId,
+        senderType: 'system',
+        content: data.message,
+        createdAt: new Date().toISOString()
+      }]
+    }
   })
 
   s.on('new_message', (data: { message: Message }) => {
@@ -315,8 +353,26 @@ function sendMessage() {
 
 let typingTimeout: ReturnType<typeof setTimeout> | null = null
 
+const filteredQuickReplies = computed(() => {
+  if (!newMessage.value.startsWith('/')) return []
+  const query = newMessage.value.substring(1).toLowerCase()
+  return quickReplies.value.filter(qr => 
+    qr.title.toLowerCase().includes(query) || 
+    qr.content.toLowerCase().includes(query)
+  )
+})
+
+const activeQuickReplyIndex = ref(0)
+
 function handleInputChange() {
   if (!activeConversationId.value) return
+
+  if (newMessage.value.startsWith('/')) {
+    showQuickReplyPopover.value = true
+    activeQuickReplyIndex.value = 0
+  } else {
+    showQuickReplyPopover.value = false
+  }
 
   socket.value?.emit('typing_start', {
     conversationId: activeConversationId.value,
@@ -415,6 +471,106 @@ async function loadSettings() {
   }
 }
 
+async function loadQuickReplies() {
+  try {
+    const res = await fetch(`${props.serverUrl}/quick-replies`, {
+      headers: { 'Authorization': `Bearer ${props.token}` },
+    })
+    if (res.ok) {
+      quickReplies.value = await res.json()
+    }
+  } catch (err) {
+    console.error('Failed to load quick replies', err)
+  }
+}
+
+function startEditingQuickReply(qr?: QuickReply) {
+  if (qr) {
+    editingQuickReplyId.value = qr.id
+    qrDraftTitle.value = qr.title
+    qrDraftContent.value = qr.content
+  } else {
+    editingQuickReplyId.value = 'new'
+    qrDraftTitle.value = ''
+    qrDraftContent.value = ''
+  }
+}
+
+function cancelEditingQuickReply() {
+  editingQuickReplyId.value = null
+  qrDraftTitle.value = ''
+  qrDraftContent.value = ''
+}
+
+async function saveQuickReply() {
+  if (!qrDraftTitle.value.trim() || !qrDraftContent.value.trim()) return
+  
+  try {
+    const isNew = editingQuickReplyId.value === 'new'
+    const url = isNew ? `${props.serverUrl}/quick-replies` : `${props.serverUrl}/quick-replies/${editingQuickReplyId.value}`
+    const method = isNew ? 'POST' : 'PUT'
+    
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${props.token}`,
+      },
+      body: JSON.stringify({
+        title: qrDraftTitle.value.trim(),
+        content: qrDraftContent.value.trim()
+      })
+    })
+    
+    if (res.ok) {
+      await loadQuickReplies()
+      cancelEditingQuickReply()
+    }
+  } catch (err) {
+    console.error('Failed to save quick reply', err)
+  }
+}
+
+async function deleteQuickReply(id: string) {
+  if (!confirm('Are you sure you want to delete this quick reply?')) return
+  try {
+    const res = await fetch(`${props.serverUrl}/quick-replies/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${props.token}` },
+    })
+    if (res.ok) {
+      await loadQuickReplies()
+    }
+  } catch (err) {
+    console.error('Failed to delete quick reply', err)
+  }
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (showQuickReplyPopover.value && filteredQuickReplies.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      activeQuickReplyIndex.value = Math.min(activeQuickReplyIndex.value + 1, filteredQuickReplies.value.length - 1)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      activeQuickReplyIndex.value = Math.max(activeQuickReplyIndex.value - 1, 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      insertQuickReply(filteredQuickReplies.value[activeQuickReplyIndex.value].content)
+    }
+  } else if (e.key === 'Enter') {
+    sendMessage()
+  }
+}
+
+function insertQuickReply(content: string) {
+  newMessage.value = content
+  showQuickReplyPopover.value = false
+  activeQuickReplyIndex.value = 0
+  handleInputChange()
+}
+
+
 async function saveSettings() {
   settingsSaved.value = false
   settingsError.value = ''
@@ -507,6 +663,7 @@ async function handleLogout() {
 onMounted(() => {
   connect()
   loadSettings()
+  loadQuickReplies()
 })
 
 onUnmounted(() => {
@@ -734,15 +891,30 @@ onUnmounted(() => {
           {{ typingUser }} is typing...
         </div>
 
+        <!-- Quick Reply Popover -->
+        <div v-if="showQuickReplyPopover && filteredQuickReplies.length > 0" class="quick-reply-popover" style="position: absolute; bottom: 65px; left: 15px; width: 300px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); z-index: 10;">
+          <div
+            v-for="(qr, index) in filteredQuickReplies"
+            :key="qr.id"
+            class="quick-reply-item"
+            :style="{ padding: '10px', cursor: 'pointer', borderBottom: index < filteredQuickReplies.length - 1 ? '1px solid #f3f4f6' : 'none', backgroundColor: index === activeQuickReplyIndex ? '#f3f4f6' : 'white' }"
+            @click="insertQuickReply(qr.content)"
+            @mouseover="activeQuickReplyIndex = index"
+          >
+            <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 2px;">/{{ qr.title }}</div>
+            <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ qr.content }}</div>
+          </div>
+        </div>
+
         <!-- Input area — always show when conversation is selected -->
         <div class="chat-input-area" style="flex: 0 0 auto !important; min-height: 60px !important;">
           <input
             v-model="newMessage"
             class="chat-input"
             type="text"
-            :placeholder="isActive ? 'Type a message...' : 'Conversation resolved'"
+            :placeholder="isActive ? 'Type a message... (Type / for quick replies)' : 'Conversation resolved'"
             :disabled="!isActive"
-            @keyup.enter="sendMessage"
+            @keydown="handleKeyDown"
             @input="handleInputChange"
           />
           <button
@@ -765,7 +937,7 @@ onUnmounted(() => {
     <!-- Settings Drawer -->
     <template v-if="showSettings">
       <div class="settings-overlay" @click="showSettings = false" />
-      <div class="settings-drawer">
+      <div class="settings-drawer" style="width: 360px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Settings</h3>
           <button
@@ -776,87 +948,154 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <div class="settings-field">
-          <label class="settings-label">Bubble Color</label>
-          <input
-            v-model="bubbleColor"
-            type="color"
-            class="settings-input"
-            style="height: 40px; padding: 4px;"
-          />
+        <div style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+          <button
+            style="flex: 1; padding: 10px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid transparent;"
+            :style="settingsTab === 'widget' ? { borderBottomColor: '#4f46e5', color: '#4f46e5' } : { color: '#6b7280' }"
+            @click="settingsTab = 'widget'"
+          >
+            Widget Setup
+          </button>
+          <button
+            style="flex: 1; padding: 10px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid transparent;"
+            :style="settingsTab === 'quick-replies' ? { borderBottomColor: '#4f46e5', color: '#4f46e5' } : { color: '#6b7280' }"
+            @click="settingsTab = 'quick-replies'"
+          >
+            Quick Replies
+          </button>
         </div>
 
-        <div class="settings-field">
-          <label class="settings-label">Welcome Message</label>
-          <textarea
-            v-model="welcomeMessage"
-            class="settings-input"
-            rows="3"
-            style="resize: vertical;"
-          />
+        <div v-if="settingsTab === 'widget'">
+          <div class="settings-field">
+            <label class="settings-label">Bubble Color</label>
+            <input
+              v-model="bubbleColor"
+              type="color"
+              class="settings-input"
+              style="height: 40px; padding: 4px;"
+            />
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Welcome Message</label>
+            <textarea
+              v-model="welcomeMessage"
+              class="settings-input"
+              rows="3"
+              style="resize: vertical;"
+            />
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Bubble Size</label>
+            <select v-model="bubbleSize" class="settings-input">
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Bubble Pattern</label>
+            <select v-model="bubblePattern" class="settings-input">
+              <option value="solid">Solid</option>
+              <option value="gradient">Gradient</option>
+              <option value="stripes">Stripes</option>
+              <option value="dots">Dots</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Website Position</label>
+            <select v-model="websitePosition" class="settings-input">
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Bubble Icon</label>
+            <select v-model="bubbleIcon" class="settings-input">
+              <option value="💬">💬 Chat</option>
+              <option value="✉️">✉️ Envelope</option>
+              <option value="👋">👋 Wave</option>
+              <option value="❓">❓ Question</option>
+              <option value="🎧">🎧 Headset</option>
+            </select>
+          </div>
+
+          <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input
+              id="enableReadReceipts"
+              type="checkbox"
+              v-model="enableReadReceipts"
+            />
+            <label for="enableReadReceipts" class="settings-label" style="margin-bottom: 0;">Enable Read Receipts</label>
+          </div>
+
+          <button
+            class="send-btn"
+            style="width: 100%; margin-top: 12px;"
+            :style="{ backgroundColor: bubbleColor }"
+            @click="saveSettings"
+          >
+            Save Settings
+          </button>
+
+          <div v-if="settingsSaved" style="color: #10b981; font-size: 13px; margin-top: 8px; text-align: center;">
+            Settings saved successfully
+          </div>
+          <div v-if="settingsError" style="color: #ef4444; font-size: 13px; margin-top: 8px; text-align: center;">
+            {{ settingsError }}
+          </div>
         </div>
 
-        <div class="settings-field">
-          <label class="settings-label">Bubble Size</label>
-          <select v-model="bubbleSize" class="settings-input">
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-        </div>
-
-        <div class="settings-field">
-          <label class="settings-label">Bubble Pattern</label>
-          <select v-model="bubblePattern" class="settings-input">
-            <option value="solid">Solid</option>
-            <option value="gradient">Gradient</option>
-            <option value="stripes">Stripes</option>
-            <option value="dots">Dots</option>
-          </select>
-        </div>
-
-        <div class="settings-field">
-          <label class="settings-label">Website Position</label>
-          <select v-model="websitePosition" class="settings-input">
-            <option value="bottom-right">Bottom Right</option>
-            <option value="bottom-left">Bottom Left</option>
-          </select>
-        </div>
-
-        <div class="settings-field">
-          <label class="settings-label">Bubble Icon</label>
-          <select v-model="bubbleIcon" class="settings-input">
-            <option value="💬">💬 Chat</option>
-            <option value="✉️">✉️ Envelope</option>
-            <option value="👋">👋 Wave</option>
-            <option value="❓">❓ Question</option>
-            <option value="🎧">🎧 Headset</option>
-          </select>
-        </div>
-
-        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
-          <input
-            id="enableReadReceipts"
-            type="checkbox"
-            v-model="enableReadReceipts"
-          />
-          <label for="enableReadReceipts" class="settings-label" style="margin-bottom: 0;">Enable Read Receipts</label>
-        </div>
-
-        <button
-          class="send-btn"
-          style="width: 100%; margin-top: 12px;"
-          :style="{ backgroundColor: bubbleColor }"
-          @click="saveSettings"
-        >
-          Save Settings
-        </button>
-
-        <div v-if="settingsSaved" style="color: #10b981; font-size: 13px; margin-top: 8px; text-align: center;">
-          Settings saved successfully
-        </div>
-        <div v-if="settingsError" style="color: #ef4444; font-size: 13px; margin-top: 8px; text-align: center;">
-          {{ settingsError }}
+        <div v-if="settingsTab === 'quick-replies'" style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Quick Replies List -->
+          <div v-if="!editingQuickReplyId">
+            <button
+              class="send-btn"
+              style="width: 100%; margin-bottom: 16px; background-color: #10b981;"
+              @click="startEditingQuickReply()"
+            >
+              + Add Quick Reply
+            </button>
+            
+            <div v-if="quickReplies.length === 0" style="text-align: center; color: #6b7280; font-size: 13px;">
+              No quick replies found.
+            </div>
+            
+            <div v-for="qr in quickReplies" :key="qr.id" style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 600;">{{ qr.title }}</h4>
+                <div style="display: flex; gap: 8px;">
+                  <button @click="startEditingQuickReply(qr)" style="background: none; border: none; cursor: pointer; color: #4f46e5; font-size: 12px;">Edit</button>
+                  <button @click="deleteQuickReply(qr.id)" style="background: none; border: none; cursor: pointer; color: #ef4444; font-size: 12px;">Delete</button>
+                </div>
+              </div>
+              <p style="margin: 0; font-size: 12px; color: #6b7280; white-space: pre-wrap;">{{ qr.content }}</p>
+            </div>
+          </div>
+          
+          <!-- Edit/Create Form -->
+          <div v-if="editingQuickReplyId" style="background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 600;">{{ editingQuickReplyId === 'new' ? 'New Quick Reply' : 'Edit Quick Reply' }}</h4>
+            
+            <div class="settings-field">
+              <label class="settings-label">Title / Shortcut</label>
+              <input v-model="qrDraftTitle" type="text" class="settings-input" placeholder="e.g. Greeting" />
+            </div>
+            
+            <div class="settings-field">
+              <label class="settings-label">Message Content</label>
+              <textarea v-model="qrDraftContent" class="settings-input" rows="4" placeholder="Enter the full message..." style="resize: vertical;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+              <button class="send-btn" style="flex: 1;" @click="saveQuickReply">Save</button>
+              <button style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer;" @click="cancelEditingQuickReply">Cancel</button>
+            </div>
+          </div>
         </div>
       </div>
     </template>

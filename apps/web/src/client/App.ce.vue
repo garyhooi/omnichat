@@ -19,7 +19,7 @@ const props = defineProps({
 interface Message {
   id: string
   conversationId: string
-  senderType: 'visitor' | 'agent'
+  senderType: 'visitor' | 'agent' | 'system'
   senderId?: string
   content: string
   senderDisplayName?: string
@@ -142,8 +142,8 @@ function connect() {
 
   s.on('conversation_started', (data: { conversation: { id: string } }) => {
     conversationId.value = data.conversation.id
-    // Store conversation ID so the visitor can resume on page refresh
-    sessionStorage.setItem('omnichat_conversation_id', data.conversation.id)
+    // Store conversation ID so the visitor can resume on page refresh or across tabs
+    localStorage.setItem('omnichat_conversation_id', data.conversation.id)
   })
 
   s.on('conversation_history', (data: { conversation: { messages?: Message[]; status?: string; rating?: number } }) => {
@@ -163,6 +163,19 @@ function connect() {
         markUnreadMessagesAsRead()
       }
     })
+  })
+
+  s.on('inactivity_warning', (data: { conversationId: string; message: string }) => {
+    if (data.conversationId === conversationId.value) {
+      messages.value.push({
+        id: 'sys_' + Date.now(),
+        conversationId: data.conversationId,
+        senderType: 'system',
+        content: data.message,
+        createdAt: new Date().toISOString()
+      })
+      nextTick(() => scrollToBottom())
+    }
   })
 
   s.on('new_message', (data: { message: Message }) => {
@@ -216,8 +229,8 @@ function connect() {
 
   socket.value = s
 
-  // Attempt to rejoin existing conversation from session storage
-  const existingConvId = sessionStorage.getItem('omnichat_conversation_id')
+  // Attempt to rejoin existing conversation from local storage
+  const existingConvId = localStorage.getItem('omnichat_conversation_id')
   if (existingConvId) {
     conversationId.value = existingConvId
     s.on('connect', () => {
@@ -352,7 +365,7 @@ function startNewChat() {
   reviewSubmitted.value = false
   reviewRating.value = 0
   reviewComment.value = ''
-  sessionStorage.removeItem('omnichat_conversation_id')
+  localStorage.removeItem('omnichat_conversation_id')
 }
 
 // ---------------------------------------------------------------------------

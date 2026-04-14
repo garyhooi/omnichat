@@ -155,6 +155,18 @@
   border-bottom-left-radius: 4px;
 }
 
+.msg-bubble.system {
+  align-self: center;
+  background: transparent !important;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+  padding: 4px 8px;
+  margin: 10px 0;
+  text-align: center;
+  max-width: 100%;
+}
+
 .msg-time {
   font-size: 11px;
   color: #9ca3af;

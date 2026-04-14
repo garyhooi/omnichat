@@ -144,6 +144,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Rate limiter map: IP/VisitorID -> RateLimitInfo
   private rateLimits = new Map<string, RateLimitInfo>();
 
+  // Inactivity Timers
+  private inactivityWarnings = new Map<string, NodeJS.Timeout>();
+  private inactivityResolves = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
@@ -173,6 +177,56 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     info.count++;
     return false;
+  }
+
+  // =========================================================================
+  // INACTIVITY TIMERS
+  // =========================================================================
+
+  private resetInactivityTimer(conversationId: string) {
+    this.clearInactivityTimer(conversationId);
+
+    // Set 3 minute warning
+    this.inactivityWarnings.set(conversationId, setTimeout(() => {
+      this.server.to(`conv:${conversationId}`).emit('inactivity_warning', {
+        conversationId,
+        message: 'Chat will automatically close in 2 minutes due to inactivity.',
+      });
+    }, 3 * 60 * 1000));
+
+    // Set 5 minute resolve
+    this.inactivityResolves.set(conversationId, setTimeout(async () => {
+      try {
+        const conversation = await this.chatService.resolveConversation(conversationId);
+        
+        // Notify the room
+        this.server.to(`conv:${conversationId}`).emit('conversation_resolved', {
+          conversationId,
+          resolvedBy: 'System (Inactivity)',
+        });
+        
+        // Push a final system message
+        this.server.to(`conv:${conversationId}`).emit('inactivity_warning', {
+          conversationId,
+          message: 'Chat was closed due to inactivity.',
+        });
+
+        // Notify agents
+        this.server.to('agents').emit('conversation_updated', { conversation });
+        
+        this.logger.log(`Conversation ${conversationId} resolved due to inactivity`);
+      } catch (err) {
+        this.logger.error(`Failed to auto-resolve ${conversationId}: ${err.message}`);
+      }
+      this.clearInactivityTimer(conversationId);
+    }, 5 * 60 * 1000));
+  }
+
+  private clearInactivityTimer(conversationId: string) {
+    if (this.inactivityWarnings.has(conversationId)) clearTimeout(this.inactivityWarnings.get(conversationId));
+    if (this.inactivityResolves.has(conversationId)) clearTimeout(this.inactivityResolves.get(conversationId));
+    this.inactivityWarnings.delete(conversationId);
+    this.inactivityResolves.delete(conversationId);
   }
 
   // =========================================================================
@@ -317,6 +371,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     client.emit('conversation_started', { conversation });
 
+    // Start inactivity timer
+    this.resetInactivityTimer(conversation.id);
+
     this.logger.log(
       `Conversation started: ${conversation.id} by visitor ${visitorId}`,
     );
@@ -352,6 +409,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Send conversation history to the joining client
     client.emit('conversation_history', { conversation });
+
+    // Restart timer if conversation is still active
+    if (conversation.status === 'active') {
+      this.resetInactivityTimer(conversationId);
+    }
 
     this.logger.log(
       `Socket ${client.id} joined room ${roomName}`,
@@ -403,6 +465,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           senderDisplayName: client.data.user?.displayName ?? 'Visitor',
         },
       });
+
+      // Reset the inactivity timer for this conversation
+      this.resetInactivityTimer(conversationId);
     } catch (error) {
       // Failed write — do NOT emit. Notify only the sender of the failure.
       this.logger.error(
@@ -550,6 +615,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const conversation =
         await this.chatService.resolveConversation(conversationId);
+
+      this.clearInactivityTimer(conversationId);
 
       // Notify all clients in the room
       this.server.to(`conv:${conversationId}`).emit('conversation_resolved', {

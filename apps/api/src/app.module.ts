@@ -6,6 +6,7 @@ import { ChatModule } from './chat/chat.module';
 import { AuthModule } from './auth/auth.module';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QuickReplyModule } from './quick-reply/quick-reply.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     ChatModule,
     AppConfigModule,
+    QuickReplyModule,
   ],
   providers: [
     {
