@@ -24,7 +24,10 @@ interface JoinConversationPayload {
 
 interface SendMessagePayload {
   conversationId: string;
-  content: string;
+  content?: string;
+  messageType?: string;
+  attachmentUrl?: string;
+  attachmentThumbnailUrl?: string;
 }
 
 interface TypingPayload {
@@ -430,7 +433,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SendMessagePayload,
   ) {
-    const { conversationId, content } = payload;
+    const { conversationId, content, messageType, attachmentUrl, attachmentThumbnailUrl } = payload;
 
     // Rate Limit Check
     const rlKey = `msg:${client.id}`;
@@ -455,7 +458,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId,
         senderType,
         senderId,
-        content,
+        content: content || '',
+        messageType,
+        attachmentUrl,
+        attachmentThumbnailUrl,
       });
 
       // Emit to all clients in the conversation room AND all agents for dashboard preview updates

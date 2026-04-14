@@ -9,7 +9,10 @@ export interface CreateMessageInput {
   conversationId: string;
   senderType: 'visitor' | 'agent';
   senderId?: string;
-  content: string;
+  content?: string;
+  messageType?: string;
+  attachmentUrl?: string;
+  attachmentThumbnailUrl?: string;
 }
 
 export interface CreateConversationInput {
@@ -116,17 +119,20 @@ export class ChatService {
    * the database. The gateway MUST call this before emitting to the room.
    */
   async createMessage(input: CreateMessageInput) {
-    const cleanContent = sanitizeHtml(input.content, {
+    const cleanContent = input.content ? sanitizeHtml(input.content, {
       allowedTags: [], // Strip all HTML tags
       allowedAttributes: {},
-    });
+    }) : null;
 
     const message = await this.prisma.message.create({
       data: {
         conversationId: input.conversationId,
         senderType: input.senderType,
         senderId: input.senderId ?? null,
+        messageType: input.messageType ?? 'text',
         content: cleanContent,
+        attachmentUrl: input.attachmentUrl ?? null,
+        attachmentThumbnailUrl: input.attachmentThumbnailUrl ?? null,
       },
     });
 

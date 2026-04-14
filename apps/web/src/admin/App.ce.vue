@@ -21,6 +21,9 @@ interface Message {
   senderType: 'visitor' | 'agent' | 'system'
   senderId?: string
   content: string
+  messageType?: string
+  attachmentUrl?: string
+  attachmentThumbnailUrl?: string
   senderDisplayName?: string
   createdAt: string
   readAt?: string
@@ -73,6 +76,18 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const settingsSaved = ref(false)
 const settingsError = ref('')
 const showResolveConfirm = ref(false)
+const isUploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+const selectedImage = ref<string | null>(null)
+
+function openImage(url: string) {
+  selectedImage.value = url
+}
+
+function closeImage() {
+  selectedImage.value = null
+}
 
 // Settings state
 const bubbleColor = ref('#4F46E5')
@@ -336,12 +351,108 @@ function markUnreadVisitorMessagesAsRead() {
   })
 }
 
+function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (event) => {
+      const img = new Image()
+      img.src = event.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name, { type: file.type || 'image/jpeg' }))
+          } else {
+            reject(new Error('Canvas to Blob failed'))
+          }
+        }, file.type || 'image/jpeg', quality)
+      }
+      img.onerror = (e) => reject(e)
+    }
+    reader.onerror = (e) => reject(e)
+  })
+}
+
+function triggerFileUpload() {
+  fileInput.value?.click()
+}
+
+async function handleFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+
+  let file = target.files[0]
+  if (file.size > 10 * 1024 * 1024) {
+    alert('File size exceeds 10MB limit.')
+    return
+  }
+
+  isUploading.value = true
+
+  try {
+    if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
+      file = await compressImage(file, 1200, 0.8)
+    }
+  } catch (err) {
+    console.warn('Image compression failed, using original file', err)
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const res = await fetch(`${props.serverUrl}/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${props.token}`,
+      },
+      body: formData,
+    })
+
+    if (!res.ok) {
+      throw new Error('Upload failed')
+    }
+
+    const data = await res.json()
+
+    // Send message as image
+    socket.value?.emit('send_message', {
+      conversationId: activeConversationId.value,
+      content: '', // Optional caption if we want
+      messageType: 'image',
+      attachmentUrl: `${props.serverUrl}${data.url}`,
+      attachmentThumbnailUrl: `${props.serverUrl}${data.thumbnailUrl || data.url}`,
+    })
+  } catch (error) {
+    console.error('File upload error:', error)
+    alert('Failed to upload file.')
+  } finally {
+    isUploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+
 function sendMessage() {
   if (!newMessage.value.trim() || !activeConversationId.value) return
 
   socket.value?.emit('send_message', {
     conversationId: activeConversationId.value,
     content: newMessage.value.trim(),
+    messageType: 'text',
   })
 
   socket.value?.emit('typing_stop', {
@@ -441,7 +552,12 @@ function getVisitorEmail(conv: Conversation) {
 
 function getLastMessage(conv: Conversation) {
   if (conv.messages && conv.messages.length > 0) {
-    return conv.messages[0].content.slice(0, 50) + (conv.messages[0].content.length > 50 ? '...' : '')
+    const msg = conv.messages[0]
+    if (msg.messageType === 'image') {
+      return msg.content ? `[Image] ${msg.content}` : '[Image]'
+    }
+    const content = msg.content || ''
+    return content.slice(0, 50) + (content.length > 50 ? '...' : '')
   }
   return 'No messages yet'
 }
@@ -863,10 +979,21 @@ onUnmounted(() => {
             v-for="msg in messages"
             :key="msg.id"
             :class="['message-bubble', msg.senderType]"
-            :style="msg.senderType === 'agent' ? { backgroundColor: bubbleColor } : {}"
+            :style="msg.senderType === 'agent' ? { backgroundColor: bubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
           >
-            <div>{{ msg.content }}</div>
-            <div class="message-meta">
+            <template v-if="msg.messageType === 'image'">
+              <img 
+                :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" 
+                alt="Attachment" 
+                style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" 
+                @click="openImage(msg.attachmentUrl || '')" 
+              />
+              <div v-if="msg.content" style="padding: 8px;">{{ msg.content }}</div>
+            </template>
+            <template v-else>
+              <div>{{ msg.content }}</div>
+            </template>
+            <div class="message-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
               <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
               <span v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt" style="color: #10b981; font-weight: bold; margin-left: 4px;" title="Read">
                 &#10003;&#10003;
@@ -908,22 +1035,38 @@ onUnmounted(() => {
 
         <!-- Input area — always show when conversation is selected -->
         <div class="chat-input-area" style="flex: 0 0 auto !important; min-height: 60px !important;">
+          <button
+            class="attachment-btn"
+            style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 10px; color: #6b7280;"
+            :disabled="!isActive || isUploading"
+            @click="triggerFileUpload"
+            title="Attach Image"
+          >
+            &#128206;
+          </button>
+          <input
+            type="file"
+            ref="fileInput"
+            style="display: none;"
+            accept="image/*"
+            @change="handleFileUpload"
+          />
           <input
             v-model="newMessage"
             class="chat-input"
             type="text"
-            :placeholder="isActive ? 'Type a message... (Type / for quick replies)' : 'Conversation resolved'"
-            :disabled="!isActive"
+            :placeholder="isUploading ? 'Uploading image...' : (isActive ? 'Type a message... (Type / for quick replies)' : 'Conversation resolved')"
+            :disabled="!isActive || isUploading"
             @keydown="handleKeyDown"
             @input="handleInputChange"
           />
           <button
             class="send-btn"
             :style="{ backgroundColor: bubbleColor }"
-            :disabled="!newMessage.trim() || !isActive"
+            :disabled="(!newMessage.trim() && !isUploading) || !isActive"
             @click="sendMessage"
           >
-            Send
+            {{ isUploading ? '...' : 'Send' }}
           </button>
         </div>
       </template>
@@ -1099,5 +1242,11 @@ onUnmounted(() => {
         </div>
       </div>
     </template>
+  </div>
+
+  <!-- Lightbox overlay -->
+  <div v-if="selectedImage" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2147483647; display: flex; align-items: center; justify-content: center;" @click="closeImage">
+    <button style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 32px; cursor: pointer;">&times;</button>
+    <img :src="selectedImage" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;" @click.stop />
   </div>
 </template>

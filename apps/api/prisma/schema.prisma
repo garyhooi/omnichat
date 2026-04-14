@@ -57,7 +57,10 @@ model Message {
   conversationId String   @db.ObjectId
   senderType     String
   senderId       String?
-  content        String
+  messageType    String   @default("text")
+  content        String?
+  attachmentUrl  String?
+  attachmentThumbnailUrl String?
   readAt         DateTime?
   createdAt      DateTime @default(now())
 
