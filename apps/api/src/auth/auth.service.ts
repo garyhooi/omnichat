@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './jwt.strategy';
 
@@ -77,6 +78,18 @@ export class AuthService {
   async validateToken(token: string) {
     try {
       const payload = this.jwtService.verify<JwtPayload>(token);
+      if (!payload.jti) {
+        throw new UnauthorizedException('Invalid token: missing jti');
+      }
+
+      const session = await this.prisma.session.findUnique({
+        where: { jti: payload.jti },
+      });
+
+      if (!session || session.revoked || session.expiresAt < new Date()) {
+        throw new UnauthorizedException('Session expired or revoked');
+      }
+
       const user = await this.prisma.adminUser.findUnique({
         where: { id: payload.sub },
       });
@@ -88,26 +101,50 @@ export class AuthService {
         username: user.username,
         role: user.role,
         displayName: user.displayName,
+        jti: payload.jti,
       };
     } catch {
       throw new UnauthorizedException('Invalid token');
     }
   }
 
-  private generateToken(user: { id: string; username: string; role: string }) {
+  async generateToken(user: { id: string; username: string; role: string }) {
+    const jti = crypto.randomUUID();
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
       role: user.role,
+      jti,
     };
 
+    const accessToken = this.jwtService.sign(payload);
+    
+    // Default expiration is 24 hours in auth.module.ts
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    await this.prisma.session.create({
+      data: {
+        jti,
+        adminUserId: user.id,
+        expiresAt,
+      },
+    });
+
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken,
       user: {
         id: user.id,
         username: user.username,
         role: user.role,
       },
     };
+  }
+
+  async logout(jti: string) {
+    await this.prisma.session.update({
+      where: { jti },
+      data: { revoked: true },
+    });
   }
 }

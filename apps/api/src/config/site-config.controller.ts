@@ -28,8 +28,28 @@ class CreateSiteConfigDto {
   welcomeMessage?: string;
 
   @IsString()
+  @IsOptional()
+  bubbleSize?: string;
+
+  @IsString()
+  @IsOptional()
+  bubblePattern?: string;
+
+  @IsString()
+  @IsOptional()
+  websitePosition?: string;
+
+  @IsString()
+  @IsOptional()
+  bubbleIcon?: string;
+
+  @IsString()
   @IsNotEmpty()
   allowedOrigins: string;
+
+  @IsBoolean()
+  @IsOptional()
+  enableReadReceipts?: boolean;
 }
 
 class UpdateSiteConfigDto {
@@ -43,11 +63,31 @@ class UpdateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  bubbleSize?: string;
+
+  @IsString()
+  @IsOptional()
+  bubblePattern?: string;
+
+  @IsString()
+  @IsOptional()
+  websitePosition?: string;
+
+  @IsString()
+  @IsOptional()
+  bubbleIcon?: string;
+
+  @IsString()
+  @IsOptional()
   allowedOrigins?: string;
 
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  enableReadReceipts?: boolean;
 }
 
 // ---------------------------------------------------------------------------

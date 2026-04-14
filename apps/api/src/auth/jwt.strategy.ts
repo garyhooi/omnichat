@@ -8,6 +8,7 @@ export interface JwtPayload {
   sub: string; // AdminUser.id
   username: string;
   role: string;
+  jti?: string;
 }
 
 @Injectable()
@@ -28,6 +29,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * Returns the user object that gets attached to request.user.
    */
   async validate(payload: JwtPayload) {
+    if (!payload.jti) {
+      throw new UnauthorizedException('Invalid token: missing jti');
+    }
+
+    const session = await this.prisma.session.findUnique({
+      where: { jti: payload.jti },
+    });
+
+    if (!session || session.revoked || session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Session expired or revoked');
+    }
+
     const user = await this.prisma.adminUser.findUnique({
       where: { id: payload.sub },
     });
@@ -41,6 +54,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       username: user.username,
       role: user.role,
       displayName: user.displayName,
+      jti: payload.jti,
     };
   }
 }

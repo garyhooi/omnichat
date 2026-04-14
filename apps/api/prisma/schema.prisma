@@ -26,9 +26,13 @@ model Conversation {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   visitorId String
   status    String   @default("active")
-  agentId   String?  @db.ObjectId
-  metadata  String?
-  createdAt DateTime @default(now())
+  agentId          String?  @db.ObjectId
+  metadata         String?
+  rating           Int?
+  review           String?
+  agentRemarks     String?
+  assignedUsername String?
+  createdAt        DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   agent    AdminUser? @relation(fields: [agentId], references: [id])
@@ -45,6 +49,7 @@ model Message {
   senderType     String
   senderId       String?
   content        String
+  readAt         DateTime?
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id])
@@ -65,15 +70,34 @@ model AdminUser {
   updatedAt    DateTime @updatedAt
 
   conversations Conversation[]
+  sessions      Session[]
+}
+
+model Session {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  jti         String   @unique
+  adminUserId String   @db.ObjectId
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  admin       AdminUser @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId])
 }
 
 model SiteConfig {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  siteName       String   @unique
-  bubbleColor    String   @default("#4F46E5")
-  welcomeMessage String   @default("Hello! How can we help you today?")
-  allowedOrigins String
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  siteName           String   @unique
+  bubbleColor        String   @default("#4F46E5")
+  welcomeMessage     String   @default("Hello! How can we help you today?")
+  bubbleSize         String   @default("medium")
+  bubblePattern      String   @default("solid")
+  websitePosition    String   @default("bottom-right")
+  bubbleIcon         String   @default("💬")
+  allowedOrigins     String
+  isActive           Boolean  @default(true)
+  enableReadReceipts Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

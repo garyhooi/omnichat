@@ -17,8 +17,6 @@
 
 /* Chat bubble trigger */
 .chat-bubble {
-  width: 56px;
-  height: 56px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
@@ -28,7 +26,6 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform 0.2s, box-shadow 0.2s;
   color: #ffffff;
-  font-size: 24px;
 }
 
 .chat-bubble:hover {
@@ -222,4 +219,148 @@
   color: #166534;
   font-size: 13px;
   border-top: 1px solid #bbf7d0;
+}
+
+/* New Features Styles */
+
+.pre-chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #4F46E5;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: inherit;
+  opacity: 0.8;
+  justify-content: flex-end;
+}
+
+.msg-read-receipt {
+  color: #10B981; /* Green color for read */
+  font-weight: bold;
+}
+
+.review-section {
+  background: #f9fafb;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.star-rating {
+  font-size: 24px;
+  cursor: pointer;
+  color: #d1d5db;
+}
+
+.star-rating span {
+  transition: color 0.2s;
+}
+
+.star-rating span.active, .star-rating span:hover {
+  color: #f59e0b;
+}
+
+.submit-review-btn {
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.review-thank-you {
+  margin: 15px 0;
+  color: #10B981;
+  font-weight: 500;
+}
+
+.start-new-chat-btn {
+  background: none;
+  border: 1px solid #4F46E5;
+  color: #4F46E5;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.end-chat-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 5px;
+}
+
+.end-chat-btn:hover {
+  color: #dc2626;
+}
+
+.confirm-action-area {
+  padding: 12px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff0f0;
+}
+
+.confirm-text {
+  font-size: 14px;
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-cancel-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+}
+
+.confirm-yes-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #ef4444;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
 }

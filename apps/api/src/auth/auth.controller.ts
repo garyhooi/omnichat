@@ -1,4 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
@@ -44,5 +45,14 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto.username, dto.password);
+  }
+
+  @Post('logout')
+  @UseGuards(AuthGuard('jwt'))
+  async logout(@Request() req: any) {
+    if (req.user && req.user.jti) {
+      await this.authService.logout(req.user.jti);
+    }
+    return { success: true };
   }
 }

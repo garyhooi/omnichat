@@ -35,6 +35,25 @@ interface ResolveConversationPayload {
 interface StartConversationPayload {
   visitorId: string;
   metadata?: string;
+  visitorName?: string;
+  visitorEmail?: string;
+}
+
+interface ReadMessagePayload {
+  messageId: string;
+  conversationId: string;
+}
+
+interface SubmitReviewPayload {
+  conversationId: string;
+  rating: number;
+  review?: string;
+}
+
+interface UpdateConversationDetailsPayload {
+  conversationId: string;
+  assignedUsername?: string;
+  agentRemarks?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,12 +118,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.user = user;
         client.data.isVisitor = false;
 
+        // Join global agents room for broadcasts
+        client.join('agents');
+
         // Mark agent as online
         await this.chatService.setAgentOnline(user.id, true);
 
-        // Broadcast updated presence to all connected clients
+        // Broadcast updated presence to all connected agents
         const onlineAgents = await this.chatService.getOnlineAgents();
-        this.server.emit('agent_presence', { agents: onlineAgents });
+        this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
 
         // Send conversation list to the newly connected agent immediately
         const conversations = await this.chatService.listConversations();
@@ -144,7 +166,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await this.chatService.setAgentOnline(client.data.user.id, false);
 
         const onlineAgents = await this.chatService.getOnlineAgents();
-        this.server.emit('agent_presence', { agents: onlineAgents });
+        this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
       }
 
       this.logger.log(
@@ -172,9 +194,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const visitorId = payload.visitorId || client.data.visitorId || client.id;
 
+    // Combine any existing metadata with the new pre-chat form details
+    const parsedMetadata = payload.metadata ? JSON.parse(payload.metadata) : {};
+    if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
+    if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
+
     const conversation = await this.chatService.createConversation({
       visitorId,
-      metadata: payload.metadata,
+      metadata: JSON.stringify(parsedMetadata),
     });
 
     // Join the visitor to the conversation room
@@ -182,7 +209,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.join(roomName);
 
     // Notify all agents of the new conversation
-    this.server.emit('new_conversation', { conversation });
+    this.server.to('agents').emit('new_conversation', { conversation });
 
     client.emit('conversation_started', { conversation });
 
@@ -255,8 +282,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         content,
       });
 
-      // Emit to all clients in the conversation room (including sender)
-      this.server.to(`conv:${conversationId}`).emit('new_message', {
+      // Emit to all clients in the conversation room AND all agents for dashboard preview updates
+      this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
         message: {
           ...message,
           senderDisplayName: client.data.user?.displayName ?? 'Visitor',
@@ -271,6 +298,78 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId,
         error: 'Failed to send message. Please try again.',
       });
+    }
+  }
+
+  // =========================================================================
+  // MESSAGE & CONVERSATION ENHANCEMENTS (Read Receipts, Reviews)
+  // =========================================================================
+
+  @SubscribeMessage('read_message')
+  async handleReadMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: ReadMessagePayload,
+  ) {
+    try {
+      const message = await this.chatService.markMessageAsRead(payload.messageId);
+      
+      // Notify the room that this message was read
+      this.server.to(`conv:${payload.conversationId}`).emit('message_read', {
+        messageId: payload.messageId,
+        conversationId: payload.conversationId,
+        readAt: message.readAt,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to mark message ${payload.messageId} as read: ${error.message}`);
+    }
+  }
+
+  @SubscribeMessage('submit_review')
+  async handleSubmitReview(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: SubmitReviewPayload,
+  ) {
+    try {
+      const conversation = await this.chatService.submitReview(
+        payload.conversationId,
+        payload.rating,
+        payload.review,
+      );
+
+      this.server.to(`conv:${payload.conversationId}`).emit('review_submitted', {
+        conversationId: payload.conversationId,
+        rating: payload.rating,
+        review: payload.review,
+      });
+
+      this.server.to('agents').emit('conversation_updated', { conversation });
+    } catch (error) {
+      this.logger.error(`Failed to submit review for ${payload.conversationId}: ${error.message}`);
+    }
+  }
+
+  @SubscribeMessage('update_conversation_details')
+  async handleUpdateConversationDetails(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: UpdateConversationDetailsPayload,
+  ) {
+    if (client.data.isVisitor || !client.data.user) {
+      client.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const conversation = await this.chatService.updateConversationDetails(
+        payload.conversationId,
+        payload.assignedUsername,
+        payload.agentRemarks,
+      );
+
+      // Notify all agents of the status change so they see the updated remarks/username
+      this.server.emit('conversation_updated', { conversation });
+    } catch (error) {
+      this.logger.error(`Failed to update conversation details for ${payload.conversationId}: ${error.message}`);
+      client.emit('error', { message: 'Failed to update details' });
     }
   }
 
@@ -345,7 +444,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       // Notify all agents of the status change
-      this.server.emit('conversation_updated', { conversation });
+      this.server.to('agents').emit('conversation_updated', { conversation });
 
       this.logger.log(
         `Conversation ${conversationId} resolved by ${client.data.user.displayName}`,

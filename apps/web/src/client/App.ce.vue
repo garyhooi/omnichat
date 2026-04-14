@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,7 @@ interface Message {
   content: string
   senderDisplayName?: string
   createdAt: string
+  readAt?: string
 }
 
 const socket = ref<Socket | null>(null)
@@ -36,6 +37,77 @@ const typingUser = ref('')
 const isResolved = ref(false)
 const visitorId = ref('')
 const messagesArea = ref<HTMLElement | null>(null)
+
+// Site config state
+const siteBubbleColor = ref('')
+const siteWelcomeMessage = ref('')
+const siteBubbleSize = ref('medium')
+const siteBubblePattern = ref('solid')
+const siteWebsitePosition = ref('bottom-right')
+const siteBubbleIcon = ref('💬')
+const siteEnableReadReceipts = ref(true)
+const currentBubbleColor = computed(() => siteBubbleColor.value || props.bubbleColor)
+const dynamicBubbleStyle = computed(() => {
+  let bg = currentBubbleColor.value
+  let size = '56px'
+  let fontSize = '24px'
+
+  // Pattern handling
+  if (siteBubblePattern.value === 'gradient') {
+    bg = `linear-gradient(135deg, ${currentBubbleColor.value}, #ffffff)`
+  } else if (siteBubblePattern.value === 'stripes') {
+    bg = `repeating-linear-gradient(45deg, ${currentBubbleColor.value}, ${currentBubbleColor.value} 10px, #ffffff 10px, #ffffff 20px)`
+  } else if (siteBubblePattern.value === 'dots') {
+    bg = `radial-gradient(#ffffff 2px, transparent 2px), radial-gradient(#ffffff 2px, transparent 2px)`
+  }
+
+  // Size handling
+  if (siteBubbleSize.value === 'small') {
+    size = '48px'
+    fontSize = '20px'
+  } else if (siteBubbleSize.value === 'large') {
+    size = '64px'
+    fontSize = '28px'
+  }
+
+  const baseStyle: any = {
+    width: size,
+    height: size,
+    fontSize: fontSize,
+  }
+
+  if (siteBubblePattern.value === 'dots') {
+    baseStyle.backgroundColor = currentBubbleColor.value
+    baseStyle.backgroundImage = bg
+    baseStyle.backgroundSize = '10px 10px'
+    baseStyle.backgroundPosition = '0 0, 5px 5px'
+  } else {
+    baseStyle.background = bg
+  }
+
+  return baseStyle
+})
+
+const dynamicPanelStyle = computed(() => {
+  return siteWebsitePosition.value === 'bottom-left' 
+    ? { left: '0', right: 'auto' } 
+    : { right: '0', left: 'auto' }
+})
+
+// Pre-chat form state
+const visitorName = ref('')
+const visitorEmail = ref('')
+
+// Unread count state
+const unreadCount = ref(0)
+
+// Post-chat review state
+const reviewRating = ref(0)
+const reviewComment = ref('')
+const reviewSubmitted = ref(false)
+
+// End chat confirmation state
+const showEndChatConfirm = ref(false)
 
 // Generate or retrieve a persistent visitor ID
 function getVisitorId(): string {
@@ -69,16 +141,50 @@ function connect() {
     sessionStorage.setItem('omnichat_conversation_id', data.conversation.id)
   })
 
-  s.on('conversation_history', (data: { conversation: { messages?: Message[]; status?: string } }) => {
+  s.on('conversation_history', (data: { conversation: { messages?: Message[]; status?: string; rating?: number } }) => {
     messages.value = data.conversation.messages || []
     isResolved.value = data.conversation.status === 'resolved'
-    nextTick(() => scrollToBottom())
+    if (data.conversation.rating) {
+      reviewSubmitted.value = true
+    }
+    
+    if (!isOpen.value) {
+      unreadCount.value = messages.value.filter(m => m.senderType === 'agent' && !m.readAt).length
+    }
+
+    nextTick(() => {
+      scrollToBottom()
+      if (isOpen.value) {
+        markUnreadMessagesAsRead()
+      }
+    })
   })
 
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === conversationId.value) {
       messages.value.push(data.message)
-      nextTick(() => scrollToBottom())
+      
+      if (!isOpen.value && data.message.senderType === 'agent') {
+        unreadCount.value++
+      }
+
+      nextTick(() => {
+        scrollToBottom()
+        if (isOpen.value && data.message.senderType === 'agent') {
+          // If panel is open and agent sent a message, mark it read
+          socket.value?.emit('read_message', {
+            messageId: data.message.id,
+            conversationId: conversationId.value
+          })
+        }
+      })
+    }
+  })
+
+  s.on('message_read', (data: { messageId: string; readAt: string }) => {
+    const msg = messages.value.find((m) => m.id === data.messageId)
+    if (msg) {
+      msg.readAt = data.readAt
     }
   })
 
@@ -120,11 +226,35 @@ function connect() {
 // ---------------------------------------------------------------------------
 function toggleWidget() {
   isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    unreadCount.value = 0
+    markUnreadMessagesAsRead()
+  } else {
+    showEndChatConfirm.value = false // reset on close
+  }
+}
+
+function markUnreadMessagesAsRead() {
+  if (!socket.value || !conversationId.value) return
+  const unreadAgentMessages = messages.value.filter(m => m.senderType === 'agent' && !m.readAt)
+  unreadAgentMessages.forEach(m => {
+    socket.value?.emit('read_message', {
+      messageId: m.id,
+      conversationId: conversationId.value
+    })
+  })
 }
 
 function startConversation() {
+  if (!visitorName.value.trim()) {
+    alert('Please provide your name to continue.')
+    return
+  }
+
   socket.value?.emit('start_conversation', {
     visitorId: visitorId.value,
+    visitorName: visitorName.value.trim(),
+    visitorEmail: visitorEmail.value.trim(),
     metadata: JSON.stringify({
       url: window.location.href,
       userAgent: navigator.userAgent,
@@ -164,6 +294,37 @@ function handleInput() {
   }, 2000)
 }
 
+function submitReview() {
+  if (!conversationId.value || reviewRating.value === 0) return
+  
+  socket.value?.emit('submit_review', {
+    conversationId: conversationId.value,
+    rating: reviewRating.value,
+    review: reviewComment.value.trim(),
+  })
+  
+  reviewSubmitted.value = true
+}
+
+function endChat() {
+  showEndChatConfirm.value = true
+}
+
+function confirmEndChat() {
+  if (!conversationId.value) return
+  
+  // Visitor optionally ends chat
+  socket.value?.emit('resolve_conversation', {
+    conversationId: conversationId.value,
+  })
+  isResolved.value = true
+  showEndChatConfirm.value = false
+}
+
+function cancelEndChat() {
+  showEndChatConfirm.value = false
+}
+
 function scrollToBottom() {
   if (messagesArea.value) {
     messagesArea.value.scrollTop = messagesArea.value.scrollHeight
@@ -179,6 +340,9 @@ function startNewChat() {
   conversationId.value = null
   messages.value = []
   isResolved.value = false
+  reviewSubmitted.value = false
+  reviewRating.value = 0
+  reviewComment.value = ''
   sessionStorage.removeItem('omnichat_conversation_id')
 }
 
@@ -190,8 +354,22 @@ onMounted(() => {
   fetch(`${props.serverUrl}/config/active`)
     .then((res) => res.json())
     .then((config) => {
-      // Config could override defaults — but props always win if set explicitly
-      console.log('[OmniChat Widget] Site config loaded:', config)
+      if (config.bubbleColor) siteBubbleColor.value = config.bubbleColor
+      if (config.welcomeMessage) siteWelcomeMessage.value = config.welcomeMessage
+      if (config.bubbleSize) siteBubbleSize.value = config.bubbleSize
+      if (config.bubblePattern) siteBubblePattern.value = config.bubblePattern
+      if (config.websitePosition) siteWebsitePosition.value = config.websitePosition
+      if (config.bubbleIcon) siteBubbleIcon.value = config.bubbleIcon
+      if (config.enableReadReceipts !== undefined) siteEnableReadReceipts.value = config.enableReadReceipts
+      
+      // Apply position to the host element
+      if (siteWebsitePosition.value === 'bottom-left') {
+        const host = document.querySelector('omnichat-widget') as HTMLElement
+        if (host) {
+          host.style.right = 'auto'
+          host.style.left = '20px'
+        }
+      }
     })
     .catch(() => {
       // Config endpoint is optional — widget still works with prop defaults
@@ -207,22 +385,31 @@ onUnmounted(() => {
 
 <template>
   <!-- Floating chat bubble -->
-  <button
-    v-if="!isOpen"
-    class="chat-bubble"
-    :style="{ backgroundColor: bubbleColor }"
-    @click="toggleWidget"
-    aria-label="Open chat"
-  >
-    &#128172;
-  </button>
+  <div style="position: relative; display: inline-block;">
+    <button
+      v-if="!isOpen"
+      type="button"
+      class="chat-bubble"
+      :style="dynamicBubbleStyle"
+      @click="toggleWidget"
+      aria-label="Open chat"
+    >
+      {{ siteBubbleIcon }}
+    </button>
+    <div
+      v-if="!isOpen && unreadCount > 0"
+      style="position: absolute; top: -6px; right: -6px; background-color: #ef4444; color: white; border-radius: 9999px; min-width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; z-index: 10;"
+    >
+      {{ unreadCount }}
+    </div>
+  </div>
 
   <!-- Chat panel -->
-  <div v-if="isOpen" class="chat-panel">
+  <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle">
     <!-- Header -->
-    <div class="panel-header" :style="{ backgroundColor: bubbleColor }">
+    <div class="panel-header" :style="{ backgroundColor: currentBubbleColor }">
       <h3>Chat with us</h3>
-      <button class="close-btn" @click="toggleWidget" aria-label="Close chat">
+      <button type="button" class="close-btn" @click="toggleWidget" aria-label="Close chat">
         &times;
       </button>
     </div>
@@ -230,10 +417,17 @@ onUnmounted(() => {
     <!-- Welcome screen (no active conversation) -->
     <template v-if="!conversationId">
       <div class="welcome-screen">
-        <p>{{ welcomeMessage }}</p>
+        <p>{{ currentWelcomeMessage }}</p>
+        
+        <div class="pre-chat-form">
+          <input v-model="visitorName" type="text" placeholder="Your Name" class="form-input" />
+          <input v-model="visitorEmail" type="text" inputmode="email" placeholder="Your Email (Optional)" class="form-input" />
+        </div>
+
         <button
+          type="button"
           class="start-chat-btn"
-          :style="{ backgroundColor: bubbleColor }"
+          :style="{ backgroundColor: currentBubbleColor }"
           @click="startConversation"
         >
           Start a conversation
@@ -249,10 +443,13 @@ onUnmounted(() => {
           v-for="msg in messages"
           :key="msg.id"
           :class="['msg-bubble', msg.senderType]"
-          :style="msg.senderType === 'visitor' ? { backgroundColor: bubbleColor } : {}"
+          :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor } : {}"
         >
           <div>{{ msg.content }}</div>
-          <div class="msg-time">{{ formatTime(msg.createdAt) }}</div>
+          <div class="msg-meta">
+            <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+            <span v-if="siteEnableReadReceipts && msg.senderType === 'visitor' && msg.readAt" class="msg-read-receipt" title="Read">&#10003;&#10003;</span>
+          </div>
         </div>
       </div>
 
@@ -261,12 +458,30 @@ onUnmounted(() => {
         {{ typingUser }} is typing...
       </div>
 
-      <!-- Resolved state -->
+      <!-- Resolved state & Review -->
       <template v-if="isResolved">
         <div class="resolved-banner">
           This conversation has been resolved.
+          
+          <div v-if="!reviewSubmitted" class="review-section">
+            <p>How was your experience?</p>
+            <div class="star-rating">
+              <span v-for="star in 5" :key="star" 
+                    @click="reviewRating = star"
+                    :class="{ active: star <= reviewRating }">
+                &#9733;
+              </span>
+            </div>
+            <textarea v-model="reviewComment" placeholder="Any comments? (Optional)" class="form-input"></textarea>
+            <button type="button" class="submit-review-btn" :style="{ backgroundColor: currentBubbleColor }" @click="submitReview">Submit Review</button>
+          </div>
+          <div v-else class="review-thank-you">
+            Thank you for your feedback!
+          </div>
+
           <button
-            style="background: none; border: none; color: #4f46e5; cursor: pointer; font-weight: 500; margin-left: 4px;"
+            type="button"
+            class="start-new-chat-btn"
             @click="startNewChat"
           >
             Start a new chat
@@ -276,7 +491,16 @@ onUnmounted(() => {
 
       <!-- Input area (only when conversation is active) -->
       <template v-else>
-        <div class="input-area">
+        <!-- End Chat Confirmation Overlay -->
+        <div v-if="showEndChatConfirm" class="confirm-action-area">
+          <span class="confirm-text">End this chat?</span>
+          <div class="confirm-buttons">
+            <button type="button" class="confirm-yes-btn" @click="confirmEndChat">End</button>
+            <button type="button" class="confirm-cancel-btn" @click="cancelEndChat">Cancel</button>
+          </div>
+        </div>
+
+        <div v-else class="input-area">
           <input
             v-model="newMessage"
             class="msg-input"
@@ -286,12 +510,21 @@ onUnmounted(() => {
             @input="handleInput"
           />
           <button
+            type="button"
             class="send-msg-btn"
-            :style="{ backgroundColor: bubbleColor }"
+            :style="{ backgroundColor: currentBubbleColor }"
             :disabled="!newMessage.trim()"
             @click="sendMessage"
           >
             Send
+          </button>
+          <button
+            type="button"
+            class="end-chat-btn"
+            @click="endChat"
+            title="End Chat"
+          >
+            &#10006;
           </button>
         </div>
       </template>

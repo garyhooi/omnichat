@@ -31,6 +31,10 @@ export class SiteConfigService {
     siteName: string;
     bubbleColor?: string;
     welcomeMessage?: string;
+    bubbleSize?: string;
+    bubblePattern?: string;
+    websitePosition?: string;
+    bubbleIcon?: string;
     allowedOrigins: string;
   }) {
     return this.prisma.siteConfig.create({ data });
@@ -44,6 +48,10 @@ export class SiteConfigService {
     data: {
       bubbleColor?: string;
       welcomeMessage?: string;
+      bubbleSize?: string;
+      bubblePattern?: string;
+      websitePosition?: string;
+      bubbleIcon?: string;
       allowedOrigins?: string;
       isActive?: boolean;
     },

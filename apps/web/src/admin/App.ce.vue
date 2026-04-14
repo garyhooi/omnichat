@@ -23,6 +23,7 @@ interface Message {
   content: string
   senderDisplayName?: string
   createdAt: string
+  readAt?: string
 }
 
 interface Conversation {
@@ -35,6 +36,12 @@ interface Conversation {
   updatedAt: string
   messages?: Message[]
   agent?: { id: string; displayName: string; isOnline: boolean }
+  rating?: number
+  review?: string
+  agentRemarks?: string
+  assignedUsername?: string
+  _count?: { messages: number }
+  unreadCount?: number
 }
 
 const socket = ref<Socket | null>(null)
@@ -50,15 +57,47 @@ const showSettings = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 const settingsSaved = ref(false)
 const settingsError = ref('')
+const showResolveConfirm = ref(false)
 
 // Settings state
 const bubbleColor = ref('#4F46E5')
 const welcomeMessage = ref('Hello! How can we help you today?')
+const bubbleSize = ref('medium')
+const bubblePattern = ref('solid')
+const websitePosition = ref('bottom-right')
+const bubbleIcon = ref('💬')
 const siteConfigId = ref<string | null>(null)
+const enableReadReceipts = ref(true)
 
-const filteredConversations = computed(() =>
-  conversations.value.filter((c) => c.status === activeTab.value),
-)
+const emit = defineEmits(['omnichat:logout'])
+
+const searchQuery = ref('')
+const showConversationDetails = ref(false)
+const draftAssignedUsername = ref('')
+const draftAgentRemarks = ref('')
+
+const filteredConversations = computed(() => {
+  let list = conversations.value.filter((c) => c.status === activeTab.value)
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(c => {
+      const visitorLabel = getVisitorLabel(c).toLowerCase()
+      const email = getVisitorEmail(c)?.toLowerCase() || ''
+      const assigned = (c.assignedUsername || '').toLowerCase()
+      const remarks = (c.agentRemarks || '').toLowerCase()
+      const id = c.id.toLowerCase()
+      const visitorId = c.visitorId.toLowerCase()
+      
+      return visitorLabel.includes(q) || 
+             email.includes(q) || 
+             assigned.includes(q) || 
+             remarks.includes(q) || 
+             id.includes(q) || 
+             visitorId.includes(q)
+    })
+  }
+  return list
+})
 
 const isActive = computed(() => activeConversationData.value?.status === 'active')
 
@@ -76,9 +115,12 @@ function connect() {
   })
 
   s.on('conversations_list', (data: { conversations: Conversation[] }) => {
-    conversations.value = data.conversations
+    conversations.value = data.conversations.map(c => ({
+      ...c,
+      unreadCount: c._count?.messages || 0
+    }))
     if (activeConversationId.value) {
-      const found = data.conversations.find((c) => c.id === activeConversationId.value)
+      const found = conversations.value.find((c) => c.id === activeConversationId.value)
       if (found) {
         activeConversationData.value = found
       }
@@ -86,7 +128,8 @@ function connect() {
   })
 
   s.on('new_conversation', (data: { conversation: Conversation }) => {
-    conversations.value.unshift(data.conversation)
+    const newConv = { ...data.conversation, unreadCount: data.conversation._count?.messages || 0 }
+    conversations.value.unshift(newConv)
   })
 
   s.on('conversation_history', (data: { conversation: Conversation }) => {
@@ -96,19 +139,54 @@ function connect() {
     if (conv) {
       conv.status = data.conversation.status
     }
-    nextTick(() => scrollToBottom())
+    nextTick(() => {
+      scrollToBottom()
+      markUnreadVisitorMessagesAsRead()
+    })
   })
 
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
-      nextTick(() => scrollToBottom())
+      nextTick(() => {
+        scrollToBottom()
+        if (data.message.senderType === 'visitor') {
+          // Admin marks visitor message as read
+          socket.value?.emit('read_message', {
+            messageId: data.message.id,
+            conversationId: activeConversationId.value
+          })
+        }
+      })
     }
     const conv = conversations.value.find(
       (c) => c.id === data.message.conversationId,
     )
     if (conv) {
       conv.messages = [data.message]
+      // Increment unread count if it's a visitor message and we are not viewing this conversation
+      if (data.message.conversationId !== activeConversationId.value && data.message.senderType === 'visitor') {
+        conv.unreadCount = (conv.unreadCount || 0) + 1
+      }
+    }
+  })
+
+  s.on('message_read', (data: { messageId: string; readAt: string }) => {
+    const msg = messages.value.find((m) => m.id === data.messageId)
+    if (msg) {
+      msg.readAt = data.readAt
+    }
+  })
+
+  s.on('review_submitted', (data: { conversationId: string; rating: number; review?: string }) => {
+    const conv = conversations.value.find((c) => c.id === data.conversationId)
+    if (conv) {
+      conv.rating = data.rating
+      conv.review = data.review
+    }
+    if (activeConversationData.value?.id === data.conversationId) {
+      activeConversationData.value.rating = data.rating
+      activeConversationData.value.review = data.review
     }
   })
 
@@ -177,9 +255,38 @@ function selectConversation(conversationId: string) {
   activeConversationId.value = conversationId
   messages.value = []
   isTyping.value = false
+  showResolveConfirm.value = false
   activeConversationData.value = conversations.value.find((c) => c.id === conversationId) || null
 
+  if (activeConversationData.value) {
+    activeConversationData.value.unreadCount = 0
+    draftAssignedUsername.value = activeConversationData.value.assignedUsername || ''
+    draftAgentRemarks.value = activeConversationData.value.agentRemarks || ''
+  }
+  showConversationDetails.value = false
+
   socket.value?.emit('join_conversation', { conversationId })
+}
+
+function saveConversationDetails() {
+  if (!activeConversationId.value) return
+  socket.value?.emit('update_conversation_details', {
+    conversationId: activeConversationId.value,
+    assignedUsername: draftAssignedUsername.value.trim(),
+    agentRemarks: draftAgentRemarks.value.trim(),
+  })
+  showConversationDetails.value = false
+}
+
+function markUnreadVisitorMessagesAsRead() {
+  if (!activeConversationId.value || !socket.value) return
+  const unreadVisitorMessages = messages.value.filter((m) => m.senderType === 'visitor' && !m.readAt)
+  unreadVisitorMessages.forEach((m) => {
+    socket.value?.emit('read_message', {
+      messageId: m.id,
+      conversationId: activeConversationId.value
+    })
+  })
 }
 
 function sendMessage() {
@@ -214,12 +321,22 @@ function handleInputChange() {
   }, 2000)
 }
 
-function resolveConversation() {
+function confirmResolveConversation() {
+  showResolveConfirm.value = true
+}
+
+function executeResolveConversation() {
   if (!activeConversationId.value) return
 
   socket.value?.emit('resolve_conversation', {
     conversationId: activeConversationId.value,
   })
+  
+  showResolveConfirm.value = false
+}
+
+function cancelResolveConversation() {
+  showResolveConfirm.value = false
 }
 
 function scrollToBottom() {
@@ -234,15 +351,27 @@ function formatTime(dateStr: string) {
 }
 
 function getVisitorLabel(conv: Conversation) {
+  const shortId = conv.visitorId ? `#${conv.visitorId.substring(conv.visitorId.length > 6 ? conv.visitorId.length - 5 : 0)}` : ''
   if (conv.metadata) {
     try {
       const meta = JSON.parse(conv.metadata)
-      return meta.name || `Visitor ${conv.visitorId.slice(0, 8)}`
+      const name = meta.visitorName || meta.name
+      if (name) return `${name} ${shortId}`
+    } catch {}
+  }
+  return `Visitor ${shortId}`
+}
+
+function getVisitorEmail(conv: Conversation) {
+  if (conv.metadata) {
+    try {
+      const meta = JSON.parse(conv.metadata)
+      if (meta.visitorEmail) return meta.visitorEmail
     } catch {
-      return `Visitor ${conv.visitorId.slice(0, 8)}`
+      return null
     }
   }
-  return `Visitor ${conv.visitorId.slice(0, 8)}`
+  return null
 }
 
 function getLastMessage(conv: Conversation) {
@@ -263,6 +392,13 @@ async function loadSettings() {
         siteConfigId.value = config.id
         bubbleColor.value = config.bubbleColor || '#4F46E5'
         welcomeMessage.value = config.welcomeMessage || 'Hello! How can we help you today?'
+        bubbleSize.value = config.bubbleSize || 'medium'
+        bubblePattern.value = config.bubblePattern || 'solid'
+        websitePosition.value = config.websitePosition || 'bottom-right'
+        bubbleIcon.value = config.bubbleIcon || '💬'
+        if (config.enableReadReceipts !== undefined) {
+          enableReadReceipts.value = config.enableReadReceipts
+        }
       }
     }
   } catch {
@@ -287,6 +423,11 @@ async function saveSettings() {
         body: JSON.stringify({
           bubbleColor: bubbleColor.value,
           welcomeMessage: welcomeMessage.value,
+          bubbleSize: bubbleSize.value,
+          bubblePattern: bubblePattern.value,
+          websitePosition: websitePosition.value,
+          bubbleIcon: bubbleIcon.value,
+          enableReadReceipts: enableReadReceipts.value,
         }),
       })
     } else {
@@ -300,7 +441,12 @@ async function saveSettings() {
           siteName: 'default',
           bubbleColor: bubbleColor.value,
           welcomeMessage: welcomeMessage.value,
+          bubbleSize: bubbleSize.value,
+          bubblePattern: bubblePattern.value,
+          websitePosition: websitePosition.value,
+          bubbleIcon: bubbleIcon.value,
           allowedOrigins: '*',
+          enableReadReceipts: enableReadReceipts.value,
         }),
       })
     }
@@ -317,6 +463,32 @@ async function saveSettings() {
   } catch (err: any) {
     settingsError.value = err.message || 'Failed to save settings'
     setTimeout(() => { settingsError.value = '' }, 5000)
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${props.serverUrl}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${props.token}`,
+      },
+    })
+  } catch (err) {
+    console.error('[OmniChat Admin] Failed to call logout endpoint', err)
+  }
+  
+  // Disconnect socket immediately
+  socket.value?.disconnect()
+  socket.value = null
+
+  // Emit custom event to host application
+  emit('omnichat:logout')
+  
+  // Dispatch native composed event for broader compatibility
+  const host = document.querySelector('omnichat-admin')
+  if (host) {
+    host.dispatchEvent(new CustomEvent('omnichat:logout', { bubbles: true, composed: true }))
   }
 }
 
@@ -337,15 +509,24 @@ onUnmounted(() => {
   <div class="omnichat-admin-root" style="position: relative; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; height: 100% !important; width: 100% !important; overflow: hidden !important;">
     <!-- Sidebar Panel -->
     <div class="sidebar" style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; border-right: 1px solid #e5e7eb;">
-      <div class="sidebar-header" style="flex-shrink: 0 !important;">
+      <div class="sidebar-header" style="flex-shrink: 0 !important; display: flex; align-items: center; justify-content: space-between;">
         <span>OmniChat</span>
-        <button
-          style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
-          title="Settings"
-          @click="showSettings = !showSettings"
-        >
-          &#9881;
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button
+            style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
+            title="Settings"
+            @click="showSettings = !showSettings"
+          >
+            &#9881;
+          </button>
+          <button
+            style="background: none; border: none; cursor: pointer; font-size: 18px; color: #ef4444;"
+            title="Logout"
+            @click="handleLogout"
+          >
+            &#10162;
+          </button>
+        </div>
       </div>
 
       <!-- Active / Resolved tabs -->
@@ -353,6 +534,7 @@ onUnmounted(() => {
         <button
           class="sidebar-tab"
           :class="{ active: activeTab === 'active' }"
+          :style="activeTab === 'active' ? { borderBottomColor: bubbleColor, color: bubbleColor } : {}"
           @click="activeTab = 'active'"
         >
           Active
@@ -360,10 +542,21 @@ onUnmounted(() => {
         <button
           class="sidebar-tab"
           :class="{ active: activeTab === 'resolved' }"
+          :style="activeTab === 'resolved' ? { borderBottomColor: bubbleColor, color: bubbleColor } : {}"
           @click="activeTab = 'resolved'"
         >
           Resolved
         </button>
+      </div>
+
+      <!-- Search Bar -->
+      <div style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+        <input 
+          v-model="searchQuery" 
+          type="text" 
+          placeholder="Search name, email, username, ID..." 
+          style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
+        />
       </div>
 
       <!-- Conversation list -->
@@ -375,8 +568,17 @@ onUnmounted(() => {
           :class="{ active: conv.id === activeConversationId }"
           @click="selectConversation(conv.id)"
         >
-          <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px;">
-            {{ getVisitorLabel(conv) }}
+          <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span>{{ getVisitorLabel(conv) }}</span>
+              <span v-if="conv.unreadCount && conv.unreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: bold; line-height: 16px;">
+                {{ conv.unreadCount }}
+              </span>
+            </div>
+            <span v-if="conv.agentRemarks" style="color: #d97706; font-size: 11px;" title="Has remarks">📝</span>
+          </div>
+          <div v-if="conv.assignedUsername" style="font-size: 11px; color: #4338ca; margin-bottom: 4px; background: #e0e7ff; display: inline-block; padding: 2px 4px; border-radius: 4px;">
+            @{{ conv.assignedUsername }}
           </div>
           <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
             {{ getLastMessage(conv) }}
@@ -398,20 +600,73 @@ onUnmounted(() => {
         <!-- Chat header -->
         <div class="chat-header" style="flex: 0 0 auto !important;">
           <div>
-            <div style="font-weight: 600; font-size: 14px;">
+            <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
               {{ getVisitorLabel(activeConversationData) }}
+              <span v-if="activeConversationData.assignedUsername" style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 11px;">
+                @{{ activeConversationData.assignedUsername }}
+              </span>
+              <span v-if="getVisitorEmail(activeConversationData)" style="font-weight: 400; font-size: 12px; color: #6b7280;">
+                {{ getVisitorEmail(activeConversationData) }}
+              </span>
             </div>
-            <div style="font-size: 12px; color: #6b7280;">
-              {{ isActive ? 'Active conversation' : 'Resolved' }}
+            <div style="font-size: 12px; color: #6b7280; display: flex; align-items: center; gap: 8px;">
+              <span>{{ isActive ? 'Active conversation' : 'Resolved' }}</span>
+              <span v-if="activeConversationData.agentRemarks" style="color: #d97706;" :title="activeConversationData.agentRemarks">
+                📝 Has remarks
+              </span>
             </div>
           </div>
-          <button
-            v-if="isActive"
-            class="resolve-btn"
-            @click="resolveConversation"
-          >
-            Resolve
-          </button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button
+              style="background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
+              @click="showConversationDetails = !showConversationDetails"
+            >
+              Details
+            </button>
+            <template v-if="isActive">
+              <template v-if="showResolveConfirm">
+                <span style="font-size: 13px; color: #b91c1c; font-weight: 500; margin-right: 4px;">Resolve?</span>
+                <button
+                  style="background: #ef4444; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
+                  @click="executeResolveConversation"
+                >
+                  Confirm
+                </button>
+                <button
+                  style="background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
+                  @click="cancelResolveConversation"
+                >
+                  Cancel
+                </button>
+              </template>
+              <template v-else>
+                <button
+                  class="resolve-btn"
+                  :style="{ backgroundColor: bubbleColor, borderColor: bubbleColor }"
+                  @click="confirmResolveConversation"
+                >
+                  Resolve
+                </button>
+              </template>
+            </template>
+          </div>
+        </div>
+
+        <!-- Conversation Details Panel -->
+        <div v-if="showConversationDetails" style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 15px; flex: 0 0 auto;">
+          <div style="display: flex; gap: 15px;">
+            <div style="flex: 1;">
+              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Assigned Username</label>
+              <input v-model="draftAssignedUsername" type="text" placeholder="e.g. user123" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;" />
+            </div>
+            <div style="flex: 2;">
+              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Internal Remarks</label>
+              <textarea v-model="draftAgentRemarks" placeholder="Add notes for other agents..." rows="2" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; resize: vertical;"></textarea>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+              <button @click="saveConversationDetails" style="background: #10b981; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: 500; cursor: pointer; font-size: 13px;">Save</button>
+            </div>
+          </div>
         </div>
 
         <!-- Messages -->
@@ -420,11 +675,26 @@ onUnmounted(() => {
             v-for="msg in messages"
             :key="msg.id"
             :class="['message-bubble', msg.senderType]"
+            :style="msg.senderType === 'agent' ? { backgroundColor: bubbleColor } : {}"
           >
             <div>{{ msg.content }}</div>
             <div class="message-meta">
-              {{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}
+              <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
+              <span v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt" style="color: #10b981; font-weight: bold; margin-left: 4px;" title="Read">
+                &#10003;&#10003;
+              </span>
             </div>
+          </div>
+        </div>
+
+        <!-- Post-chat Review -->
+        <div v-if="activeConversationData.rating" style="padding: 15px; background: #f3f4f6; text-align: center; border-top: 1px solid #e5e7eb;">
+          <div style="font-weight: 600; color: #374151;">Visitor Review</div>
+          <div style="font-size: 20px;" :style="{ color: bubbleColor }">
+            {{ '★'.repeat(activeConversationData.rating) }}{{ '☆'.repeat(5 - activeConversationData.rating) }}
+          </div>
+          <div v-if="activeConversationData.review" style="font-size: 14px; color: #6b7280; font-style: italic; margin-top: 5px;">
+            "{{ activeConversationData.review }}"
           </div>
         </div>
 
@@ -446,6 +716,7 @@ onUnmounted(() => {
           />
           <button
             class="send-btn"
+            :style="{ backgroundColor: bubbleColor }"
             :disabled="!newMessage.trim() || !isActive"
             @click="sendMessage"
           >
@@ -494,9 +765,57 @@ onUnmounted(() => {
           />
         </div>
 
+        <div class="settings-field">
+          <label class="settings-label">Bubble Size</label>
+          <select v-model="bubbleSize" class="settings-input">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">Bubble Pattern</label>
+          <select v-model="bubblePattern" class="settings-input">
+            <option value="solid">Solid</option>
+            <option value="gradient">Gradient</option>
+            <option value="stripes">Stripes</option>
+            <option value="dots">Dots</option>
+          </select>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">Website Position</label>
+          <select v-model="websitePosition" class="settings-input">
+            <option value="bottom-right">Bottom Right</option>
+            <option value="bottom-left">Bottom Left</option>
+          </select>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">Bubble Icon</label>
+          <select v-model="bubbleIcon" class="settings-input">
+            <option value="💬">💬 Chat</option>
+            <option value="✉️">✉️ Envelope</option>
+            <option value="👋">👋 Wave</option>
+            <option value="❓">❓ Question</option>
+            <option value="🎧">🎧 Headset</option>
+          </select>
+        </div>
+
+        <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+          <input
+            id="enableReadReceipts"
+            type="checkbox"
+            v-model="enableReadReceipts"
+          />
+          <label for="enableReadReceipts" class="settings-label" style="margin-bottom: 0;">Enable Read Receipts</label>
+        </div>
+
         <button
           class="send-btn"
           style="width: 100%; margin-top: 12px;"
+          :style="{ backgroundColor: bubbleColor }"
           @click="saveSettings"
         >
           Save Settings

@@ -77,6 +77,16 @@ export class ChatService {
         agent: {
           select: { id: true, displayName: true, isOnline: true },
         },
+        _count: {
+          select: {
+            messages: {
+              where: {
+                senderType: 'visitor',
+                readAt: null,
+              },
+            },
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -156,4 +166,52 @@ export class ChatService {
       },
     });
   }
+
+  /**
+   * Mark a message as read by setting the readAt timestamp.
+   */
+  async markMessageAsRead(messageId: string) {
+    return this.prisma.message.update({
+      where: { id: messageId },
+      data: { readAt: new Date() },
+    });
+  }
+
+  /**
+   * Submit a review for a resolved conversation.
+   */
+  async submitReview(conversationId: string, rating: number, review?: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        rating,
+        review: review || null,
+        status: 'resolved', // Ensure it's resolved if not already
+      },
+    });
+  }
+
+  /**
+   * Update internal agent remarks and assigned username for a conversation.
+   */
+  async updateConversationDetails(conversationId: string, assignedUsername?: string, agentRemarks?: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        assignedUsername,
+        agentRemarks,
+      },
+    });
+  }
+
+  /**
+   * Update visitor details (e.g. from pre-chat form).
+   */
+  async updateConversationMetadata(conversationId: string, metadata: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { metadata },
+    });
+  }
 }
+
