@@ -44,7 +44,7 @@ interface AuthenticatedSocket extends Socket {
   data: {
     user?: {
       id: string;
-      email: string;
+      username: string;
       role: string;
       displayName: string;
     };
@@ -88,12 +88,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * visitor sockets.
    */
   async handleConnection(client: AuthenticatedSocket) {
-    try {
-      const token =
-        client.handshake.auth?.token ||
-        client.handshake.headers?.authorization?.replace('Bearer ', '');
+    const token =
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization?.replace('Bearer ', '');
 
-      if (token) {
+    if (token) {
+      try {
         // Agent connection — validate JWT
         const user = await this.authService.validateToken(token);
         client.data.user = user;
@@ -106,21 +106,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const onlineAgents = await this.chatService.getOnlineAgents();
         this.server.emit('agent_presence', { agents: onlineAgents });
 
-        this.logger.log(`Agent connected: ${user.displayName} (${client.id})`);
-      } else {
-        // Visitor connection — no authentication required
-        client.data.isVisitor = true;
-        client.data.visitorId =
-          (client.handshake.auth?.visitorId as string) || client.id;
+        // Send conversation list to the newly connected agent immediately
+        const conversations = await this.chatService.listConversations();
+        client.emit('conversations_list', { conversations });
 
-        this.logger.log(
-          `Visitor connected: ${client.data.visitorId} (${client.id})`,
-        );
+        this.logger.log(`Agent connected: ${user.displayName} (${client.id})`);
+      } catch (error) {
+        this.logger.warn(`Connection rejected: ${error.message}`);
+        client.emit('error', { message: 'Authentication failed' });
+        client.disconnect();
       }
-    } catch (error) {
-      this.logger.warn(`Connection rejected: ${error.message}`);
-      client.emit('error', { message: 'Authentication failed' });
-      client.disconnect();
+    } else {
+      // Visitor connection — no authentication required
+      client.data.isVisitor = true;
+      client.data.visitorId =
+        (client.handshake.auth?.visitorId as string) || client.id;
+
+      this.logger.log(
+        `Visitor connected: ${client.data.visitorId} (${client.id})`,
+      );
     }
   }
 

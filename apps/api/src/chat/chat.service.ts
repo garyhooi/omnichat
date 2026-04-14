@@ -55,7 +55,7 @@ export class ChatService {
           select: {
             id: true,
             displayName: true,
-            email: true,
+            username: true,
             isOnline: true,
           },
         },
@@ -150,7 +150,7 @@ export class ChatService {
       select: {
         id: true,
         displayName: true,
-        email: true,
+        username: true,
         role: true,
         isOnline: true,
       },

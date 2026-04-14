@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './jwt.strategy';
 
@@ -17,21 +17,28 @@ export class AuthService {
 
   /**
    * Register a new admin user.
+   * Password is hashed using Argon2 (memory-hard, resistant to GPU/ASIC attacks).
    */
-  async register(email: string, password: string, displayName: string) {
+  async register(username: string, password: string, displayName: string) {
     // Check if user already exists
     const existing = await this.prisma.adminUser.findUnique({
-      where: { email },
+      where: { username },
     });
     if (existing) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('Username already registered');
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    // Hash password with Argon2
+    const passwordHash = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 65536, // 64 MB
+      timeCost: 3,
+      parallelism: 4,
+    });
 
     const user = await this.prisma.adminUser.create({
       data: {
-        email,
+        username,
         passwordHash,
         displayName,
         role: 'agent',
@@ -43,17 +50,19 @@ export class AuthService {
 
   /**
    * Authenticate an admin user and return a JWT.
+   * Password is verified against Argon2 hash.
    */
-  async login(email: string, password: string) {
+  async login(username: string, password: string) {
     const user = await this.prisma.adminUser.findUnique({
-      where: { email },
+      where: { username },
     });
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    // Verify password against Argon2 hash
+    const isPasswordValid = await argon2.verify(user.passwordHash, password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -76,7 +85,7 @@ export class AuthService {
       }
       return {
         id: user.id,
-        email: user.email,
+        username: user.username,
         role: user.role,
         displayName: user.displayName,
       };
@@ -85,10 +94,10 @@ export class AuthService {
     }
   }
 
-  private generateToken(user: { id: string; email: string; role: string }) {
+  private generateToken(user: { id: string; username: string; role: string }) {
     const payload: JwtPayload = {
       sub: user.id,
-      email: user.email,
+      username: user.username,
       role: user.role,
     };
 
@@ -96,7 +105,7 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       user: {
         id: user.id,
-        email: user.email,
+        username: user.username,
         role: user.role,
       },
     };

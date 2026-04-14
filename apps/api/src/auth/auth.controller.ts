@@ -1,13 +1,14 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 // ---------------------------------------------------------------------------
 // DTOs
 // ---------------------------------------------------------------------------
 export class RegisterDto {
-  @IsEmail()
-  email: string;
+  @IsString()
+  @IsNotEmpty()
+  username: string;
 
   @IsString()
   @MinLength(8)
@@ -19,8 +20,9 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  @IsEmail()
-  email: string;
+  @IsString()
+  @IsNotEmpty()
+  username: string;
 
   @IsString()
   @IsNotEmpty()
@@ -36,11 +38,11 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto.email, dto.password, dto.displayName);
+    return this.authService.register(dto.username, dto.password, dto.displayName);
   }
 
   @Post('login')
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+    return this.authService.login(dto.username, dto.password);
   }
 }

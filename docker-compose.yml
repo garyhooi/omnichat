@@ -33,11 +33,11 @@ services:
     env_file:
       - ./apps/api/.env
     depends_on:
-      db-mysql:
-        condition: service_healthy
-      # Uncomment for MongoDB:
-      # db-mongo:
+      # db-mysql:
       #   condition: service_healthy
+      # Uncomment for MongoDB:
+      db-mongo:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - omnichat-network
@@ -45,26 +45,26 @@ services:
   # ---------------------------------------------------------------------------
   # MySQL 8 — Comment out this entire block for MongoDB-only deployments
   # ---------------------------------------------------------------------------
-  db-mysql:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root_secret
-      MYSQL_DATABASE: omnichat
-      MYSQL_USER: omnichat
-      MYSQL_PASSWORD: omnichat_secret
-    volumes:
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - omnichat-network
+  # db-mysql:
+  #   image: mysql:8.0
+  #   ports:
+  #     - "3306:3306"
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root_secret
+  #     MYSQL_DATABASE: omnichat
+  #     MYSQL_USER: omnichat
+  #     MYSQL_PASSWORD: omnichat_secret
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+  #   restart: unless-stopped
+  #   networks:
+  #     - omnichat-network
 
   # ---------------------------------------------------------------------------
   # MongoDB 7 — Comment out this entire block for MySQL-only deployments
@@ -127,7 +127,7 @@ services:
   #     - omnichat-network
 
 volumes:
-  mysql-data:
+  # mysql-data:
   mongo-data:
   # redis-data:
 

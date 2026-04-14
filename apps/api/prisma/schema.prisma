@@ -1,15 +1,16 @@
 // =============================================================================
-// OmniChat — Prisma Schema (MySQL variant — active by default)
+// OmniChat — Prisma Schema (MongoDB variant)
 // =============================================================================
-// This file is the ACTIVE schema used by `prisma generate` and `prisma db push`.
-// It is overwritten by `scripts/use-provider.sh` based on DATABASE_PROVIDER.
-//
-// PRIMARY KEY STRATEGY:
-// All models use `String @default(cuid())` as the primary key type.
-// - cuid() generates collision-resistant, URL-safe IDs that work across all DBs.
-// - For MySQL/PostgreSQL: stored as VARCHAR.
-// - For MongoDB: stored as String, with @map("_id") in the MongoDB overlay.
-// This abstraction lets us switch providers without changing application code.
+// Activated by: scripts/use-provider.sh mongodb
+// Key differences from SQL variants:
+//   - provider = "mongodb"
+//   - All @id fields use @map("_id") to align with MongoDB's native _id field
+//   - No @@index directives needed for _id (MongoDB indexes _id automatically)
+//   - No @db.Text — MongoDB stores strings without length limits natively
+//   - No onDelete: Cascade — MongoDB doesn't enforce referential integrity;
+//     cascade deletion must be handled in application code (ChatService)
+//   - Relations are purely "virtual" (Prisma-level only) — no foreign key
+//     constraints exist in MongoDB
 // =============================================================================
 
 generator client {
@@ -17,23 +18,19 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// Conversation — tracks visitor chat sessions
-// ---------------------------------------------------------------------------
 model Conversation {
-  id        String   @id @default(cuid())
-  visitorId String   // Unique identifier for the visitor (browser fingerprint or cookie-based)
-  status    String   @default("active") // "active" | "resolved"
-  agentId   String?  // Foreign key to AdminUser — the assigned agent (nullable if unassigned)
-  metadata  String?  @db.Text // Optional JSON blob for visitor info (name, email, page URL, etc.)
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  visitorId String
+  status    String   @default("active")
+  agentId   String?  @db.ObjectId
+  metadata  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   agent    AdminUser? @relation(fields: [agentId], references: [id])
   messages Message[]
 
@@ -42,51 +39,40 @@ model Conversation {
   @@index([visitorId])
 }
 
-// ---------------------------------------------------------------------------
-// Message — individual chat messages within a conversation
-// ---------------------------------------------------------------------------
 model Message {
-  id             String   @id @default(cuid())
-  conversationId String   // Foreign key to Conversation
-  senderType     String   // "visitor" | "agent"
-  senderId       String?  // AdminUser.id if agent, visitorId if visitor
-  content        String   @db.Text
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  senderType     String
+  senderId       String?
+  content        String
   createdAt      DateTime @default(now())
 
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@index([conversationId])
   @@index([createdAt])
 }
 
-// ---------------------------------------------------------------------------
-// AdminUser — agent/admin credentials and online presence
-// ---------------------------------------------------------------------------
 model AdminUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   // bcrypt hash
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  username     String   @unique
+  passwordHash String
   displayName  String
-  role         String   @default("agent") // "admin" | "agent"
+  role         String   @default("agent")
   isOnline     Boolean  @default(false)
   lastSeenAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Relations
   conversations Conversation[]
 }
 
-// ---------------------------------------------------------------------------
-// SiteConfig — per-site widget configuration
-// ---------------------------------------------------------------------------
 model SiteConfig {
-  id             String   @id @default(cuid())
-  siteName       String   @unique // Friendly label for this site configuration
-  bubbleColor    String   @default("#4F46E5") // HEX color for the chat bubble
-  welcomeMessage String   @default("Hello! How can we help you today?") @db.Text
-  allowedOrigins String   @db.Text // Comma-separated list of allowed origins for CORS
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  siteName       String   @unique
+  bubbleColor    String   @default("#4F46E5")
+  welcomeMessage String   @default("Hello! How can we help you today?")
+  allowedOrigins String
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

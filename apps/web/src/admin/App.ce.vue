@@ -40,6 +40,7 @@ interface Conversation {
 const socket = ref<Socket | null>(null)
 const conversations = ref<Conversation[]>([])
 const activeConversationId = ref<string | null>(null)
+const activeConversationData = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
 const newMessage = ref('')
 const activeTab = ref<'active' | 'resolved'>('active')
@@ -47,18 +48,19 @@ const isTyping = ref(false)
 const typingUser = ref('')
 const showSettings = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
+const settingsSaved = ref(false)
+const settingsError = ref('')
 
 // Settings state
 const bubbleColor = ref('#4F46E5')
 const welcomeMessage = ref('Hello! How can we help you today?')
+const siteConfigId = ref<string | null>(null)
 
 const filteredConversations = computed(() =>
   conversations.value.filter((c) => c.status === activeTab.value),
 )
 
-const activeConversation = computed(() =>
-  conversations.value.find((c) => c.id === activeConversationId.value),
-)
+const isActive = computed(() => activeConversationData.value?.status === 'active')
 
 // ---------------------------------------------------------------------------
 // Socket.io connection & event handlers
@@ -71,31 +73,37 @@ function connect() {
 
   s.on('connect', () => {
     console.log('[OmniChat Admin] Connected to server')
-    // Request conversation list on connect
-    s.emit('list_conversations', {})
   })
 
   s.on('conversations_list', (data: { conversations: Conversation[] }) => {
     conversations.value = data.conversations
+    if (activeConversationId.value) {
+      const found = data.conversations.find((c) => c.id === activeConversationId.value)
+      if (found) {
+        activeConversationData.value = found
+      }
+    }
   })
 
   s.on('new_conversation', (data: { conversation: Conversation }) => {
-    // Add new conversation to the top of the list
     conversations.value.unshift(data.conversation)
   })
 
   s.on('conversation_history', (data: { conversation: Conversation }) => {
     messages.value = data.conversation.messages || []
+    activeConversationData.value = data.conversation
+    const conv = conversations.value.find((c) => c.id === data.conversation.id)
+    if (conv) {
+      conv.status = data.conversation.status
+    }
     nextTick(() => scrollToBottom())
   })
 
   s.on('new_message', (data: { message: Message }) => {
-    // Add message to the current conversation if it matches
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
       nextTick(() => scrollToBottom())
     }
-    // Update the conversation list preview
     const conv = conversations.value.find(
       (c) => c.id === data.message.conversationId,
     )
@@ -123,6 +131,9 @@ function connect() {
       if (conv) {
         conv.status = 'resolved'
       }
+      if (activeConversationData.value?.id === data.conversationId) {
+        activeConversationData.value.status = 'resolved'
+      }
     },
   )
 
@@ -133,6 +144,12 @@ function connect() {
     if (idx !== -1) {
       conversations.value[idx] = {
         ...conversations.value[idx],
+        ...data.conversation,
+      }
+    }
+    if (activeConversationData.value?.id === data.conversation.id) {
+      activeConversationData.value = {
+        ...activeConversationData.value,
         ...data.conversation,
       }
     }
@@ -160,6 +177,7 @@ function selectConversation(conversationId: string) {
   activeConversationId.value = conversationId
   messages.value = []
   isTyping.value = false
+  activeConversationData.value = conversations.value.find((c) => c.id === conversationId) || null
 
   socket.value?.emit('join_conversation', { conversationId })
 }
@@ -172,7 +190,6 @@ function sendMessage() {
     content: newMessage.value.trim(),
   })
 
-  // Stop typing indicator
   socket.value?.emit('typing_stop', {
     conversationId: activeConversationId.value,
   })
@@ -235,11 +252,80 @@ function getLastMessage(conv: Conversation) {
   return 'No messages yet'
 }
 
+async function loadSettings() {
+  try {
+    const res = await fetch(`${props.serverUrl}/config/active`, {
+      headers: { 'Authorization': `Bearer ${props.token}` },
+    })
+    if (res.ok) {
+      const config = await res.json()
+      if (config) {
+        siteConfigId.value = config.id
+        bubbleColor.value = config.bubbleColor || '#4F46E5'
+        welcomeMessage.value = config.welcomeMessage || 'Hello! How can we help you today?'
+      }
+    }
+  } catch {
+    // Config may not exist yet
+  }
+}
+
+async function saveSettings() {
+  settingsSaved.value = false
+  settingsError.value = ''
+
+  try {
+    let res: Response
+
+    if (siteConfigId.value) {
+      res = await fetch(`${props.serverUrl}/config/${siteConfigId.value}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${props.token}`,
+        },
+        body: JSON.stringify({
+          bubbleColor: bubbleColor.value,
+          welcomeMessage: welcomeMessage.value,
+        }),
+      })
+    } else {
+      res = await fetch(`${props.serverUrl}/config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${props.token}`,
+        },
+        body: JSON.stringify({
+          siteName: 'default',
+          bubbleColor: bubbleColor.value,
+          welcomeMessage: welcomeMessage.value,
+          allowedOrigins: '*',
+        }),
+      })
+    }
+
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.message || 'Failed to save settings')
+    }
+
+    const saved = await res.json()
+    siteConfigId.value = saved.id
+    settingsSaved.value = true
+    setTimeout(() => { settingsSaved.value = false }, 3000)
+  } catch (err: any) {
+    settingsError.value = err.message || 'Failed to save settings'
+    setTimeout(() => { settingsError.value = '' }, 5000)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(() => {
   connect()
+  loadSettings()
 })
 
 onUnmounted(() => {
@@ -248,10 +334,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="omnichat-admin-root" style="position: relative;">
+  <div class="omnichat-admin-root" style="position: relative; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; height: 100% !important; width: 100% !important; overflow: hidden !important;">
     <!-- Sidebar Panel -->
-    <div class="sidebar">
-      <div class="sidebar-header">
+    <div class="sidebar" style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; border-right: 1px solid #e5e7eb;">
+      <div class="sidebar-header" style="flex-shrink: 0 !important;">
         <span>OmniChat</span>
         <button
           style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
@@ -281,7 +367,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Conversation list -->
-      <div class="conversation-list">
+      <div class="conversation-list" style="flex: 1; min-height: 0; overflow-y: auto;">
         <div
           v-for="conv in filteredConversations"
           :key="conv.id"
@@ -307,20 +393,20 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat Window -->
-    <div class="chat-window">
-      <template v-if="activeConversation">
+    <div class="chat-window" style="flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; height: 100% !important; overflow: hidden !important; position: relative;">
+      <template v-if="activeConversationData">
         <!-- Chat header -->
-        <div class="chat-header">
+        <div class="chat-header" style="flex: 0 0 auto !important;">
           <div>
             <div style="font-weight: 600; font-size: 14px;">
-              {{ getVisitorLabel(activeConversation) }}
+              {{ getVisitorLabel(activeConversationData) }}
             </div>
             <div style="font-size: 12px; color: #6b7280;">
-              {{ activeConversation.status === 'active' ? 'Active conversation' : 'Resolved' }}
+              {{ isActive ? 'Active conversation' : 'Resolved' }}
             </div>
           </div>
           <button
-            v-if="activeConversation.status === 'active'"
+            v-if="isActive"
             class="resolve-btn"
             @click="resolveConversation"
           >
@@ -329,7 +415,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Messages -->
-        <div ref="messagesContainer" class="messages-container">
+        <div ref="messagesContainer" class="messages-container" style="flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; overflow-x: hidden !important;">
           <div
             v-for="msg in messages"
             :key="msg.id"
@@ -347,19 +433,20 @@ onUnmounted(() => {
           {{ typingUser }} is typing...
         </div>
 
-        <!-- Input area -->
-        <div v-if="activeConversation.status === 'active'" class="chat-input-area">
+        <!-- Input area — always show when conversation is selected -->
+        <div class="chat-input-area" style="flex: 0 0 auto !important; min-height: 60px !important;">
           <input
             v-model="newMessage"
             class="chat-input"
             type="text"
-            placeholder="Type a message..."
+            :placeholder="isActive ? 'Type a message...' : 'Conversation resolved'"
+            :disabled="!isActive"
             @keyup.enter="sendMessage"
             @input="handleInputChange"
           />
           <button
             class="send-btn"
-            :disabled="!newMessage.trim()"
+            :disabled="!newMessage.trim() || !isActive"
             @click="sendMessage"
           >
             Send
@@ -410,9 +497,17 @@ onUnmounted(() => {
         <button
           class="send-btn"
           style="width: 100%; margin-top: 12px;"
+          @click="saveSettings"
         >
           Save Settings
         </button>
+
+        <div v-if="settingsSaved" style="color: #10b981; font-size: 13px; margin-top: 8px; text-align: center;">
+          Settings saved successfully
+        </div>
+        <div v-if="settingsError" style="color: #ef4444; font-size: 13px; margin-top: 8px; text-align: center;">
+          {{ settingsError }}
+        </div>
       </div>
     </template>
   </div>
