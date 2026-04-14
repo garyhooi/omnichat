@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as sanitizeHtml from 'sanitize-html';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,6 +15,15 @@ export interface CreateMessageInput {
 export interface CreateConversationInput {
   visitorId: string;
   metadata?: string;
+  visitorIp?: string;
+  visitorBrowser?: string;
+  visitorOs?: string;
+  visitorDevice?: string;
+  visitorCurrentUrl?: string;
+  visitorTimezone?: string;
+  visitorLanguage?: string;
+  visitorScreenRes?: string;
+  visitorReferrer?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +44,15 @@ export class ChatService {
         visitorId: input.visitorId,
         status: 'active',
         metadata: input.metadata ?? null,
+        visitorIp: input.visitorIp ?? null,
+        visitorBrowser: input.visitorBrowser ?? null,
+        visitorOs: input.visitorOs ?? null,
+        visitorDevice: input.visitorDevice ?? null,
+        visitorCurrentUrl: input.visitorCurrentUrl ?? null,
+        visitorTimezone: input.visitorTimezone ?? null,
+        visitorLanguage: input.visitorLanguage ?? null,
+        visitorScreenRes: input.visitorScreenRes ?? null,
+        visitorReferrer: input.visitorReferrer ?? null,
       },
     });
 
@@ -97,12 +116,17 @@ export class ChatService {
    * the database. The gateway MUST call this before emitting to the room.
    */
   async createMessage(input: CreateMessageInput) {
+    const cleanContent = sanitizeHtml(input.content, {
+      allowedTags: [], // Strip all HTML tags
+      allowedAttributes: {},
+    });
+
     const message = await this.prisma.message.create({
       data: {
         conversationId: input.conversationId,
         senderType: input.senderType,
         senderId: input.senderId ?? null,
-        content: input.content,
+        content: cleanContent,
       },
     });
 

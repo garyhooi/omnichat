@@ -28,6 +28,15 @@ model Conversation {
   status    String   @default("active")
   agentId          String?  @db.ObjectId
   metadata         String?
+  visitorIp        String?
+  visitorBrowser   String?
+  visitorOs        String?
+  visitorDevice    String?
+  visitorCurrentUrl String?
+  visitorTimezone   String?
+  visitorLanguage   String?
+  visitorScreenRes  String?
+  visitorReferrer   String?
   rating           Int?
   review           String?
   agentRemarks     String?
@@ -65,6 +74,9 @@ model AdminUser {
   displayName  String
   role         String   @default("agent")
   isOnline     Boolean  @default(false)
+  registrationIp String?
+  lastLoginIp    String?
+  userAgent      String?
   lastSeenAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

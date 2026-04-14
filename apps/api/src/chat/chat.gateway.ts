@@ -11,6 +11,9 @@ import { Logger, UnauthorizedException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { AuthService } from '../auth/auth.service';
+import { UAParser } from 'ua-parser-js';
+
+import { PrismaService } from '../prisma/prisma.service';
 
 // ---------------------------------------------------------------------------
 // Types for inbound/outbound events
@@ -37,6 +40,11 @@ interface StartConversationPayload {
   metadata?: string;
   visitorName?: string;
   visitorEmail?: string;
+  visitorCurrentUrl?: string;
+  visitorTimezone?: string;
+  visitorLanguage?: string;
+  visitorScreenRes?: string;
+  visitorReferrer?: string;
 }
 
 interface ReadMessagePayload {
@@ -54,6 +62,14 @@ interface UpdateConversationDetailsPayload {
   conversationId: string;
   assignedUsername?: string;
   agentRemarks?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Rate Limiting Types
+// ---------------------------------------------------------------------------
+interface RateLimitInfo {
+  count: number;
+  resetTime: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +93,40 @@ interface AuthenticatedSocket extends Socket {
 // ---------------------------------------------------------------------------
 @WebSocketGateway({
   cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    origin: async (origin: string, callback: (err: Error | null, allow?: boolean | string) => void) => {
+      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+        return callback(null, true);
+      }
+
+      try {
+        const { PrismaClient } = require('@prisma/client');
+        const prisma = new PrismaClient();
+        const config = await prisma.siteConfig.findFirst({
+          where: { isActive: true },
+        });
+
+        if (!config || !config.allowedOrigins) {
+          return callback(new Error('CORS not configured in database'));
+        }
+
+        if (config.allowedOrigins === '*') {
+          return callback(null, true);
+        }
+
+        const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
+        const isAllowed = allowed.some((allowedOrigin: string) => {
+          return origin === allowedOrigin || origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
+        });
+
+        if (isAllowed) {
+          callback(null, origin);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      } catch (err) {
+        callback(new Error('CORS check failed'));
+      }
+    },
     credentials: true,
   },
   // Uncomment the following lines for Redis adapter (multi-instance scaling):
@@ -91,11 +140,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private readonly logger = new Logger(ChatGateway.name);
+  
+  // Rate limiter map: IP/VisitorID -> RateLimitInfo
+  private rateLimits = new Map<string, RateLimitInfo>();
 
   constructor(
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
   ) {}
+
+  /**
+   * Internal Simple Rate Limiter
+   * Allows 'limit' requests per 'ttl' milliseconds.
+   */
+  private isRateLimited(key: string, limit: number, ttl: number): boolean {
+    const now = Date.now();
+    const info = this.rateLimits.get(key);
+
+    if (!info) {
+      this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
+      return false;
+    }
+
+    if (now > info.resetTime) {
+      this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
+      return false;
+    }
+
+    if (info.count >= limit) {
+      return true;
+    }
+
+    info.count++;
+    return false;
+  }
 
   // =========================================================================
   // CONNECTION LIFECYCLE
@@ -193,15 +271,41 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: StartConversationPayload,
   ) {
     const visitorId = payload.visitorId || client.data.visitorId || client.id;
+    
+    // Rate limit: 2 starts per 60 seconds
+    const rlKey = `start:${client.handshake.address}:${visitorId}`;
+    if (this.isRateLimited(rlKey, 2, 60000)) {
+      client.emit('error', { message: 'Rate limit exceeded. Please wait before starting a new conversation.' });
+      return;
+    }
 
     // Combine any existing metadata with the new pre-chat form details
     const parsedMetadata = payload.metadata ? JSON.parse(payload.metadata) : {};
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
+    // Extract IP and User-Agent
+    const visitorIp = client.handshake.headers['x-forwarded-for']?.toString().split(',')[0] || client.handshake.address;
+    const userAgentString = client.handshake.headers['user-agent'] || '';
+    
+    // Parse User-Agent
+    const parser = new UAParser(userAgentString);
+    const visitorBrowser = parser.getBrowser().name;
+    const visitorOs = parser.getOS().name;
+    const visitorDevice = parser.getDevice().type || 'Desktop';
+
     const conversation = await this.chatService.createConversation({
       visitorId,
       metadata: JSON.stringify(parsedMetadata),
+      visitorIp,
+      visitorBrowser,
+      visitorOs,
+      visitorDevice,
+      visitorCurrentUrl: payload.visitorCurrentUrl,
+      visitorTimezone: payload.visitorTimezone,
+      visitorLanguage: payload.visitorLanguage,
+      visitorScreenRes: payload.visitorScreenRes,
+      visitorReferrer: payload.visitorReferrer,
     });
 
     // Join the visitor to the conversation room
@@ -265,6 +369,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: SendMessagePayload,
   ) {
     const { conversationId, content } = payload;
+
+    // Rate Limit Check
+    const rlKey = `msg:${client.id}`;
+    if (this.isRateLimited(rlKey, 20, 10000)) { // 20 messages per 10 seconds
+      client.emit('message_error', {
+        conversationId,
+        error: 'You are sending messages too quickly. Please slow down.',
+      });
+      return;
+    }
 
     // Determine sender type and ID based on socket identity
     const senderType = client.data.isVisitor ? 'visitor' : 'agent';

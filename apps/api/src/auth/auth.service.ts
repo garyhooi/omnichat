@@ -20,7 +20,13 @@ export class AuthService {
    * Register a new admin user.
    * Password is hashed using Argon2 (memory-hard, resistant to GPU/ASIC attacks).
    */
-  async register(username: string, password: string, displayName: string) {
+  async register(
+    username: string,
+    password: string,
+    displayName: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
     // Check if user already exists
     const existing = await this.prisma.adminUser.findUnique({
       where: { username },
@@ -43,6 +49,8 @@ export class AuthService {
         passwordHash,
         displayName,
         role: 'agent',
+        registrationIp: ip,
+        userAgent,
       },
     });
 
@@ -53,7 +61,7 @@ export class AuthService {
    * Authenticate an admin user and return a JWT.
    * Password is verified against Argon2 hash.
    */
-  async login(username: string, password: string) {
+  async login(username: string, password: string, ip?: string, userAgent?: string) {
     const user = await this.prisma.adminUser.findUnique({
       where: { username },
     });
@@ -67,6 +75,15 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Update last login info
+    await this.prisma.adminUser.update({
+      where: { id: user.id },
+      data: {
+        lastLoginIp: ip,
+        userAgent,
+      },
+    });
 
     return this.generateToken(user);
   }

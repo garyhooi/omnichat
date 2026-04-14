@@ -114,7 +114,12 @@ function getVisitorId(): string {
   const storageKey = 'omnichat_visitor_id'
   let id = localStorage.getItem(storageKey)
   if (!id) {
-    id = 'v_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
+    if (window.crypto && crypto.randomUUID) {
+      id = 'v_' + crypto.randomUUID()
+    } else {
+      // Fallback for older browsers
+      id = 'v_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
+    }
     localStorage.setItem(storageKey, id)
   }
   return id
@@ -255,8 +260,12 @@ function startConversation() {
     visitorId: visitorId.value,
     visitorName: visitorName.value.trim(),
     visitorEmail: visitorEmail.value.trim(),
+    visitorCurrentUrl: window.location.href,
+    visitorTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    visitorLanguage: navigator.language,
+    visitorScreenRes: `${window.screen.width}x${window.screen.height}`,
+    visitorReferrer: document.referrer || null,
     metadata: JSON.stringify({
-      url: window.location.href,
       userAgent: navigator.userAgent,
     }),
   })

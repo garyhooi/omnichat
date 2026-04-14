@@ -40,6 +40,15 @@ interface Conversation {
   review?: string
   agentRemarks?: string
   assignedUsername?: string
+  visitorIp?: string
+  visitorBrowser?: string
+  visitorOs?: string
+  visitorDevice?: string
+  visitorCurrentUrl?: string
+  visitorTimezone?: string
+  visitorLanguage?: string
+  visitorScreenRes?: string
+  visitorReferrer?: string
   _count?: { messages: number }
   unreadCount?: number
 }
@@ -663,6 +672,28 @@ onUnmounted(() => {
               <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Internal Remarks</label>
               <textarea v-model="draftAgentRemarks" placeholder="Add notes for other agents..." rows="2" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; resize: vertical;"></textarea>
             </div>
+            
+            <div style="flex: 1.5; border-left: 1px solid #d1d5db; padding-left: 15px;">
+              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Visitor Info</label>
+              <div style="font-size: 12px; color: #6b7280; display: grid; grid-template-columns: 60px 1fr; gap: 4px;">
+                <strong>IP:</strong> <span>{{ activeConversationData.visitorIp || 'Unknown' }}</span>
+                <strong>Browser:</strong> <span>{{ activeConversationData.visitorBrowser || 'Unknown' }}</span>
+                <strong>OS:</strong> <span>{{ activeConversationData.visitorOs || 'Unknown' }}</span>
+                <strong>Device:</strong> <span style="text-transform: capitalize;">{{ activeConversationData.visitorDevice || 'Desktop' }}</span>
+                <strong>Screen:</strong> <span>{{ activeConversationData.visitorScreenRes || 'Unknown' }}</span>
+              </div>
+            </div>
+            
+            <div style="flex: 1.5; border-left: 1px solid #d1d5db; padding-left: 15px;">
+              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Session Context</label>
+              <div style="font-size: 12px; color: #6b7280; display: grid; grid-template-columns: 70px 1fr; gap: 4px;">
+                <strong>URL:</strong> <a :href="activeConversationData.visitorCurrentUrl" target="_blank" style="color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block;" :title="activeConversationData.visitorCurrentUrl">{{ activeConversationData.visitorCurrentUrl || 'Unknown' }}</a>
+                <strong>Referrer:</strong> <a v-if="activeConversationData.visitorReferrer" :href="activeConversationData.visitorReferrer" target="_blank" style="color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block;" :title="activeConversationData.visitorReferrer">{{ activeConversationData.visitorReferrer }}</a><span v-else>Direct / None</span>
+                <strong>Timezone:</strong> <span>{{ activeConversationData.visitorTimezone || 'Unknown' }}</span>
+                <strong>Language:</strong> <span>{{ activeConversationData.visitorLanguage || 'Unknown' }}</span>
+              </div>
+            </div>
+
             <div style="display: flex; align-items: flex-end;">
               <button @click="saveConversationDetails" style="background: #10b981; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: 500; cursor: pointer; font-size: 13px;">Save</button>
             </div>
