@@ -31,6 +31,13 @@ This project is structured as an npm workspace monorepo:
 
 ## 🚀 Quick Start
 
+### CDN Links
+
+You can easily embed OmniChat via CDN:
+
+* **Admin Portal Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js`
+* **Client Visitor Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js`
+
 ### Prerequisites
 * Node.js >= 18.0.0
 * MongoDB (Local or Atlas)
