@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import * as express from 'express';
@@ -27,6 +28,8 @@ async function bootstrap() {
     xContentTypeOptions: true,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   }));
+
+  app.use(cookieParser());
 
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);

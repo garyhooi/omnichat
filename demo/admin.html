@@ -120,10 +120,10 @@
     </style>
 
     <!-- Load OmniChat Admin Bundle from jsDelivr CDN -->
-    <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script> -->
     
     <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
-    <!-- <script src="../apps/web/dist/omnichat-admin.js"></script> -->
+    <script src="../apps/web/dist/omnichat-admin.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
@@ -158,14 +158,14 @@
         const SERVER_URL = 'http://localhost:3001';
 
         document.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('omnichat_demo_token');
+            const token = localStorage.getItem('omnichat_demo_logged_in') === 'true';
             const isDemo = localStorage.getItem('omnichat_ui_demo_mode');
             
             if (isDemo === 'true') {
                 renderDemoMode();
                 updateTabStyles('tab-demo');
             } else if (token) {
-                renderAdminComponent(token);
+                renderAdminComponent('cookie-auth');
                 updateTabStyles('tab-login');
             } else {
                 renderLoginForm();
@@ -175,7 +175,7 @@
             document.getElementById('tab-login').addEventListener('click', () => {
                 localStorage.removeItem('omnichat_ui_demo_mode');
                 // Force logout when clicking the Login tab manually
-                localStorage.removeItem('omnichat_demo_token');
+                localStorage.removeItem('omnichat_demo_logged_in');
                 updateTabStyles('tab-login');
                 renderLoginForm();
             });
@@ -244,7 +244,8 @@
                     const response = await fetch(`${SERVER_URL}/auth/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
+                        body: JSON.stringify({ username, password }),
+                        credentials: 'include'
                     });
 
                     const data = await response.json();
@@ -254,9 +255,9 @@
                     }
 
                     // Save token and load the component
-                    localStorage.setItem('omnichat_demo_token', data.accessToken);
+                    localStorage.setItem('omnichat_demo_logged_in', 'true');
                     localStorage.removeItem('omnichat_ui_demo_mode');
-                    renderAdminComponent(data.accessToken);
+                    renderAdminComponent('cookie-auth');
 
                 } catch (error) {
                     errorDiv.textContent = error.message;
@@ -277,7 +278,7 @@
 
             // Handle the logout event emitted by the component
             adminElement.addEventListener('omnichat:logout', () => {
-                localStorage.removeItem('omnichat_demo_token');
+                localStorage.removeItem('omnichat_demo_logged_in');
                 localStorage.removeItem('omnichat_ui_demo_mode');
                 renderLoginForm();
             });

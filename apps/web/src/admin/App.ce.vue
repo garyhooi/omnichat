@@ -86,7 +86,7 @@ const adminList = ref<{ username: string, displayName: string }[]>([])
 async function loadAdminList() {
   try {
     const res = await fetch(`${props.serverUrl}/admin/users`, {
-      headers: { 'Authorization': `Bearer ${props.token}` },
+      credentials: "include",
     })
     if (res.ok) {
       adminList.value = await res.json()
@@ -179,10 +179,8 @@ async function uploadCustomSound(event: Event) {
     formData.append('file', file) // already handled audio
     
     const res = await fetch(`${props.serverUrl}/upload`, {
+      credentials: "include",
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${props.token}`,
-      },
       body: formData,
     })
     
@@ -299,6 +297,7 @@ function connect() {
   const s = io(props.serverUrl, {
     auth: { token: props.token },
     transports: ['websocket', 'polling'],
+    withCredentials: true,
   })
 
   s.on('connect', () => {
@@ -617,10 +616,8 @@ async function handleFileUpload(event: Event) {
 
   try {
     const res = await fetch(`${props.serverUrl}/upload`, {
+      credentials: "include",
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${props.token}`,
-      },
       body: formData,
     })
 
@@ -802,7 +799,7 @@ function getLastMessage(conv: Conversation) {
 async function loadSettings() {
   try {
     const res = await fetch(`${props.serverUrl}/config/active`, {
-      headers: { 'Authorization': `Bearer ${props.token}` },
+      credentials: "include",
     })
     if (res.ok) {
       const config = await res.json()
@@ -834,7 +831,7 @@ async function loadSettings() {
 async function loadQuickReplies() {
   try {
     const res = await fetch(`${props.serverUrl}/quick-replies`, {
-      headers: { 'Authorization': `Bearer ${props.token}` },
+      credentials: "include",
     })
     if (res.ok) {
       quickReplies.value = await res.json()
@@ -871,11 +868,11 @@ async function saveQuickReply() {
     const method = isNew ? 'POST' : 'PUT'
     
     const res = await fetch(url, {
+      credentials: "include",
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${props.token}`,
-      },
+},
       body: JSON.stringify({
         title: qrDraftTitle.value.trim(),
         content: qrDraftContent.value.trim()
@@ -895,8 +892,8 @@ async function deleteQuickReply(id: string) {
   if (!confirm('Are you sure you want to delete this quick reply?')) return
   try {
     const res = await fetch(`${props.serverUrl}/quick-replies/${id}`, {
+      credentials: "include",
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${props.token}` },
     })
     if (res.ok) {
       await loadQuickReplies()
@@ -971,10 +968,8 @@ async function uploadCustomIcon(event: Event) {
     formData.append('file', webpBlob, 'icon.webp')
     
     const res = await fetch(`${props.serverUrl}/upload`, {
+      credentials: "include",
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${props.token}`,
-      },
       body: formData,
     })
     
@@ -999,11 +994,11 @@ async function saveSettings() {
 
     if (siteConfigId.value) {
       res = await fetch(`${props.serverUrl}/config/${siteConfigId.value}`, {
+      credentials: "include",
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${props.token}`,
-        },
+},
         body: JSON.stringify({
           bubbleColor: bubbleColor.value,
           welcomeMessage: welcomeMessage.value,
@@ -1017,11 +1012,11 @@ async function saveSettings() {
       })
     } else {
       res = await fetch(`${props.serverUrl}/config`, {
+      credentials: "include",
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${props.token}`,
-        },
+},
         body: JSON.stringify({
           siteName: 'default',
           bubbleColor: bubbleColor.value,
@@ -1054,10 +1049,8 @@ async function saveSettings() {
 async function handleLogout() {
   try {
     await fetch(`${props.serverUrl}/auth/logout`, {
+      credentials: "include",
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${props.token}`,
-      },
     })
   } catch (err) {
     console.error('[OmniChat Admin] Failed to call logout endpoint', err)

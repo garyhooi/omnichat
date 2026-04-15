@@ -98,158 +98,41 @@ docker-compose logs -f
 
 ---
 
+
 ## Testing the Demo
 
-### 1. Create an Admin Account (via API)
-Open Postman, curl, or browser and POST to:
+### 1. Start the Demo Server
 
-```
-POST http://localhost:3001/auth/register
-Content-Type: application/json
+For security reasons (XSS & CSRF protection), OmniChat uses **HttpOnly Cookies** to authenticate admin sessions instead of standard JWT Bearer headers. 
+Because browsers strictly enforce CORS and block cookies on `file://` protocols, you must serve the HTML files via a local HTTP server.
 
-{
-  "email": "admin@example.com",
-  "password": "SecurePassword123!",
-  "displayName": "John Agent"
-}
-```
-
-**Response:**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "user": {
-    "id": "clx...",
-    "email": "admin@example.com",
-    "role": "agent"
-  }
-}
-```
-
-**Copy the `accessToken` — you'll need it next.**
-
-### 2. Load Admin Portal
-Open in browser: **http://localhost:5173**
-
-You'll see the OmniChat dev preview page with two components:
-
-**Admin Portal** (top):
-```html
-<omnichat-admin
-  server-url="http://localhost:3001"
-  token="YOUR_TOKEN_HERE"
-></omnichat-admin>
-```
-
-Replace `YOUR_TOKEN_HERE` with the `accessToken` from Step 1.
-
-**Visitor Widget** (bottom-right floating bubble):
-```html
-<omnichat-widget
-  server-url="http://localhost:3001"
-  bubble-color="#4F46E5"
-  welcome-message="Hi! How can we help?"
-></omnichat-widget>
-```
-
-### 3. Test the Chat Flow
-
-**Step A: Open Visitor Widget**
-- Click the floating chat bubble (bottom-right)
-- Click "Start a conversation"
-- The widget opens and connects to the API
-
-**Step B: Check Admin Portal**
-- A new conversation should appear in the "Active" tab
-- Click it to open the chat window
-- You should see the empty message list
-
-**Step C: Send Messages**
-- Type a message in the widget and send it
-- The message appears in the admin portal in real-time
-- Type a reply in the admin portal
-- The reply appears in the widget
-
-**Step D: Test Typing Indicator**
-- Start typing in either side
-- The other side should see "is typing..." indicator
-- Indicator disappears after 2 seconds of no typing
-
-**Step E: Resolve Conversation**
-- In the admin portal, click the "Resolve" button
-- The widget shows "This conversation has been resolved"
-- Optionally click "Start a new chat" for a fresh conversation
-
----
-
-## Useful Commands
-
-### Development
+Open a new terminal and start the demo server:
 ```bash
-# Start everything (from 3 terminals as shown above)
-npm run dev:api                          # Terminal 1
-npm run dev:web                          # Terminal 2
-
-# Watch web components hot-reload (dev mode)
-cd apps/web && npm run dev
-
-# Watch API hot-reload
-cd apps/api && npm run dev
+node serve-demo.js
 ```
+This runs a tiny server at **http://localhost:8081**.
 
-### Database
+### 2. Create an Admin Account (via API)
+Open Postman, curl, or your preferred REST client and register an admin user:
+
 ```bash
-# Push schema to database
-npm run prisma:push
-
-# Regenerate Prisma client (after changing provider)
-npm run prisma:generate
-
-# Open Prisma Studio (visual database explorer)
-npm run prisma:studio
-# Opens http://localhost:5555
-
-# Switch database provider
-./scripts/use-provider.sh postgresql     # Switch to PostgreSQL
-./scripts/use-provider.sh mongodb        # Switch to MongoDB
-./scripts/use-provider.sh mysql          # Switch to MySQL
+curl -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "SecurePassword123!",
+    "displayName": "John Agent"
+  }'
 ```
+*(No need to copy the token! The API will automatically set the HttpOnly cookie for future requests).*
 
-### Docker
-```bash
-# Start services in background
-docker-compose up -d
+### 3. Load Admin Portal & Widget
 
-# Stop services
-docker-compose down
+Open your browser to:
+- **Admin Dashboard:** [http://localhost:8081/demo/admin.html](http://localhost:8081/demo/admin.html)
+- **Visitor Widget:** [http://localhost:8081/demo/widget.html](http://localhost:8081/demo/widget.html)
 
-# View logs
-docker-compose logs -f
-
-# Restart a specific service
-docker-compose restart db-mysql
-
-# MySQL-only deployment (no Mongo)
-docker-compose up -d api db-mysql nginx
-
-# MongoDB-only deployment (uncomment mongo in compose file first)
-# docker-compose up -d api db-mongo nginx
-```
-
-### Building
-```bash
-# Build both admin and visitor widgets
-npm run build:web
-
-# Build only admin portal (omnichat-admin.js)
-npm run build:admin
-
-# Build only visitor widget (omnichat-client.js)
-npm run build:client
-
-# Production API build
-npm run build:api
-```
+Sign in with the credentials from Step 2. The admin dashboard will automatically load and seamlessly authenticate via cookies over HTTP and WebSockets.
 
 ---
 
@@ -268,9 +151,9 @@ npm run prisma:generate
 - MySQL takes ~30 seconds to start. Wait and retry.
 - Check logs: `docker-compose logs db-mysql`
 
-### "Token invalid" in admin portal
-- Make sure you're using the full `accessToken` from `/auth/register`
-- The token format should start with `eyJ...`
+### "Unauthorized" in admin portal
+- Ensure you are accessing the demo via **http://localhost:8081** and NOT `file://` or `localhost:5173`
+- Ensure you have successfully registered and logged in via the Admin Demo login page.
 
 ### Visitor widget won't connect
 - Ensure API is running on port 3001: `npm run dev:api`

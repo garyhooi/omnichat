@@ -32,43 +32,35 @@ cd apps/web && npm run dev
 
 ---
 
+
 ## Test the Demo in 3 Steps
 
-### 1. Create Admin Account (Postman/curl/browser)
+### 1. Start the Local Demo Server
+Run the secure demo server to serve the HTML pages over HTTP so the browser can attach the HttpOnly cookies for security:
+```bash
+node serve-demo.js
+```
+This will run the demo server at **http://localhost:8081**.
+
+### 2. Create Admin Account (via API)
 ```bash
 curl -X POST http://localhost:3001/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
+    "username": "admin",
     "password": "SecurePassword123!",
     "displayName": "John Agent"
   }'
 ```
 
-Copy the `accessToken` from the response.
+*(No need to copy the token! The API automatically sets the HttpOnly cookie for future requests).*
 
-### 2. Open Admin Portal in Browser
-Navigate to: **http://localhost:5173**
+### 3. Open Admin Dashboard and Widget
+Navigate to:
+- **Admin Dashboard:** [http://localhost:8081/demo/admin.html](http://localhost:8081/demo/admin.html)
+- **Visitor Widget:** [http://localhost:8081/demo/widget.html](http://localhost:8081/demo/widget.html)
 
-Find this in the HTML:
-```html
-<omnichat-admin
-  server-url="http://localhost:3001"
-  token="YOUR_TOKEN_HERE"
-></omnichat-admin>
-```
-
-Replace `YOUR_TOKEN_HERE` with the token from Step 1. 
-
-**The admin portal should now be live with no conversations.**
-
-### 3. Test with the Visitor Widget
-- Click the floating chat bubble (bottom-right) on the same page
-- Click "Start a conversation"
-- Type a message from the widget
-- Watch it appear in the admin portal in real-time
-- Reply from admin portal
-- Watch it appear in the widget
+Sign in from the Admin Dashboard and the portal will load. Open the Visitor Widget in a separate tab or window to start a conversation!
 
 ---
 
@@ -97,7 +89,7 @@ npm run prisma:studio
 |-------|-----|
 | `Cannot find module '@prisma/client'` | `npm run prisma:generate` then restart API |
 | MySQL connection refused | `docker-compose ps` to check if running, wait 30s |
-| Token invalid in admin portal | Make sure you copied the full `accessToken` value |
+| Unauthorized in admin portal | Ensure you are using `http://localhost:8081` instead of `file://` |
 | Widget won't connect | Check API running on 3001, look at browser console |
 | Port 3001 in use | Change `PORT=3002` in `.env` |
 | Port 5173 in use | Vite auto-increments, check console for new port |

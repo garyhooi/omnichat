@@ -18,7 +18,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: any) => {
+          let token = null;
+          if (request && request.cookies) {
+            token = request.cookies['omnichat_auth_token'];
+          }
+          if (!token && request.headers.authorization) {
+            token = request.headers.authorization.replace('Bearer ', '');
+          }
+          return token;
+        },
+      ]),
       ignoreExpiration: false,
       secretOrKey: config.get<string>('JWT_SECRET'),
     });

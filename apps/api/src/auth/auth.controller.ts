@@ -1,5 +1,6 @@
-import { Body, Controller, Post, UseGuards, Request, Ip, Headers } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
@@ -42,8 +43,16 @@ export class AuthController {
     @Body() dto: RegisterDto,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.register(dto.username, dto.password, dto.displayName, ip, userAgent);
+    const result = await this.authService.register(dto.username, dto.password, dto.displayName, ip, userAgent);
+    res.cookie('omnichat_auth_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+    return result;
   }
 
   @Post('login')
@@ -51,16 +60,25 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.login(dto.username, dto.password, ip, userAgent);
+    const result = await this.authService.login(dto.username, dto.password, ip, userAgent);
+    res.cookie('omnichat_auth_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+    return result;
   }
 
   @Post('logout')
   @UseGuards(AuthGuard('jwt'))
-  async logout(@Request() req: any) {
+  async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
     if (req.user && req.user.jti) {
       await this.authService.logout(req.user.jti);
     }
+    res.clearCookie('omnichat_auth_token');
     return { success: true };
   }
 }
