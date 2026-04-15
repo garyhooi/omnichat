@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
+import heic2any from 'heic2any'
 
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes by Vue's defineCustomElement
@@ -331,13 +332,16 @@ function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File
         const ctx = canvas.getContext('2d')
         ctx?.drawImage(img, 0, 0, width, height)
 
+        const mimeType = 'image/webp'
+
         canvas.toBlob((blob) => {
           if (blob) {
-            resolve(new File([blob], file.name, { type: file.type || 'image/jpeg' }))
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp"
+            resolve(new File([blob], newName, { type: mimeType }))
           } else {
             reject(new Error('Canvas to Blob failed'))
           }
-        }, file.type || 'image/jpeg', quality)
+        }, mimeType, quality)
       }
       img.onerror = (e) => reject(e)
     }
@@ -350,19 +354,35 @@ async function handleFileUpload(event: Event) {
   if (!target.files || target.files.length === 0) return
 
   let file = target.files[0]
-  if (file.size > 10 * 1024 * 1024) {
-    alert('File size exceeds 10MB limit.')
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File size exceeds 5MB limit.')
     return
   }
 
   isUploading.value = true
 
   try {
+    if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+      })
+      const blobArray = Array.isArray(convertedBlob) ? convertedBlob : [convertedBlob]
+      file = new File([blobArray[0]], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' })
+    }
+
     if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
+    } else {
+      // If it's another format somehow or conversion failed but bypassed, ensure it's still treated
+      throw new Error('Unsupported format')
     }
   } catch (err) {
-    console.warn('Image compression failed, using original file', err)
+    console.error('Image compression/conversion failed', err)
+    alert('Failed to process image. Make sure it is a valid format (JPG, PNG, HEIC, WEBP).')
+    isUploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+    return
   }
 
   const formData = new FormData()
@@ -659,10 +679,10 @@ onUnmounted(() => {
           <button
             type="button"
             class="attachment-btn"
-            style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 10px; color: #6b7280;"
+            style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 0 8px; color: #6b7280; display: flex; align-items: center; justify-content: center;"
             :disabled="isUploading"
             @click="triggerFileUpload"
-            title="Attach Image"
+            title="Attach Image (Max size: 5MB. Supported: JPG, PNG, HEIC, WEBP)"
           >
             &#128206;
           </button>

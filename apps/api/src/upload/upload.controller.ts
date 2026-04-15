@@ -1,11 +1,12 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException, Optional, UseGuards } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException, Optional } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { randomUUID } from 'crypto';
-import { extname, join } from 'path';
+import { join } from 'path';
 import { Request } from 'express';
 import * as sharp from 'sharp';
+import * as fs from 'fs/promises';
 import { UploadTokenService } from './upload-token.service';
 
 @Controller('upload')
@@ -16,20 +17,14 @@ export class UploadController {
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // Restrict uploads to 10 per minute
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req: Request, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
-          const uniqueSuffix = randomUUID();
-          const ext = extname(file.originalname);
-          callback(null, `${uniqueSuffix}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fileSize: 5 * 1024 * 1024, // 5MB limit
       },
       fileFilter: (req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-          return callback(new BadRequestException('Only image files are allowed!'), false);
+        // Enforce the mimetype check, but we will also verify content with sharp
+        if (!file.mimetype.match(/\/(webp)$/)) {
+          return callback(new BadRequestException('Only WebP images are allowed!'), false);
         }
         callback(null, true);
       },
@@ -47,7 +42,6 @@ export class UploadController {
     // Check for upload token or JWT auth
     let token = uploadToken;
     
-    // Extract token from Authorization header if present (Bearer token or just the token)
     if (authHeader) {
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7);
@@ -56,43 +50,62 @@ export class UploadController {
       }
     }
 
-    // Validate token if provided (for visitor uploads)
     if (token && token.startsWith('upload_')) {
       try {
-        const conversationId = await this.uploadTokenService.validateToken(token);
+        await this.uploadTokenService.validateToken(token);
         await this.uploadTokenService.markTokenAsUsed(token);
       } catch (error) {
         throw new ForbiddenException('Invalid or expired upload token');
       }
     }
 
-    // Generate a thumbnail
-    const ext = extname(file.filename);
-    const thumbFilename = file.filename.replace(ext, `-thumb${ext}`);
-    const thumbPath = join(file.destination, thumbFilename);
+    // Process image strictly with sharp (memory buffer)
+    const uniqueSuffix = randomUUID();
+    const filename = `${uniqueSuffix}.webp`;
+    const thumbFilename = `${uniqueSuffix}-thumb.webp`;
+    const uploadDir = './uploads';
+    const filePath = join(uploadDir, filename);
+    const thumbPath = join(uploadDir, thumbFilename);
 
     try {
-      await sharp(file.path)
-        .resize(150, 150, { fit: 'cover' })
-        .toFile(thumbPath);
-    } catch (err) {
-      console.error('Failed to generate thumbnail', err);
-      // Fallback: If thumbnail generation fails, return the original URL as thumbnail
-      return {
-        url: `/uploads/${file.filename}`,
-        thumbnailUrl: `/uploads/${file.filename}`,
-        filename: file.filename,
-        mimetype: file.mimetype,
-        size: file.size,
-      };
-    }
+      // Ensure directory exists
+      await fs.mkdir(uploadDir, { recursive: true });
 
-    return {
-      url: `/uploads/${file.filename}`,
-      thumbnailUrl: `/uploads/${thumbFilename}`,
-      filename: file.filename,
-      mimetype: file.mimetype,
-      size: file.size,
-    };
+      const image = sharp(file.buffer);
+      const metadata = await image.metadata();
+
+      // Ensure valid dimensions
+      let width = metadata.width;
+      let height = metadata.height;
+
+      // Force resize if width > 1200
+      if (width && width > 1200) {
+        width = 1200;
+        // sharp automatically maintains aspect ratio if only width is passed
+      }
+
+      // Write primary image (forces strip of EXIF data & ensures pure WebP format)
+      const primaryImageInfo = await image
+        .resize(width)
+        .webp({ quality: 80 })
+        .toFile(filePath);
+
+      // Write thumbnail
+      await sharp(file.buffer)
+        .resize(150, 150, { fit: 'cover' })
+        .webp({ quality: 80 })
+        .toFile(thumbPath);
+
+      return {
+        url: `/uploads/${filename}`,
+        thumbnailUrl: `/uploads/${thumbFilename}`,
+        filename: filename,
+        mimetype: 'image/webp',
+        size: primaryImageInfo.size,
+      };
+    } catch (err) {
+      console.error('Image processing failed:', err);
+      throw new BadRequestException('Invalid or corrupt image file');
+    }
   }
 }
