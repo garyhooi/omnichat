@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniChat Visitor Widget Demo</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f9fafb;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #4f46e5;
+        }
+        p {
+            line-height: 1.6;
+        }
+    </style>
+
+    <!-- Load OmniChat Client Bundle from jsDelivr CDN -->
+    <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js" crossorigin="anonymous"></script>
+    
+    <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
+    <script>
+        window.addEventListener('error', function(e) {
+            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
+                console.warn('CDN script failed to load. Falling back to local build...');
+                const localScript = document.createElement('script');
+                localScript.src = '../apps/web/dist/omnichat-client.js';
+                document.head.appendChild(localScript);
+            }
+        }, true);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>OmniChat Visitor Widget</h1>
+        <p>
+            Welcome to the OmniChat Visitor Widget Demo! Look at the bottom-right corner of your screen to interact with the chat bubble.
+        </p>
+        <p>
+            This page demonstrates how easily you can embed the compiled Vue 3 Custom Web Component into any static HTML site using our jsDelivr CDN link.
+        </p>
+        
+        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #e5e7eb;">
+        
+        <h3>Setup Instructions:</h3>
+        <ol>
+            <li>Include the <code>&lt;script&gt;</code> tag pointing to the CDN in your <code>&lt;head&gt;</code>.</li>
+            <li>Add the <code>&lt;omnichat-widget&gt;</code> element anywhere in your body.</li>
+            <li>Point the <code>server-url</code> attribute to your running OmniChat API backend (e.g., <code>http://localhost:3001</code>).</li>
+        </ol>
+    </div>
+
+    <!-- OmniChat Widget Component -->
+    <omnichat-widget 
+        server-url="http://localhost:3001" 
+        bubble-color="#4F46E5" 
+        welcome-message="Hi there! 👋 How can we help you today?">
+    </omnichat-widget>
+</body>
+</html>

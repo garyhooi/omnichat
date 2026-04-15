@@ -25,10 +25,8 @@ async function bootstrap() {
   // Enable CORS dynamically using the DB config
   app.enableCors({
     origin: async (origin, callback) => {
-      // Localhost bypass for development
-      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-        return callback(null, true);
-      }
+      // Allow all origins unconditionally
+      return callback(null, true);
 
       try {
         const config = await prisma.siteConfig.findFirst({
