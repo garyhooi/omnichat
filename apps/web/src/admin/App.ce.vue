@@ -96,7 +96,11 @@ const welcomeMessage = ref('Hello! How can we help you today?')
 const bubbleSize = ref('medium')
 const bubblePattern = ref('solid')
 const websitePosition = ref('bottom-right')
-const bubbleIcon = ref('💬')
+const bubbleIconType = ref('emoji')
+const bubbleIconEmoji = ref('💬')
+const bubbleIconUrl = ref('')
+const isUploadingIcon = ref(false)
+const iconFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
 const enableReadReceipts = ref(true)
 
@@ -433,6 +437,9 @@ async function handleFileUpload(event: Event) {
 
   const formData = new FormData()
   formData.append('file', file)
+  if (activeConversationId.value) {
+    formData.append('conversationId', activeConversationId.value)
+  }
 
   try {
     const res = await fetch(`${props.serverUrl}/upload`, {
@@ -596,7 +603,13 @@ async function loadSettings() {
         bubbleSize.value = config.bubbleSize || 'medium'
         bubblePattern.value = config.bubblePattern || 'solid'
         websitePosition.value = config.websitePosition || 'bottom-right'
-        bubbleIcon.value = config.bubbleIcon || '💬'
+        if (config.bubbleIcon && (config.bubbleIcon.startsWith('/') || config.bubbleIcon.startsWith('http'))) {
+          bubbleIconType.value = 'custom'
+          bubbleIconUrl.value = config.bubbleIcon
+        } else {
+          bubbleIconType.value = 'emoji'
+          bubbleIconEmoji.value = config.bubbleIcon || '💬'
+        }
         if (config.enableReadReceipts !== undefined) {
           enableReadReceipts.value = config.enableReadReceipts
         }
@@ -707,6 +720,65 @@ function insertQuickReply(content: string) {
 }
 
 
+
+async function uploadCustomIcon(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  try {
+    isUploadingIcon.value = true
+    
+    // Convert to webp if it's not already using the backend or frontend logic.
+    // The backend expects webp. We might need to send it as webp or let backend handle it.
+    // Wait, backend explicitly checks for webp mimetype in fileFilter.
+    // We should convert to webp here, OR remove the restriction in the backend, 
+    // BUT the backend says "Only WebP images are allowed!". Let's see if there's an existing heic/png converter.
+    // The codebase has `heic2any` in package.json.
+    
+    const formData = new FormData()
+    
+    // Create a canvas to convert to webp
+    const img = new Image()
+    img.src = URL.createObjectURL(file)
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+    })
+    
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')
+    ctx?.drawImage(img, 0, 0)
+    
+    const webpBlob = await new Promise<Blob | null>(resolve => {
+      canvas.toBlob(resolve, 'image/webp', 0.9)
+    })
+    
+    if (!webpBlob) throw new Error('Failed to convert image to WebP')
+    
+    formData.append('file', webpBlob, 'icon.webp')
+    
+    const res = await fetch(`${props.serverUrl}/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${props.token}`,
+      },
+      body: formData,
+    })
+    
+    if (!res.ok) throw new Error('Upload failed')
+    const data = await res.json()
+    bubbleIconUrl.value = data.url
+  } catch (err: any) {
+    settingsError.value = err.message || 'Failed to upload icon'
+    setTimeout(() => { settingsError.value = '' }, 5000)
+  } finally {
+    isUploadingIcon.value = false
+    if (iconFileInput.value) iconFileInput.value.value = ''
+  }
+}
+
 async function saveSettings() {
   settingsSaved.value = false
   settingsError.value = ''
@@ -727,7 +799,7 @@ async function saveSettings() {
           bubbleSize: bubbleSize.value,
           bubblePattern: bubblePattern.value,
           websitePosition: websitePosition.value,
-          bubbleIcon: bubbleIcon.value,
+          bubbleIcon: bubbleIconType.value === 'custom' ? bubbleIconUrl.value : bubbleIconEmoji.value,
           enableReadReceipts: enableReadReceipts.value,
         }),
       })
@@ -745,7 +817,7 @@ async function saveSettings() {
           bubbleSize: bubbleSize.value,
           bubblePattern: bubblePattern.value,
           websitePosition: websitePosition.value,
-          bubbleIcon: bubbleIcon.value,
+          bubbleIcon: bubbleIconType.value === 'custom' ? bubbleIconUrl.value : bubbleIconEmoji.value,
           allowedOrigins: '*',
           enableReadReceipts: enableReadReceipts.value,
         }),
@@ -1178,13 +1250,37 @@ onUnmounted(() => {
 
           <div class="settings-field">
             <label class="settings-label">Bubble Icon</label>
-            <select v-model="bubbleIcon" class="settings-input">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px; color: #374151;">
+                <input type="radio" v-model="bubbleIconType" value="emoji" /> Emoji
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px; color: #374151;">
+                <input type="radio" v-model="bubbleIconType" value="custom" /> Custom Image
+              </label>
+            </div>
+            
+            <select v-if="bubbleIconType === 'emoji'" v-model="bubbleIconEmoji" class="settings-input">
               <option value="💬">💬 Chat</option>
               <option value="✉️">✉️ Envelope</option>
               <option value="👋">👋 Wave</option>
               <option value="❓">❓ Question</option>
               <option value="🎧">🎧 Headset</option>
             </select>
+            
+            <div v-if="bubbleIconType === 'custom'" style="display: flex; flex-direction: column; gap: 8px;">
+              <div v-if="bubbleIconUrl" style="display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <img :src="props.serverUrl + bubbleIconUrl" alt="Custom Icon" style="width: 32px; height: 32px; object-fit: contain; border-radius: 4px;" />
+                <button @click="bubbleIconUrl = ''" class="settings-btn" style="padding: 4px 8px; font-size: 12px;">Remove</button>
+              </div>
+              <div v-else>
+                <input type="file" ref="iconFileInput" accept="image/*" style="display: none" @change="uploadCustomIcon" />
+                <button @click="iconFileInput?.click()" class="settings-btn" :disabled="isUploadingIcon" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+                  <span v-if="isUploadingIcon" class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
+                  {{ isUploadingIcon ? 'Uploading...' : 'Upload Image' }}
+                </button>
+                <p style="font-size: 11px; color: #6b7280; margin-top: 4px;">Square image recommended (PNG, JPG, WebP)</p>
+              </div>
+            </div>
           </div>
 
           <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">

@@ -387,6 +387,9 @@ async function handleFileUpload(event: Event) {
 
   const formData = new FormData()
   formData.append('file', file)
+  if (conversationId.value) {
+    formData.append('conversationId', conversationId.value)
+  }
 
   try {
     const headers: HeadersInit = {}
@@ -558,7 +561,8 @@ onUnmounted(() => {
       @click="toggleWidget"
       aria-label="Open chat"
     >
-      {{ siteBubbleIcon }}
+      <img v-if="siteBubbleIcon.startsWith('/') || siteBubbleIcon.startsWith('http')" :src="siteBubbleIcon.startsWith('http') ? siteBubbleIcon : props.serverUrl + siteBubbleIcon" alt="Chat Icon" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none; border-radius: 50%;" />
+      <span v-else>{{ siteBubbleIcon }}</span>
     </button>
     <div
       v-if="!isOpen && unreadCount > 0"

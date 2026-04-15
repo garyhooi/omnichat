@@ -1,4 +1,4 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException, Body } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -33,6 +33,7 @@ export class UploadController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Headers('authorization') authHeader: string,
+    @Body('conversationId') conversationId?: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -60,9 +61,11 @@ export class UploadController {
 
     // Process image strictly with sharp (memory buffer)
     const uniqueSuffix = randomUUID();
-    const filename = `${uniqueSuffix}.webp`;
-    const thumbFilename = `${uniqueSuffix}-thumb.webp`;
-    const uploadDir = './uploads';
+    const prefix = conversationId ? `${conversationId}-` : '';
+    const filename = `${prefix}${uniqueSuffix}.webp`;
+    const thumbFilename = `${prefix}${uniqueSuffix}-thumb.webp`;
+    const subfolder = conversationId ? 'conversations' : 'icons';
+    const uploadDir = join('./uploads', subfolder);
     const filePath = join(uploadDir, filename);
     const thumbPath = join(uploadDir, thumbFilename);
 
@@ -96,8 +99,8 @@ export class UploadController {
         .toFile(thumbPath);
 
       return {
-        url: `/uploads/${filename}`,
-        thumbnailUrl: `/uploads/${thumbFilename}`,
+        url: `/uploads/${subfolder}/${filename}`,
+        thumbnailUrl: `/uploads/${subfolder}/${thumbFilename}`,
         filename: filename,
         mimetype: 'image/webp',
         size: primaryImageInfo.size,
