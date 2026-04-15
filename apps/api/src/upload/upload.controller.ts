@@ -1,4 +1,4 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException, Optional } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Headers, ForbiddenException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -33,14 +33,13 @@ export class UploadController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Headers('authorization') authHeader: string,
-    @Optional() uploadToken?: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
     // Check for upload token or JWT auth
-    let token = uploadToken;
+    let token = '';
     
     if (authHeader) {
       if (authHeader.startsWith('Bearer ')) {
@@ -53,7 +52,7 @@ export class UploadController {
     if (token && token.startsWith('upload_')) {
       try {
         await this.uploadTokenService.validateToken(token);
-        await this.uploadTokenService.markTokenAsUsed(token);
+        // allow reusing the token for subsequent uploads
       } catch (error) {
         throw new ForbiddenException('Invalid or expired upload token');
       }

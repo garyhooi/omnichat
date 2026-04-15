@@ -62,10 +62,6 @@ export class UploadTokenService {
       throw new ForbiddenException('Invalid upload token');
     }
 
-    if (uploadToken.used) {
-      throw new ForbiddenException('Upload token already used');
-    }
-
     if (uploadToken.expiresAt < new Date()) {
       throw new ForbiddenException('Upload token expired');
     }
