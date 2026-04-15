@@ -31,12 +31,15 @@ export class SiteConfigService {
     siteName: string;
     bubbleColor?: string;
     welcomeMessage?: string;
+    offlineMessage?: string;
     bubbleSize?: string;
     bubblePattern?: string;
     websitePosition?: string;
     bubbleIcon?: string;
     notificationSoundUrl?: string;
     allowedOrigins: string;
+    enableReadReceipts?: boolean;
+    isOfflineMode?: boolean;
   }) {
     return this.prisma.siteConfig.create({ data });
   }
@@ -56,6 +59,8 @@ export class SiteConfigService {
       notificationSoundUrl?: string;
       allowedOrigins?: string;
       isActive?: boolean;
+      enableReadReceipts?: boolean;
+      isOfflineMode?: boolean;
     },
   ) {
     return this.prisma.siteConfig.update({

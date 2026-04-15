@@ -100,6 +100,8 @@ interface AuthenticatedSocket extends Socket {
 // ---------------------------------------------------------------------------
 // Chat Gateway — Socket.io WebSocket handler
 // ---------------------------------------------------------------------------
+import { SiteConfigService } from '../config/site-config.service';
+
 @WebSocketGateway({
   cors: {
     origin: async (origin: string, callback: (err: Error | null, allow?: boolean | string) => void) => {
@@ -167,6 +169,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
     private readonly uploadTokenService: UploadTokenService,
+    private readonly siteConfigService: SiteConfigService,
   ) {}
 
   /**
@@ -437,6 +440,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: StartConversationPayload,
   ) {
+    const config = await this.siteConfigService.getActiveConfig() as any;
+    if (config?.isOfflineMode) {
+      client.emit('error', { message: 'All agents are currently offline. Please check back later.' });
+      return;
+    }
+
     const visitorId = payload.visitorId || client.data.visitorId || client.id;
     
     // Rate limit: 2 starts per 60 seconds
@@ -554,6 +563,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: SendMessagePayload,
   ) {
+    const senderType = client.data.isVisitor ? 'visitor' : 'agent';
+    
     const { conversationId, content, messageType, attachmentUrl, attachmentThumbnailUrl } = payload;
 
     // Rate Limit Check
@@ -567,7 +578,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Determine sender type and ID based on socket identity
-    const senderType = client.data.isVisitor ? 'visitor' : 'agent';
     const senderId = client.data.isVisitor
       ? client.data.visitorId
       : client.data.user?.id;

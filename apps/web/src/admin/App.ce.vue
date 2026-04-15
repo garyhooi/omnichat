@@ -111,6 +111,7 @@ function closeImage() {
 // Settings state
 const bubbleColor = ref('#4F46E5')
 const welcomeMessage = ref('Hello! How can we help you today?')
+const offlineMessage = ref('We are currently offline. Please check back later.')
 const bubbleSize = ref('medium')
 const bubblePattern = ref('solid')
 const websitePosition = ref('bottom-right')
@@ -121,6 +122,7 @@ const isUploadingIcon = ref(false)
 const iconFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
 const enableReadReceipts = ref(true)
+const isOfflineMode = ref(false)
 
 const notificationSoundUrl = ref('')
 const isUploadingSound = ref(false)
@@ -217,10 +219,16 @@ const draftAgentRemarks = ref('')
 const currentUserUsername = ref('')
 const currentUserDisplayName = ref('')
 
+const activeUnreadCount = computed(() => {
+  return conversations.value
+    .filter((c) => c.status === 'active')
+    .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+})
+
 const specialistUnreadCount = computed(() => {
-  return conversations.value.filter(
-    (c) => c.status === 'specialist' && c.specialistUsername === currentUserUsername.value
-  ).length
+  return conversations.value
+    .filter((c) => c.status === 'specialist' && c.specialistUsername === currentUserUsername.value)
+    .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
 })
 
 const filteredConversations = computed(() => {
@@ -807,6 +815,7 @@ async function loadSettings() {
         siteConfigId.value = config.id
         bubbleColor.value = config.bubbleColor || '#4F46E5'
         welcomeMessage.value = config.welcomeMessage || 'Hello! How can we help you today?'
+        offlineMessage.value = config.offlineMessage || 'We are currently offline. Please check back later.'
         bubbleSize.value = config.bubbleSize || 'medium'
         bubblePattern.value = config.bubblePattern || 'solid'
         websitePosition.value = config.websitePosition || 'bottom-right'
@@ -820,6 +829,9 @@ async function loadSettings() {
         if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
         if (config.enableReadReceipts !== undefined) {
           enableReadReceipts.value = config.enableReadReceipts
+        }
+        if (config.isOfflineMode !== undefined) {
+          isOfflineMode.value = config.isOfflineMode
         }
       }
     }
@@ -1002,11 +1014,13 @@ async function saveSettings() {
         body: JSON.stringify({
           bubbleColor: bubbleColor.value,
           welcomeMessage: welcomeMessage.value,
+          offlineMessage: offlineMessage.value,
           bubbleSize: bubbleSize.value,
           bubblePattern: bubblePattern.value,
           websitePosition: websitePosition.value,
           bubbleIcon: bubbleIconType.value === 'custom' ? bubbleIconUrl.value : bubbleIconEmoji.value,
           enableReadReceipts: enableReadReceipts.value,
+          isOfflineMode: isOfflineMode.value,
           notificationSoundUrl: notificationSoundUrl.value,
         }),
       })
@@ -1027,6 +1041,7 @@ async function saveSettings() {
           bubbleIcon: bubbleIconType.value === 'custom' ? bubbleIconUrl.value : bubbleIconEmoji.value,
           allowedOrigins: '*',
           enableReadReceipts: enableReadReceipts.value,
+          isOfflineMode: isOfflineMode.value,
         }),
       })
     }
@@ -1091,7 +1106,11 @@ onUnmounted(() => {
     <div class="sidebar" style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; border-right: 1px solid #e5e7eb;">
       <div class="sidebar-header" style="flex-shrink: 0 !important; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; flex-direction: column;">
-          <span>OmniChat</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>OmniChat</span>
+            <span v-if="isOfflineMode" style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Offline Mode</span>
+            <span v-else style="background-color: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Online</span>
+          </div>
           <span v-if="currentUserUsername" style="font-size: 11px; color: #6b7280; margin-top: 2px;">
             {{ currentUserDisplayName }} (@{{ currentUserUsername }})
           </span>
@@ -1130,6 +1149,9 @@ onUnmounted(() => {
           @click="activeTab = 'active'"
         >
           Active
+          <span v-if="activeUnreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: bold; line-height: 16px; margin-left: 4px;">
+            {{ activeUnreadCount }}
+          </span>
         </button>
         <button
           class="sidebar-tab"
@@ -1509,6 +1531,16 @@ onUnmounted(() => {
           </div>
 
           <div class="settings-field">
+            <label class="settings-label">Offline Message</label>
+            <textarea
+              v-model="offlineMessage"
+              class="settings-input"
+              rows="3"
+              style="resize: vertical;"
+            />
+          </div>
+
+          <div class="settings-field">
             <label class="settings-label">Bubble Size</label>
             <select v-model="bubbleSize" class="settings-input">
               <option value="small">Small</option>
@@ -1577,6 +1609,15 @@ onUnmounted(() => {
               v-model="enableReadReceipts"
             />
             <label for="enableReadReceipts" class="settings-label" style="margin-bottom: 0;">Enable Read Receipts</label>
+          </div>
+
+          <div class="settings-field" style="display: flex; align-items: center; gap: 8px;">
+            <input
+              id="isOfflineMode"
+              type="checkbox"
+              v-model="isOfflineMode"
+            />
+            <label for="isOfflineMode" class="settings-label" style="margin-bottom: 0;">Offline Mode (Disable Chat)</label>
           </div>
 
           <div class="settings-field">

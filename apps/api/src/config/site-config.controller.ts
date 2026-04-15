@@ -29,6 +29,10 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  offlineMessage?: string;
+
+  @IsString()
+  @IsOptional()
   bubbleSize?: string;
 
   @IsString()
@@ -54,6 +58,10 @@ class CreateSiteConfigDto {
   @IsBoolean()
   @IsOptional()
   enableReadReceipts?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isOfflineMode?: boolean;
 }
 
 class UpdateSiteConfigDto {
@@ -64,6 +72,10 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   welcomeMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  offlineMessage?: string;
 
   @IsString()
   @IsOptional()
@@ -96,6 +108,10 @@ class UpdateSiteConfigDto {
   @IsBoolean()
   @IsOptional()
   enableReadReceipts?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isOfflineMode?: boolean;
 }
 
 // ---------------------------------------------------------------------------

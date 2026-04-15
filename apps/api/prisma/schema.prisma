@@ -108,12 +108,14 @@ model SiteConfig {
   siteName           String   @unique
   bubbleColor        String   @default("#4F46E5")
   welcomeMessage     String   @default("Hello! How can we help you today?")
+  offlineMessage     String   @default("We are currently offline. Please check back later.")
   bubbleSize         String   @default("medium")
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")
   bubbleIcon         String   @default("💬")
   allowedOrigins     String
   isActive           Boolean  @default(true)
+  isOfflineMode      Boolean  @default(false)
   enableReadReceipts Boolean  @default(true)
   notificationSoundUrl String?
   createdAt          DateTime @default(now())

@@ -46,11 +46,13 @@ const messagesArea = ref<HTMLElement | null>(null)
 // Site config state
 const siteBubbleColor = ref('')
 const siteWelcomeMessage = ref('')
+const siteOfflineMessage = ref('We are currently offline. Please check back later.')
 const siteBubbleSize = ref('medium')
 const siteBubblePattern = ref('solid')
 const siteWebsitePosition = ref('bottom-right')
 const siteBubbleIcon = ref('💬')
 const siteEnableReadReceipts = ref(true)
+const siteIsOfflineMode = ref(false)
 
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
@@ -579,11 +581,13 @@ onMounted(() => {
     .then((config) => {
       if (config.bubbleColor) siteBubbleColor.value = config.bubbleColor
       if (config.welcomeMessage) siteWelcomeMessage.value = config.welcomeMessage
+      if (config.offlineMessage) siteOfflineMessage.value = config.offlineMessage
       if (config.bubbleSize) siteBubbleSize.value = config.bubbleSize
       if (config.bubblePattern) siteBubblePattern.value = config.bubblePattern
       if (config.websitePosition) siteWebsitePosition.value = config.websitePosition
       if (config.bubbleIcon) siteBubbleIcon.value = config.bubbleIcon
       if (config.enableReadReceipts !== undefined) siteEnableReadReceipts.value = config.enableReadReceipts
+      if (config.isOfflineMode !== undefined) siteIsOfflineMode.value = config.isOfflineMode
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       
       // Apply position to the host element
@@ -652,21 +656,27 @@ onUnmounted(() => {
     <!-- Welcome screen (no active conversation) -->
     <template v-if="!conversationId">
       <div class="welcome-screen">
-        <p>{{ currentWelcomeMessage }}</p>
-        
-        <div class="pre-chat-form">
-          <input v-model="visitorName" type="text" placeholder="Your Name" class="form-input" />
-          <input v-model="visitorEmail" type="text" inputmode="email" placeholder="Your Email (Optional)" class="form-input" />
-        </div>
+        <template v-if="siteIsOfflineMode">
+          <p style="color: #ef4444; font-weight: bold; margin-bottom: 8px;">Agents are currently offline</p>
+          <p style="white-space: pre-wrap;">{{ siteOfflineMessage }}</p>
+        </template>
+        <template v-else>
+          <p>{{ currentWelcomeMessage }}</p>
+          
+          <div class="pre-chat-form">
+            <input v-model="visitorName" type="text" placeholder="Your Name" class="form-input" />
+            <input v-model="visitorEmail" type="text" inputmode="email" placeholder="Your Email (Optional)" class="form-input" />
+          </div>
 
-        <button
-          type="button"
-          class="start-chat-btn"
-          :style="{ backgroundColor: currentBubbleColor }"
-          @click="startConversation"
-        >
-          Start a conversation
-        </button>
+          <button
+            type="button"
+            class="start-chat-btn"
+            :style="{ backgroundColor: currentBubbleColor }"
+            @click="startConversation"
+          >
+            Start a conversation
+          </button>
+        </template>
       </div>
     </template>
 
