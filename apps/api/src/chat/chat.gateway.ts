@@ -7,12 +7,12 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { AuthService } from '../auth/auth.service';
+import { UploadTokenService } from '../upload/upload-token.service';
 import { UAParser } from 'ua-parser-js';
-
 import { PrismaService } from '../prisma/prisma.service';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,13 @@ interface AuthenticatedSocket extends Socket {
 @WebSocketGateway({
   cors: {
     origin: async (origin: string, callback: (err: Error | null, allow?: boolean | string) => void) => {
-      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Allow localhost for development
+      if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
         return callback(null, true);
       }
 
@@ -154,6 +160,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
+    private readonly uploadTokenService: UploadTokenService,
   ) {}
 
   /**
@@ -246,6 +253,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.handshake.auth?.token ||
       client.handshake.headers?.authorization?.replace('Bearer ', '');
 
+    const origin = client.handshake.headers.origin as string;
+    const referer = client.handshake.headers.referer as string;
+
+    // Validate origin for visitor connections
+    if (!token) {
+      await this.validateVisitorOrigin(origin, referer);
+    }
+
     if (token) {
       try {
         // Agent connection — validate JWT
@@ -282,6 +297,73 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(
         `Visitor connected: ${client.data.visitorId} (${client.id})`,
       );
+    }
+  }
+
+  /**
+   * Validate visitor connection origin against allowed origins in database
+   */
+  private async validateVisitorOrigin(origin: string | undefined, referer: string | undefined): Promise<void> {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin && !referer) {
+      return;
+    }
+
+    // Allow localhost for development
+    if ((origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) ||
+        (referer && (referer.startsWith('http://localhost') || referer.startsWith('http://127.0.0.1')))) {
+      return;
+    }
+
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      const config = await prisma.siteConfig.findFirst({
+        where: { isActive: true },
+      });
+
+      if (!config || !config.allowedOrigins) {
+        throw new ForbiddenException('Origin validation not configured');
+      }
+
+      // Wildcard allows all origins
+      if (config.allowedOrigins === '*') {
+        return;
+      }
+
+      const allowedOrigins = config.allowedOrigins.split(',').map((s: string) => s.trim());
+
+      // Validate origin header
+      if (origin) {
+        const isOriginAllowed = allowedOrigins.some((allowedOrigin: string) => {
+          return origin === allowedOrigin ||
+                 origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
+        });
+
+        if (isOriginAllowed) {
+          return;
+        }
+      }
+
+      // Fallback to referer validation
+      if (referer) {
+        const refererOrigin = new URL(referer).origin;
+        const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
+          return refererOrigin === allowedOrigin ||
+                 refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
+        });
+
+        if (isRefererAllowed) {
+          return;
+        }
+      }
+
+      throw new ForbiddenException(`Origin not allowed: ${origin || referer}`);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+      throw new ForbiddenException('Origin validation failed');
     }
   }
 
@@ -374,6 +456,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     client.emit('conversation_started', { conversation });
 
+    // Generate upload token for the visitor
+    const uploadToken = await this.uploadTokenService.generateToken(conversation.id);
+    client.emit('upload_token', { token: uploadToken });
+
     // Start inactivity timer
     this.resetInactivityTimer(conversation.id);
 
@@ -412,6 +498,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Send conversation history to the joining client
     client.emit('conversation_history', { conversation });
+
+    // Provide upload token for visitor if conversation is still active
+    if (client.data.isVisitor && conversation.status === 'active') {
+      const uploadToken = await this.uploadTokenService.generateToken(conversationId);
+      client.emit('upload_token', { token: uploadToken });
+    }
 
     // Restart timer if conversation is still active
     if (conversation.status === 'active') {

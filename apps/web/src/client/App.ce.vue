@@ -113,6 +113,7 @@ const reviewSubmitted = ref(false)
 const showEndChatConfirm = ref(false)
 const isUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const uploadToken = ref<string | null>(null)
 
 const selectedImage = ref<string | null>(null)
 
@@ -153,6 +154,11 @@ function connect() {
 
   s.on('connect', () => {
     console.log('[OmniChat Widget] Connected')
+  })
+
+  s.on('upload_token', (data: { token: string }) => {
+    uploadToken.value = data.token
+    console.log('[OmniChat Widget] Upload token received')
   })
 
   s.on('conversation_started', (data: { conversation: { id: string } }) => {
@@ -363,8 +369,16 @@ async function handleFileUpload(event: Event) {
   formData.append('file', file)
 
   try {
+    const headers: HeadersInit = {}
+    
+    // Use upload token if available
+    if (uploadToken.value) {
+      headers['Authorization'] = uploadToken.value
+    }
+
     const res = await fetch(`${props.serverUrl}/upload`, {
       method: 'POST',
+      headers,
       body: formData,
     })
 

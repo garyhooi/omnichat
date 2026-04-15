@@ -8,6 +8,7 @@ import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QuickReplyModule } from './quick-reply/quick-reply.module';
 import { UploadModule } from './upload/upload.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
@@ -16,12 +17,31 @@ import { UploadModule } from './upload/upload.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // Global rate limiting for HTTP endpoints (e.g. 100 requests per 60 seconds)
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
+    // Enhanced rate limiting for HTTP endpoints with multiple tiers
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 1000, // 1 second
+        limit: 10, // 10 requests per second
+      },
+      {
+        name: 'medium',
+        ttl: 60000, // 1 minute
+        limit: 100, // 100 requests per minute
+      },
+      {
+        name: 'long',
+        ttl: 3600000, // 1 hour
+        limit: 1000, // 1000 requests per hour
+      },
+      {
+        name: 'strict',
+        ttl: 60000, // 1 minute
+        limit: 20, // 20 requests per minute for sensitive endpoints
+      },
+    ]),
     PrismaModule,
+    CommonModule, // Security middleware
     AuthModule,
     ChatModule,
     AppConfigModule,

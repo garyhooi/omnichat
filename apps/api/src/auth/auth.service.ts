@@ -8,12 +8,14 @@ import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtPayload } from './jwt.strategy';
+import { SecurityLoggerService } from '../common/security-logger.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly securityLogger: SecurityLoggerService,
   ) {}
 
   /**
@@ -67,14 +69,18 @@ export class AuthService {
     });
 
     if (!user) {
+      this.securityLogger.logAuthAttempt(username, false, ip || 'unknown', 'User not found');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Verify password against Argon2 hash
     const isPasswordValid = await argon2.verify(user.passwordHash, password);
     if (!isPasswordValid) {
+      this.securityLogger.logAuthAttempt(username, false, ip || 'unknown', 'Invalid password');
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    this.securityLogger.logAuthAttempt(username, true, ip || 'unknown');
 
     // Update last login info
     await this.prisma.adminUser.update({
