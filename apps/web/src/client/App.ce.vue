@@ -12,6 +12,7 @@ const props = defineProps({
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
   position: { type: String, default: 'bottom-right' }, // future: bottom-left
+  assignUsername: { type: String, default: '' },
 })
 
 // ---------------------------------------------------------------------------
@@ -346,6 +347,7 @@ function startConversation() {
     visitorLanguage: navigator.language,
     visitorScreenRes: `${window.screen.width}x${window.screen.height}`,
     visitorReferrer: document.referrer || null,
+    assignUsername: props.assignUsername,
     metadata: JSON.stringify({
       userAgent: navigator.userAgent,
     }),

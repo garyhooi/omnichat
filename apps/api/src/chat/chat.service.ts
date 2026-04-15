@@ -27,6 +27,7 @@ export interface CreateConversationInput {
   visitorLanguage?: string;
   visitorScreenRes?: string;
   visitorReferrer?: string;
+  assignedUsername?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,7 @@ export class ChatService {
         visitorLanguage: input.visitorLanguage ?? null,
         visitorScreenRes: input.visitorScreenRes ?? null,
         visitorReferrer: input.visitorReferrer ?? null,
+        assignedUsername: input.assignedUsername ?? null,
       },
     });
 

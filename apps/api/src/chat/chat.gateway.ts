@@ -48,6 +48,7 @@ interface StartConversationPayload {
   visitorLanguage?: string;
   visitorScreenRes?: string;
   visitorReferrer?: string;
+  assignUsername?: string;
 }
 
 interface ReadMessagePayload {
@@ -445,6 +446,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       visitorLanguage: payload.visitorLanguage,
       visitorScreenRes: payload.visitorScreenRes,
       visitorReferrer: payload.visitorReferrer,
+      assignedUsername: payload.assignUsername,
     });
 
     // Join the visitor to the conversation room
