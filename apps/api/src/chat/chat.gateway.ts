@@ -38,6 +38,11 @@ interface ResolveConversationPayload {
   conversationId: string;
 }
 
+interface TransferConversationPayload {
+  conversationId: string;
+  targetUsername: string;
+}
+
 interface StartConversationPayload {
   visitorId: string;
   metadata?: string;
@@ -208,7 +213,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Set 5 minute resolve
     this.inactivityResolves.set(conversationId, setTimeout(async () => {
       try {
-        const conversation = await this.chatService.resolveConversation(conversationId);
+        const conversation = await this.chatService.resolveConversation(conversationId, 'System (Inactivity)');
         
         // Notify the room
         this.server.to(`conv:${conversationId}`).emit('conversation_resolved', {
@@ -279,9 +284,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const onlineAgents = await this.chatService.getOnlineAgents();
         this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
 
-        // Send conversation list to the newly connected agent immediately
+        // Send conversation list and current user details to the newly connected agent immediately
         const conversations = await this.chatService.listConversations();
-        client.emit('conversations_list', { conversations });
+        client.emit('conversations_list', { 
+          conversations,
+          currentUser: {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            role: user.role
+          }
+        });
 
         this.logger.log(`Agent connected: ${user.displayName} (${client.id})`);
       } catch (error) {
@@ -696,6 +709,49 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // =========================================================================
 
   /**
+   * Transfer conversation to a specialist.
+   * Only agents should call this.
+   */
+  @SubscribeMessage('transfer_to_specialist')
+  async handleTransferToSpecialist(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: TransferConversationPayload,
+  ) {
+    if (client.data.isVisitor || !client.data.user) {
+      client.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    const { conversationId, targetUsername } = payload;
+
+    try {
+      const conversation = await this.chatService.transferToSpecialist(
+        conversationId,
+        targetUsername,
+      );
+
+      // Notify all clients in the room
+      this.server.to(`conv:${conversationId}`).emit('chat_transferred', {
+        conversationId,
+        specialistUsername: targetUsername,
+        transferredBy: client.data.user.displayName,
+      });
+
+      // Notify all agents of the status change so dashboards update
+      this.server.to('agents').emit('conversation_updated', { conversation });
+
+      this.logger.log(
+        `Conversation ${conversationId} transferred to ${targetUsername} by ${client.data.user.displayName}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to transfer conversation ${conversationId}: ${error.message}`,
+      );
+      client.emit('error', { message: 'Failed to transfer conversation' });
+    }
+  }
+
+  /**
    * Resolve (close) a conversation.
    * Only agents should call this.
    */
@@ -714,7 +770,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       const conversation =
-        await this.chatService.resolveConversation(conversationId);
+        await this.chatService.resolveConversation(conversationId, client.data.user.username);
 
       this.clearInactivityTimer(conversationId);
 
@@ -754,6 +810,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const conversations = await this.chatService.listConversations(
       payload?.status,
     );
-    client.emit('conversations_list', { conversations });
+    client.emit('conversations_list', { 
+      conversations,
+      currentUser: {
+        id: client.data.user.id,
+        username: client.data.user.username,
+        displayName: client.data.user.displayName,
+        role: client.data.user.role
+      }
+    });
   }
 }

@@ -50,6 +50,8 @@ interface Conversation {
   review?: string
   agentRemarks?: string
   assignedUsername?: string
+  specialistUsername?: string
+  resolvedByUsername?: string
   visitorIp?: string
   visitorBrowser?: string
   visitorOs?: string
@@ -69,7 +71,7 @@ const activeConversationId = ref<string | null>(null)
 const activeConversationData = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
 const newMessage = ref('')
-const activeTab = ref<'active' | 'resolved'>('active')
+const activeTab = ref<'active' | 'resolved' | 'specialist'>('active')
 const isTyping = ref(false)
 const typingUser = ref('')
 const showSettings = ref(false)
@@ -77,6 +79,22 @@ const messagesContainer = ref<HTMLElement | null>(null)
 const settingsSaved = ref(false)
 const settingsError = ref('')
 const showResolveConfirm = ref(false)
+const showTransferConfirm = ref(false)
+const transferTargetUsername = ref('')
+const adminList = ref<{ username: string, displayName: string }[]>([])
+
+async function loadAdminList() {
+  try {
+    const res = await fetch(`${props.serverUrl}/admin/users`, {
+      headers: { 'Authorization': `Bearer ${props.token}` },
+    })
+    if (res.ok) {
+      adminList.value = await res.json()
+    }
+  } catch (err) {
+    console.error('Failed to load admin list', err)
+  }
+}
 const isUploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -196,8 +214,22 @@ const showConversationDetails = ref(false)
 const draftAssignedUsername = ref('')
 const draftAgentRemarks = ref('')
 
+const currentUserUsername = ref('')
+const currentUserDisplayName = ref('')
+
+const specialistUnreadCount = computed(() => {
+  return conversations.value.filter(
+    (c) => c.status === 'specialist' && c.specialistUsername === currentUserUsername.value
+  ).length
+})
+
 const filteredConversations = computed(() => {
-  let list = conversations.value.filter((c) => c.status === activeTab.value)
+  let list = conversations.value.filter((c) => {
+    if (activeTab.value === 'specialist') {
+      return c.status === 'specialist' && c.specialistUsername === currentUserUsername.value
+    }
+    return c.status === activeTab.value
+  })
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     list = list.filter(c => {
@@ -219,7 +251,7 @@ const filteredConversations = computed(() => {
   return list
 })
 
-const isActive = computed(() => activeConversationData.value?.status === 'active')
+const isActive = computed(() => activeConversationData.value?.status === 'active' || activeConversationData.value?.status === 'specialist')
 
 // ---------------------------------------------------------------------------
 // Socket.io connection & event handlers
@@ -234,7 +266,12 @@ function connect() {
     console.log('[OmniChat Admin] Connected to server')
   })
 
-  s.on('conversations_list', (data: { conversations: Conversation[] }) => {
+  s.on('conversations_list', (data: { conversations: Conversation[]; currentUser?: { id: string, username: string, displayName: string, role: string } }) => {
+    if (data.currentUser) {
+      currentUserUsername.value = data.currentUser.username
+      currentUserDisplayName.value = data.currentUser.displayName
+    }
+    
     conversations.value = data.conversations.map(c => ({
       ...c,
       unreadCount: c._count?.messages || 0
@@ -354,12 +391,31 @@ function connect() {
       )
       if (conv) {
         conv.status = 'resolved'
+        // Just note that backend now sends resolvedBy which is the displayName
+        // but the DB has resolvedByUsername. We rely on conversation_updated for full sync.
       }
       if (activeConversationData.value?.id === data.conversationId) {
         activeConversationData.value.status = 'resolved'
       }
     },
   )
+
+  s.on('chat_transferred', (data: { conversationId: string; specialistUsername: string; transferredBy: string }) => {
+    const conv = conversations.value.find((c) => c.id === data.conversationId)
+    if (conv) {
+      conv.status = 'specialist'
+      conv.specialistUsername = data.specialistUsername
+    }
+    if (activeConversationData.value?.id === data.conversationId) {
+      activeConversationData.value.status = 'specialist'
+      activeConversationData.value.specialistUsername = data.specialistUsername
+    }
+    
+    // If it was transferred TO the current user, play a sound
+    if (data.specialistUsername === currentUserUsername.value) {
+      playSound()
+    }
+  })
 
   s.on('conversation_updated', (data: { conversation: Conversation }) => {
     const idx = conversations.value.findIndex(
@@ -615,10 +671,42 @@ function executeResolveConversation() {
   })
   
   showResolveConfirm.value = false
+  
+  if (activeTab.value !== 'resolved') {
+    activeConversationData.value = null
+    activeConversationId.value = null
+  }
 }
 
 function cancelResolveConversation() {
   showResolveConfirm.value = false
+}
+
+function confirmTransferConversation() {
+  showTransferConfirm.value = true
+}
+
+function executeTransferConversation() {
+  if (!activeConversationId.value || !transferTargetUsername.value) return
+  
+  socket.value?.emit('transfer_to_specialist', {
+    conversationId: activeConversationId.value,
+    targetUsername: transferTargetUsername.value
+  })
+
+  showTransferConfirm.value = false
+  transferTargetUsername.value = ''
+  
+  // Automatically switch tab if current user is transferring away from themselves
+  if (activeTab.value === 'active' || transferTargetUsername.value !== currentUserUsername.value) {
+    activeConversationData.value = null
+    activeConversationId.value = null
+  }
+}
+
+function cancelTransferConversation() {
+  showTransferConfirm.value = false
+  transferTargetUsername.value = ''
 }
 
 function scrollToBottom() {
@@ -953,6 +1041,7 @@ onMounted(() => {
   connect()
   loadSettings()
   loadQuickReplies()
+  loadAdminList()
 })
 
 onUnmounted(() => {
@@ -965,7 +1054,12 @@ onUnmounted(() => {
     <!-- Sidebar Panel -->
     <div class="sidebar" style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; border-right: 1px solid #e5e7eb;">
       <div class="sidebar-header" style="flex-shrink: 0 !important; display: flex; align-items: center; justify-content: space-between;">
-        <span>OmniChat</span>
+        <div style="display: flex; flex-direction: column;">
+          <span>OmniChat</span>
+          <span v-if="currentUserUsername" style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+            {{ currentUserDisplayName }} (@{{ currentUserUsername }})
+          </span>
+        </div>
         <div style="display: flex; gap: 8px; align-items: center;">
           <button
             style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
@@ -991,7 +1085,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Active / Resolved tabs -->
+      <!-- Active / Resolved / Specialist tabs -->
       <div class="sidebar-tabs">
         <button
           class="sidebar-tab"
@@ -1000,6 +1094,17 @@ onUnmounted(() => {
           @click="activeTab = 'active'"
         >
           Active
+        </button>
+        <button
+          class="sidebar-tab"
+          :class="{ active: activeTab === 'specialist' }"
+          :style="activeTab === 'specialist' ? { borderBottomColor: bubbleColor, color: bubbleColor } : {}"
+          @click="activeTab = 'specialist'"
+        >
+          Specialist
+          <span v-if="specialistUnreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: bold; line-height: 16px; margin-left: 4px;">
+            {{ specialistUnreadCount }}
+          </span>
         </button>
         <button
           class="sidebar-tab"
@@ -1039,8 +1144,13 @@ onUnmounted(() => {
             </div>
             <span v-if="conv.agentRemarks" style="color: #d97706; font-size: 11px;" title="Has remarks">📝</span>
           </div>
-          <div v-if="conv.assignedUsername" style="font-size: 11px; color: #4338ca; margin-bottom: 4px; background: #e0e7ff; display: inline-block; padding: 2px 4px; border-radius: 4px;">
-            @{{ conv.assignedUsername }}
+          <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+            <div v-if="conv.assignedUsername" style="font-size: 11px; color: #4338ca; background: #e0e7ff; display: inline-block; padding: 2px 4px; border-radius: 4px;">
+              @{{ conv.assignedUsername }}
+            </div>
+            <div v-if="conv.specialistUsername" style="font-size: 11px; color: #065f46; background: #d1fae5; display: inline-block; padding: 2px 4px; border-radius: 4px;" title="Specialist">
+              👨‍⚕️ @{{ conv.specialistUsername }}
+            </div>
           </div>
           <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
             {{ getLastMessage(conv) }}
@@ -1064,8 +1174,11 @@ onUnmounted(() => {
           <div>
             <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
               {{ getVisitorLabel(activeConversationData) }}
-              <span v-if="activeConversationData.assignedUsername" style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 11px;">
+              <span v-if="activeConversationData.assignedUsername" style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 11px;" title="Customer username">
                 @{{ activeConversationData.assignedUsername }}
+              </span>
+              <span v-if="activeConversationData.specialistUsername" style="background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 11px;" title="Specialist handler">
+                👨‍⚕️ @{{ activeConversationData.specialistUsername }}
               </span>
               <span v-if="getVisitorEmail(activeConversationData)" style="font-weight: 400; font-size: 12px; color: #6b7280;">
                 {{ getVisitorEmail(activeConversationData) }}
@@ -1086,7 +1199,28 @@ onUnmounted(() => {
               Details
             </button>
             <template v-if="isActive">
-              <template v-if="showResolveConfirm">
+              <template v-if="showTransferConfirm">
+                <select v-model="transferTargetUsername" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px; font-size: 13px;">
+                  <option value="">Select Specialist</option>
+                  <option v-for="admin in adminList" :key="admin.username" :value="admin.username">
+                    {{ admin.displayName }} (@{{ admin.username }})
+                  </option>
+                </select>
+                <button
+                  style="background: #4f46e5; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
+                  :disabled="!transferTargetUsername"
+                  @click="executeTransferConversation"
+                >
+                  Transfer
+                </button>
+                <button
+                  style="background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
+                  @click="cancelTransferConversation"
+                >
+                  Cancel
+                </button>
+              </template>
+              <template v-else-if="showResolveConfirm">
                 <span style="font-size: 13px; color: #b91c1c; font-weight: 500; margin-right: 4px;">Resolve?</span>
                 <button
                   style="background: #ef4444; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;"
@@ -1103,6 +1237,13 @@ onUnmounted(() => {
               </template>
               <template v-else>
                 <button
+                  class="transfer-btn"
+                  style="background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: #4b5563;"
+                  @click="confirmTransferConversation"
+                >
+                  Transfer
+                </button>
+                <button
                   class="resolve-btn"
                   :style="{ backgroundColor: bubbleColor, borderColor: bubbleColor }"
                   @click="confirmResolveConversation"
@@ -1118,7 +1259,7 @@ onUnmounted(() => {
         <div v-if="showConversationDetails" style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 15px; flex: 0 0 auto;">
           <div style="display: flex; gap: 15px;">
             <div style="flex: 1;">
-              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Assigned Username</label>
+              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;" title="The visitor's username on your external website">Customer Username</label>
               <input v-model="draftAssignedUsername" type="text" placeholder="e.g. user123" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;" />
             </div>
             <div style="flex: 2;">
@@ -1144,6 +1285,9 @@ onUnmounted(() => {
                 <strong>Referrer:</strong> <a v-if="activeConversationData.visitorReferrer" :href="activeConversationData.visitorReferrer" target="_blank" style="color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block;" :title="activeConversationData.visitorReferrer">{{ activeConversationData.visitorReferrer }}</a><span v-else>Direct / None</span>
                 <strong>Timezone:</strong> <span>{{ activeConversationData.visitorTimezone || 'Unknown' }}</span>
                 <strong>Language:</strong> <span>{{ activeConversationData.visitorLanguage || 'Unknown' }}</span>
+                <template v-if="activeConversationData.status === 'resolved'">
+                  <strong>Resolved By:</strong> <span>@{{ activeConversationData.resolvedByUsername || 'Unknown' }}</span>
+                </template>
               </div>
             </div>
 

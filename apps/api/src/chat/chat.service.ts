@@ -151,12 +151,28 @@ export class ChatService {
   }
 
   /**
-   * Resolve a conversation — marks it as closed.
+   * Transfer conversation to a specialist.
    */
-  async resolveConversation(conversationId: string) {
+  async transferToSpecialist(conversationId: string, specialistUsername: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
-      data: { status: 'resolved' },
+      data: { 
+        status: 'specialist',
+        specialistUsername 
+      },
+    });
+  }
+
+  /**
+   * Resolve a conversation — marks it as closed.
+   */
+  async resolveConversation(conversationId: string, resolvedByUsername?: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { 
+        status: 'resolved',
+        resolvedByUsername
+      },
     });
   }
 

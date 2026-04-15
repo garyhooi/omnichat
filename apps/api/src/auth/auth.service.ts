@@ -170,4 +170,17 @@ export class AuthService {
       data: { revoked: true },
     });
   }
+
+  async getAdminUsers() {
+    return this.prisma.adminUser.findMany({
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        role: true,
+        isOnline: true,
+        lastSeenAt: true,
+      },
+    });
+  }
 }
