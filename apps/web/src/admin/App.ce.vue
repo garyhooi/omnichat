@@ -210,6 +210,8 @@ const qrDraftContent = ref('')
 const emit = defineEmits(['omnichat:logout'])
 
 const searchQuery = ref('')
+const filterStartDate = ref('')
+const filterEndDate = ref('')
 const showConversationDetails = ref(false)
 const draftAssignedUsername = ref('')
 const draftAgentRemarks = ref('')
@@ -230,22 +232,59 @@ const filteredConversations = computed(() => {
     }
     return c.status === activeTab.value
   })
-  if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase()
+
+  if (activeTab.value === 'resolved' && (filterStartDate.value || filterEndDate.value)) {
     list = list.filter(c => {
+      const convDate = new Date(c.updatedAt)
+      let isValid = true
+
+      if (filterStartDate.value) {
+        const [y, m, d] = filterStartDate.value.split('-').map(Number)
+        const start = new Date(y, m - 1, d, 0, 0, 0, 0)
+        if (convDate < start) isValid = false
+      }
+
+      if (filterEndDate.value) {
+        const [y, m, d] = filterEndDate.value.split('-').map(Number)
+        const end = new Date(y, m - 1, d, 23, 59, 59, 999)
+        if (convDate > end) isValid = false
+      }
+
+      return isValid
+    })
+  }
+
+  if (searchQuery.value) {
+    const rawQ = searchQuery.value.trim()
+    const isUsernameSearch = rawQ.startsWith('@')
+    const isTicketSearch = rawQ.startsWith('#')
+    const q = (isUsernameSearch || isTicketSearch) ? rawQ.slice(1).toLowerCase() : rawQ.toLowerCase()
+
+    list = list.filter(c => {
+      const assigned = (c.assignedUsername || '').toLowerCase()
+      const specialist = (c.specialistUsername || '').toLowerCase()
+      const id = c.id.toLowerCase()
+      const ticketId = c.id.slice(-8).toLowerCase()
+
+      if (isUsernameSearch) {
+        return assigned.includes(q) || specialist.includes(q)
+      }
+      
+      if (isTicketSearch) {
+        return id.includes(q) || ticketId.includes(q)
+      }
+
       const visitorLabel = getVisitorLabel(c).toLowerCase()
       const email = getVisitorEmail(c)?.toLowerCase() || ''
-      const assigned = (c.assignedUsername || '').toLowerCase()
       const remarks = (c.agentRemarks || '').toLowerCase()
-      const id = c.id.toLowerCase()
-      const visitorId = c.visitorId.toLowerCase()
       
       return visitorLabel.includes(q) || 
              email.includes(q) || 
              assigned.includes(q) || 
+             specialist.includes(q) ||
              remarks.includes(q) || 
              id.includes(q) || 
-             visitorId.includes(q)
+             ticketId.includes(q)
     })
   }
   return list
@@ -715,21 +754,25 @@ function scrollToBottom() {
   }
 }
 
+function formatTicketId(id: string | null): string {
+  if (!id) return ''
+  return id.slice(-8).toUpperCase()
+}
+
 function formatTime(dateStr: string) {
   const date = new Date(dateStr)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function getVisitorLabel(conv: Conversation) {
-  const shortId = conv.visitorId ? `#${conv.visitorId.substring(conv.visitorId.length > 6 ? conv.visitorId.length - 5 : 0)}` : ''
   if (conv.metadata) {
     try {
       const meta = JSON.parse(conv.metadata)
       const name = meta.visitorName || meta.name
-      if (name) return `${name} ${shortId}`
+      if (name) return name
     } catch {}
   }
-  return `Visitor ${shortId}`
+  return 'Visitor'
 }
 
 function getVisitorEmail(conv: Conversation) {
@@ -1116,14 +1159,29 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Search Bar -->
-      <div style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+      <!-- Search Bar & Filters -->
+      <div style="padding: 10px; border-bottom: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 8px;">
         <input 
           v-model="searchQuery" 
           type="text" 
           placeholder="Search name, email, username, ID..." 
           style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;"
         />
+        <div v-if="activeTab === 'resolved'" style="display: flex; gap: 8px; align-items: center;">
+          <input 
+            v-model="filterStartDate" 
+            type="date" 
+            style="flex: 1; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; color: #4b5563;"
+            title="Start Date"
+          />
+          <span style="color: #9ca3af; font-size: 12px;">to</span>
+          <input 
+            v-model="filterEndDate" 
+            type="date" 
+            style="flex: 1; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; color: #4b5563;"
+            title="End Date"
+          />
+        </div>
       </div>
 
       <!-- Conversation list -->
@@ -1138,6 +1196,7 @@ onUnmounted(() => {
           <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 4px;">
               <span>{{ getVisitorLabel(conv) }}</span>
+              <span style="font-size: 11px; color: #6b7280; font-weight: normal;">#{{ formatTicketId(conv.id) }}</span>
               <span v-if="conv.unreadCount && conv.unreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: bold; line-height: 16px;">
                 {{ conv.unreadCount }}
               </span>
@@ -1174,6 +1233,9 @@ onUnmounted(() => {
           <div>
             <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
               {{ getVisitorLabel(activeConversationData) }}
+              <span style="font-size: 13px; color: #6b7280; font-weight: normal;">
+                #{{ formatTicketId(activeConversationData.id) }}
+              </span>
               <span v-if="activeConversationData.assignedUsername" style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 11px;" title="Customer username">
                 @{{ activeConversationData.assignedUsername }}
               </span>

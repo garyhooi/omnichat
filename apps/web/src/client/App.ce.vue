@@ -309,6 +309,14 @@ function connect() {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function formatTicketId(id: string | null): string {
+  if (!id) return ''
+  return id.slice(-8).toUpperCase()
+}
+
+// ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
 function toggleWidget() {
@@ -625,7 +633,12 @@ onUnmounted(() => {
   <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle">
     <!-- Header -->
     <div class="panel-header" :style="{ backgroundColor: currentBubbleColor }">
-      <h3 style="margin: 0;">Chat with us</h3>
+      <div style="display: flex; flex-direction: column;">
+        <h3 style="margin: 0; font-size: 16px;">Chat with us</h3>
+        <span v-if="conversationId" style="font-size: 11px; opacity: 0.9; margin-top: 2px;">
+          Ticket: #{{ formatTicketId(conversationId) }}
+        </span>
+      </div>
       <div style="display: flex; align-items: center; gap: 12px;">
         <button type="button" class="close-btn" @click="toggleMute" :title="isMuted ? 'Unmute Notifications' : 'Mute Notifications'" style="font-size: 16px; margin: 0;">
           {{ isMuted ? '🔕' : '🔔' }}
@@ -694,7 +707,8 @@ onUnmounted(() => {
       <!-- Resolved state & Review -->
       <template v-if="isResolved">
         <div class="resolved-banner">
-          This conversation has been resolved.
+          This conversation has been resolved. <br/>
+          Reference Ticket: <strong>#{{ formatTicketId(conversationId) }}</strong>
           
           <div v-if="!reviewSubmitted" class="review-section">
             <p>How was your experience?</p>
