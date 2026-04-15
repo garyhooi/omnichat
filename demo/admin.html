@@ -121,6 +121,7 @@
 
     <!-- Load OmniChat Admin Bundle from jsDelivr CDN -->
     <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js" crossorigin="anonymous"></script>
     
     <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
     <script>
@@ -128,7 +129,11 @@
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
                 console.warn('CDN script failed to load. Falling back to local build...');
                 const localScript = document.createElement('script');
-                localScript.src = '../apps/web/dist/omnichat-admin.js';
+                if (e.target.src.includes('omnichat-admin')) {
+                    localScript.src = '../apps/web/dist/omnichat-admin.js';
+                } else if (e.target.src.includes('omnichat-client')) {
+                    localScript.src = '../apps/web/dist/omnichat-client.js';
+                }
                 document.head.appendChild(localScript);
             }
         }, true);
@@ -137,7 +142,13 @@
 <body>
     <div class="header">
         <h1>OmniChat Admin Demo</h1>
-        <div><small>CDN Version</small></div>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="demo-tabs" style="display: flex; gap: 10px;">
+                <button id="tab-login" class="tab-btn active" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #d1d5db; background: #e0e7ff; color: #4338ca; cursor: pointer; font-weight: 500;">Login</button>
+                <button id="tab-demo" class="tab-btn" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; font-weight: 500;">Admin Dashboard</button>
+            </div>
+            <small>CDN Version</small>
+        </div>
     </div>
 
     <!-- The container where we either show the login form or the admin component -->
@@ -150,12 +161,55 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('omnichat_demo_token');
-            if (token) {
+            const isDemo = localStorage.getItem('omnichat_ui_demo_mode');
+            
+            if (isDemo === 'true') {
+                renderDemoMode();
+                updateTabStyles('tab-demo');
+            } else if (token) {
                 renderAdminComponent(token);
+                updateTabStyles('tab-login');
             } else {
                 renderLoginForm();
+                updateTabStyles('tab-login');
             }
+
+            document.getElementById('tab-login').addEventListener('click', () => {
+                localStorage.removeItem('omnichat_ui_demo_mode');
+                // Force logout when clicking the Login tab manually
+                localStorage.removeItem('omnichat_demo_token');
+                updateTabStyles('tab-login');
+                renderLoginForm();
+            });
+
+            document.getElementById('tab-demo').addEventListener('click', () => {
+                localStorage.setItem('omnichat_ui_demo_mode', 'true');
+                updateTabStyles('tab-demo');
+                renderDemoMode();
+            });
         });
+
+        function updateTabStyles(activeId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.id === activeId) {
+                    btn.style.background = '#e0e7ff';
+                    btn.style.color = '#4338ca';
+                } else {
+                    btn.style.background = 'white';
+                    btn.style.color = '#374151';
+                }
+            });
+        }
+
+        function renderDemoMode() {
+            const container = document.getElementById('dashboard-container');
+            container.innerHTML = `
+                <div style="width: 100%; height: 100%; position: relative;">
+                    <!-- Admin Dashboard -->
+                    <omnichat-admin server-url="http://localhost:3001" token="demo-token-123"></omnichat-admin>
+                </div>
+            `;
+        }
 
         function renderLoginForm() {
             const container = document.getElementById('dashboard-container');
@@ -203,6 +257,7 @@
 
                     // Save token and load the component
                     localStorage.setItem('omnichat_demo_token', data.accessToken);
+                    localStorage.removeItem('omnichat_ui_demo_mode');
                     renderAdminComponent(data.accessToken);
 
                 } catch (error) {
@@ -225,6 +280,7 @@
             // Handle the logout event emitted by the component
             adminElement.addEventListener('omnichat:logout', () => {
                 localStorage.removeItem('omnichat_demo_token');
+                localStorage.removeItem('omnichat_ui_demo_mode');
                 renderLoginForm();
             });
 
