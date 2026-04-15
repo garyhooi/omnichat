@@ -50,6 +50,51 @@ const siteBubblePattern = ref('solid')
 const siteWebsitePosition = ref('bottom-right')
 const siteBubbleIcon = ref('💬')
 const siteEnableReadReceipts = ref(true)
+
+const notificationSoundUrl = ref('')
+const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
+
+function toggleMute() {
+  isMuted.value = !isMuted.value
+  localStorage.setItem('omnichat_client_muted', isMuted.value ? 'true' : 'false')
+}
+
+const audioPlayer = new Audio()
+function playSound() {
+  if (isMuted.value) return
+  
+  if (notificationSoundUrl.value) {
+    const src = notificationSoundUrl.value.startsWith('http') ? notificationSoundUrl.value : props.serverUrl + notificationSoundUrl.value
+    if (audioPlayer.src !== src) {
+      audioPlayer.src = src
+    }
+    audioPlayer.currentTime = 0
+    audioPlayer.play().catch(e => console.warn('Audio autoplay blocked or failed:', e))
+  } else {
+    // Fallback synthesized pop sound
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioCtx.createOscillator()
+      const gainNode = audioCtx.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioCtx.destination)
+      
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(600, audioCtx.currentTime)
+      oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1)
+      
+      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1)
+      
+      oscillator.start(audioCtx.currentTime)
+      oscillator.stop(audioCtx.currentTime + 0.1)
+    } catch (e) {
+      console.warn('Synthesized audio failed:', e)
+    }
+  }
+}
+
 const currentBubbleColor = computed(() => siteBubbleColor.value || props.bubbleColor)
 const dynamicBubbleStyle = computed(() => {
   let bg = currentBubbleColor.value
@@ -203,6 +248,7 @@ function connect() {
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === conversationId.value) {
       messages.value.push(data.message)
+      if (data.message.senderType === 'agent') playSound()
       
       if (!isOpen.value && data.message.senderType === 'agent') {
         unreadCount.value++
@@ -528,6 +574,7 @@ onMounted(() => {
       if (config.websitePosition) siteWebsitePosition.value = config.websitePosition
       if (config.bubbleIcon) siteBubbleIcon.value = config.bubbleIcon
       if (config.enableReadReceipts !== undefined) siteEnableReadReceipts.value = config.enableReadReceipts
+      if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       
       // Apply position to the host element
       if (siteWebsitePosition.value === 'bottom-left') {
@@ -556,7 +603,7 @@ onUnmounted(() => {
     <button
       v-if="!isOpen"
       type="button"
-      class="chat-bubble"
+      :class="['chat-bubble', { 'has-unread': unreadCount > 0 }]"
       :style="dynamicBubbleStyle"
       @click="toggleWidget"
       aria-label="Open chat"
@@ -576,10 +623,15 @@ onUnmounted(() => {
   <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle">
     <!-- Header -->
     <div class="panel-header" :style="{ backgroundColor: currentBubbleColor }">
-      <h3>Chat with us</h3>
-      <button type="button" class="close-btn" @click="toggleWidget" aria-label="Close chat">
-        &times;
-      </button>
+      <h3 style="margin: 0;">Chat with us</h3>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button type="button" class="close-btn" @click="toggleMute" :title="isMuted ? 'Unmute Notifications' : 'Mute Notifications'" style="font-size: 16px; margin: 0;">
+          {{ isMuted ? '🔕' : '🔔' }}
+        </button>
+        <button type="button" class="close-btn" @click="toggleWidget" aria-label="Close chat" style="margin: 0;">
+          &times;
+        </button>
+      </div>
     </div>
 
     <!-- Welcome screen (no active conversation) -->

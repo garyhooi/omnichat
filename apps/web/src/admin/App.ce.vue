@@ -104,6 +104,83 @@ const iconFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
 const enableReadReceipts = ref(true)
 
+const notificationSoundUrl = ref('')
+const isUploadingSound = ref(false)
+const soundFileInput = ref<HTMLInputElement | null>(null)
+const isMuted = ref(localStorage.getItem('omnichat_admin_muted') === 'true')
+
+function toggleMute() {
+  isMuted.value = !isMuted.value
+  localStorage.setItem('omnichat_admin_muted', isMuted.value ? 'true' : 'false')
+}
+
+// Audio player logic
+const audioPlayer = new Audio()
+function playSound() {
+  if (isMuted.value) return
+  
+  if (notificationSoundUrl.value) {
+    const src = notificationSoundUrl.value.startsWith('http') ? notificationSoundUrl.value : props.serverUrl + notificationSoundUrl.value
+    if (audioPlayer.src !== src) {
+      audioPlayer.src = src
+    }
+    audioPlayer.currentTime = 0
+    audioPlayer.play().catch(e => console.warn('Audio autoplay blocked or failed:', e))
+  } else {
+    // Fallback synthesized pop sound
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioCtx.createOscillator()
+      const gainNode = audioCtx.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioCtx.destination)
+      
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(600, audioCtx.currentTime)
+      oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1)
+      
+      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1)
+      
+      oscillator.start(audioCtx.currentTime)
+      oscillator.stop(audioCtx.currentTime + 0.1)
+    } catch (e) {
+      console.warn('Synthesized audio failed:', e)
+    }
+  }
+}
+
+async function uploadCustomSound(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  try {
+    isUploadingSound.value = true
+    const formData = new FormData()
+    formData.append('file', file) // already handled audio
+    
+    const res = await fetch(`${props.serverUrl}/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${props.token}`,
+      },
+      body: formData,
+    })
+    
+    if (!res.ok) throw new Error('Upload failed')
+    const data = await res.json()
+    notificationSoundUrl.value = data.url
+  } catch (err: any) {
+    settingsError.value = err.message || 'Failed to upload sound'
+    setTimeout(() => { settingsError.value = '' }, 5000)
+  } finally {
+    isUploadingSound.value = false
+    if (soundFileInput.value) soundFileInput.value.value = ''
+  }
+}
+
+
 // Quick Replies state
 const settingsTab = ref<'widget' | 'quick-replies'>('widget')
 const quickReplies = ref<QuickReply[]>([])
@@ -171,6 +248,7 @@ function connect() {
   })
 
   s.on('new_conversation', (data: { conversation: Conversation }) => {
+    playSound();
     const newConv = { ...data.conversation, unreadCount: data.conversation._count?.messages || 0 }
     conversations.value.unshift(newConv)
   })
@@ -213,6 +291,7 @@ function connect() {
   })
 
   s.on('new_message', (data: { message: Message }) => {
+    if (data.message.senderType === 'visitor') playSound();
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
       nextTick(() => {
@@ -610,6 +689,7 @@ async function loadSettings() {
           bubbleIconType.value = 'emoji'
           bubbleIconEmoji.value = config.bubbleIcon || '💬'
         }
+        if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
         if (config.enableReadReceipts !== undefined) {
           enableReadReceipts.value = config.enableReadReceipts
         }
@@ -801,6 +881,7 @@ async function saveSettings() {
           websitePosition: websitePosition.value,
           bubbleIcon: bubbleIconType.value === 'custom' ? bubbleIconUrl.value : bubbleIconEmoji.value,
           enableReadReceipts: enableReadReceipts.value,
+          notificationSoundUrl: notificationSoundUrl.value,
         }),
       })
     } else {
@@ -886,6 +967,13 @@ onUnmounted(() => {
       <div class="sidebar-header" style="flex-shrink: 0 !important; display: flex; align-items: center; justify-content: space-between;">
         <span>OmniChat</span>
         <div style="display: flex; gap: 8px; align-items: center;">
+          <button
+            style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
+            :title="isMuted ? 'Unmute Notifications' : 'Mute Notifications'"
+            @click="toggleMute"
+          >
+            {{ isMuted ? '🔕' : '🔔' }}
+          </button>
           <button
             style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
             title="Settings"
@@ -1291,6 +1379,27 @@ onUnmounted(() => {
             />
             <label for="enableReadReceipts" class="settings-label" style="margin-bottom: 0;">Enable Read Receipts</label>
           </div>
+
+          <div class="settings-field">
+            <label class="settings-label">Notification Sound</label>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div v-if="notificationSoundUrl" style="display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                <span style="font-size: 13px; color: #374151; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  Custom Sound Uploaded
+                </span>
+                <button @click="playSound" class="settings-btn" style="padding: 4px 8px; font-size: 12px;">Play</button>
+                <button @click="notificationSoundUrl = ''" class="settings-btn" style="padding: 4px 8px; font-size: 12px;">Remove</button>
+              </div>
+              <div v-else>
+                <input type="file" ref="soundFileInput" accept="audio/*" style="display: none" @change="uploadCustomSound" />
+                <button @click="soundFileInput?.click()" class="settings-btn" :disabled="isUploadingSound" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+                  <span v-if="isUploadingSound" class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
+                  {{ isUploadingSound ? 'Uploading...' : 'Upload Audio (.mp3, .wav)' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
 
           <button
             class="send-btn"

@@ -23,8 +23,8 @@ export class UploadController {
       },
       fileFilter: (req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         // Enforce the mimetype check, but we will also verify content with sharp
-        if (!file.mimetype.match(/\/(webp)$/)) {
-          return callback(new BadRequestException('Only WebP images are allowed!'), false);
+        if (!file.mimetype.match(/\/(webp)$/) && !file.mimetype.startsWith('audio/')) {
+          return callback(new BadRequestException('Only WebP images and audio files are allowed!'), false);
         }
         callback(null, true);
       },
@@ -59,10 +59,36 @@ export class UploadController {
       }
     }
 
-    // Process image strictly with sharp (memory buffer)
+    
+    const isAudio = file.mimetype.startsWith('audio/');
     const uniqueSuffix = randomUUID();
     const prefix = conversationId ? `${conversationId}-` : '';
+    
+    if (isAudio) {
+      const ext = file.originalname.split('.').pop()?.toLowerCase() || 'mp3';
+      const filename = `${prefix}${uniqueSuffix}.${ext}`;
+      const uploadDir = join('./uploads', 'sounds');
+      const filePath = join(uploadDir, filename);
+      
+      try {
+        await fs.mkdir(uploadDir, { recursive: true });
+        await fs.writeFile(filePath, file.buffer);
+        
+        return {
+          url: `/uploads/sounds/${filename}`,
+          filename: filename,
+          mimetype: file.mimetype,
+          size: file.size,
+        };
+      } catch (err) {
+        console.error('Audio processing failed:', err);
+        throw new BadRequestException('Invalid or corrupt audio file');
+      }
+    }
+
+    // Process image strictly with sharp (memory buffer)
     const filename = `${prefix}${uniqueSuffix}.webp`;
+
     const thumbFilename = `${prefix}${uniqueSuffix}-thumb.webp`;
     const subfolder = conversationId ? 'conversations' : 'icons';
     const uploadDir = join('./uploads', subfolder);

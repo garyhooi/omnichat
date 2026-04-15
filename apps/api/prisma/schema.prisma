@@ -113,6 +113,7 @@ model SiteConfig {
   allowedOrigins     String
   isActive           Boolean  @default(true)
   enableReadReceipts Boolean  @default(true)
+  notificationSoundUrl String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

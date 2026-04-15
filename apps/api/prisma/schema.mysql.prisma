@@ -69,6 +69,7 @@ model SiteConfig {
   welcomeMessage String   @default("Hello! How can we help you today?") @db.Text
   allowedOrigins String   @db.Text
   isActive       Boolean  @default(true)
+  notificationSoundUrl String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

@@ -35,6 +35,7 @@ export class SiteConfigService {
     bubblePattern?: string;
     websitePosition?: string;
     bubbleIcon?: string;
+    notificationSoundUrl?: string;
     allowedOrigins: string;
   }) {
     return this.prisma.siteConfig.create({ data });
@@ -52,6 +53,7 @@ export class SiteConfigService {
       bubblePattern?: string;
       websitePosition?: string;
       bubbleIcon?: string;
+      notificationSoundUrl?: string;
       allowedOrigins?: string;
       isActive?: boolean;
     },

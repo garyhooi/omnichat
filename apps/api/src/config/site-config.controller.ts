@@ -44,6 +44,10 @@ class CreateSiteConfigDto {
   bubbleIcon?: string;
 
   @IsString()
+  @IsOptional()
+  notificationSoundUrl?: string;
+
+  @IsString()
   @IsNotEmpty()
   allowedOrigins: string;
 
@@ -76,6 +80,10 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   bubbleIcon?: string;
+
+  @IsString()
+  @IsOptional()
+  notificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()
