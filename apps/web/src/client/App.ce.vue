@@ -161,6 +161,8 @@ const reviewSubmitted = ref(false)
 // End chat confirmation state
 const showEndChatConfirm = ref(false)
 const isUploading = ref(false)
+const isDragging = ref(false)
+const dragCounter = ref(0)
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadToken = ref<string | null>(null)
 
@@ -321,6 +323,38 @@ function formatTicketId(id: string | null): string {
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
+function onPanelDragEnter(event: DragEvent) {
+  if (!conversationId.value || !isOpen.value) return
+  event.preventDefault()
+  dragCounter.value++
+  isDragging.value = true
+}
+
+function onPanelDragOver(event: DragEvent) {
+  if (!conversationId.value || !isOpen.value) return
+  event.preventDefault()
+}
+
+function onPanelDragLeave(event: DragEvent) {
+  if (!conversationId.value || !isOpen.value) return
+  event.preventDefault()
+  dragCounter.value--
+  if (dragCounter.value <= 0) {
+    dragCounter.value = 0
+    isDragging.value = false
+  }
+}
+
+function onPanelDrop(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value = 0
+  isDragging.value = false
+  if (!conversationId.value) return
+  if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+    processFile(event.dataTransfer.files[0])
+  }
+}
+
 function toggleWidget() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
@@ -410,8 +444,10 @@ function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File
 async function handleFileUpload(event: Event) {
   const target = event.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
+  await processFile(target.files[0])
+}
 
-  let file = target.files[0]
+async function processFile(file: File) {
   if (file.size > 5 * 1024 * 1024) {
     alert('File size exceeds 5MB limit.')
     return
@@ -634,12 +670,12 @@ onUnmounted(() => {
   </div>
 
   <!-- Chat panel -->
-  <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle">
+  <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
     <!-- Header -->
     <div class="panel-header" :style="{ backgroundColor: currentBubbleColor }">
       <div style="display: flex; flex-direction: column;">
         <h3 style="margin: 0; font-size: 16px;">Chat with us</h3>
-        <span v-if="conversationId" style="font-size: 11px; opacity: 0.9; margin-top: 2px;">
+        <span v-if="conversationId" style="font-size: 12px; opacity: 0.85; margin-top: 2px;">
           Ticket: #{{ formatTicketId(conversationId) }}
         </span>
       </div>
@@ -652,16 +688,30 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+    <!-- Drag Overlay -->
+    <div
+      v-if="isDragging"
+      class="drag-overlay"
+    >
+      <div class="drag-overlay-content">
+        <span style="font-size: 40px; margin-bottom: 12px; display: block; text-align: center;">📥</span>
+        <span>Drop file to upload</span>
+      </div>
+    </div>
 
     <!-- Welcome screen (no active conversation) -->
     <template v-if="!conversationId">
       <div class="welcome-screen">
         <template v-if="siteIsOfflineMode">
-          <p style="color: #ef4444; font-weight: bold; margin-bottom: 8px;">Agents are currently offline</p>
-          <p style="white-space: pre-wrap;">{{ siteOfflineMessage }}</p>
+          <div style="background: rgba(254, 226, 226, 0.8); border: 1px solid #fca5a5; padding: 16px; border-radius: 12px; margin-bottom: 24px; text-align: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);">
+            <p style="color: #b91c1c; font-weight: 600; margin: 0 0 8px 0; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span style="font-size: 18px;">🌙</span> Agents are offline
+            </p>
+            <p style="color: #7f1d1d; white-space: pre-wrap; font-size: 14px; margin: 0;">{{ siteOfflineMessage }}</p>
+          </div>
         </template>
         <template v-else>
-          <p>{{ currentWelcomeMessage }}</p>
+          <p>{{ currentWelcomeMessage || siteWelcomeMessage || welcomeMessage }}</p>
           
           <div class="pre-chat-form">
             <input v-model="visitorName" type="text" placeholder="Your Name" class="form-input" />
@@ -671,7 +721,7 @@ onUnmounted(() => {
           <button
             type="button"
             class="start-chat-btn"
-            :style="{ backgroundColor: currentBubbleColor }"
+            :style="{ backgroundColor: currentBubbleColor, boxShadow: `0 4px 14px ${currentBubbleColor}66` }"
             @click="startConversation"
           >
             Start a conversation
@@ -711,7 +761,7 @@ onUnmounted(() => {
 
       <!-- Typing indicator -->
       <div v-if="isTyping" class="typing-hint">
-        {{ typingUser }} is typing...
+        <span>{{ typingUser }} is typing</span>
       </div>
 
       <!-- Resolved state & Review -->
@@ -761,12 +811,12 @@ onUnmounted(() => {
           <button
             type="button"
             class="attachment-btn"
-            style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 0 8px; color: #6b7280; display: flex; align-items: center; justify-content: center;"
+            style="background: transparent; border: none; font-size: 18px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: color 0.2s;"
             :disabled="isUploading"
             @click="triggerFileUpload"
             title="Attach Image (Max size: 5MB. Supported: JPG, PNG, HEIC, WEBP)"
           >
-            &#128206;
+            <span style="transform: rotate(45deg); display: inline-block;">&#128206;</span>
           </button>
           <input
             type="file"
@@ -775,19 +825,20 @@ onUnmounted(() => {
             accept="image/*"
             @change="handleFileUpload"
           />
-          <input
+          <textarea
             v-model="newMessage"
             class="msg-input"
-            type="text"
+            rows="1"
             :placeholder="isUploading ? 'Uploading...' : 'Type your message...'"
             :disabled="isUploading"
-            @keyup.enter="sendMessage"
+            @keydown.enter.exact.prevent="sendMessage"
+            @keydown.enter.shift.exact="() => {}"
             @input="handleInput"
-          />
+          ></textarea>
           <button
             type="button"
             class="send-msg-btn"
-            :style="{ backgroundColor: currentBubbleColor }"
+            :style="{ backgroundColor: currentBubbleColor, boxShadow: `0 4px 10px ${currentBubbleColor}40` }"
             :disabled="(!newMessage.trim() && !isUploading)"
             @click="sendMessage"
           >

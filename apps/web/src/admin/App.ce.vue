@@ -96,6 +96,8 @@ async function loadAdminList() {
   }
 }
 const isUploading = ref(false)
+const isDragging = ref(false)
+const dragCounter = ref(0)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const selectedImage = ref<string | null>(null)
@@ -583,8 +585,38 @@ function triggerFileUpload() {
 async function handleFileUpload(event: Event) {
   const target = event.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
+  await processFile(target.files[0])
+}
 
-  let file = target.files[0]
+function onPanelDragEnter(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value++
+  isDragging.value = true
+}
+
+function onPanelDragOver(event: DragEvent) {
+  event.preventDefault()
+}
+
+function onPanelDragLeave(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value--
+  if (dragCounter.value <= 0) {
+    dragCounter.value = 0
+    isDragging.value = false
+  }
+}
+
+function onPanelDrop(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value = 0
+  isDragging.value = false
+  if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+    processFile(event.dataTransfer.files[0])
+  }
+}
+
+async function processFile(file: File) {
   if (file.size > 5 * 1024 * 1024) {
     alert('File size exceeds 5MB limit.')
     return
@@ -927,7 +959,8 @@ function handleKeyDown(e: KeyboardEvent) {
       e.preventDefault()
       insertQuickReply(filteredQuickReplies.value[activeQuickReplyIndex.value].content)
     }
-  } else if (e.key === 'Enter') {
+  } else if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
     sendMessage()
   }
 }
@@ -1208,28 +1241,28 @@ onUnmounted(() => {
           :class="{ active: conv.id === activeConversationId }"
           @click="selectConversation(conv.id)"
         >
-          <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span>{{ getVisitorLabel(conv) }}</span>
-              <span style="font-size: 11px; color: #6b7280; font-weight: normal;">#{{ formatTicketId(conv.id) }}</span>
-              <span v-if="conv.unreadCount && conv.unreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: bold; line-height: 16px;">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="color: #1e293b; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom;">{{ getVisitorLabel(conv) }}</span>
+              <span style="font-size: 12px; color: #94a3b8; font-weight: normal;">#{{ formatTicketId(conv.id) }}</span>
+              <span v-if="conv.unreadCount && conv.unreadCount > 0" style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 2px 6px; font-size: 10px; font-weight: bold; line-height: 1;">
                 {{ conv.unreadCount }}
               </span>
             </div>
-            <span v-if="conv.agentRemarks" style="color: #d97706; font-size: 11px;" title="Has remarks">📝</span>
+            <span v-if="conv.agentRemarks" style="color: #f59e0b; font-size: 12px;" title="Has remarks">📝</span>
           </div>
-          <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-            <div v-if="conv.assignedUsername" style="font-size: 11px; color: #4338ca; background: #e0e7ff; display: inline-block; padding: 2px 4px; border-radius: 4px;">
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <div v-if="conv.assignedUsername" style="font-size: 11px; color: #4338ca; background: #e0e7ff; display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 12px; font-weight: 500;">
               @{{ conv.assignedUsername }}
             </div>
-            <div v-if="conv.specialistUsername" style="font-size: 11px; color: #065f46; background: #d1fae5; display: inline-block; padding: 2px 4px; border-radius: 4px;" title="Specialist">
+            <div v-if="conv.specialistUsername" style="font-size: 11px; color: #059669; background: #d1fae5; display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 12px; font-weight: 500;" title="Specialist">
               👨‍⚕️ @{{ conv.specialistUsername }}
             </div>
           </div>
-          <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          <div style="font-size: 13px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;">
             {{ getLastMessage(conv) }}
           </div>
-          <div style="font-size: 11px; color: #9ca3af; margin-top: 2px;">
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
             {{ formatTime(conv.updatedAt) }}
           </div>
         </div>
@@ -1241,13 +1274,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Chat Window -->
-    <div class="chat-window" style="flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; height: 100% !important; overflow: hidden !important; position: relative;">
+    <div class="chat-window" style="flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; height: 100% !important; overflow: hidden !important; position: relative;" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
       <template v-if="activeConversationData">
         <!-- Chat header -->
         <div class="chat-header" style="flex: 0 0 auto !important;">
           <div>
             <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-              {{ getVisitorLabel(activeConversationData) }}
+              <span style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom;">{{ getVisitorLabel(activeConversationData) }}</span>
               <span style="font-size: 13px; color: #6b7280; font-weight: normal;">
                 #{{ formatTicketId(activeConversationData.id) }}
               </span>
@@ -1332,47 +1365,70 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Conversation Details Panel -->
-        <div v-if="showConversationDetails" style="background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 15px; flex: 0 0 auto;">
-          <div style="display: flex; gap: 15px;">
-            <div style="flex: 1;">
-              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;" title="The visitor's username on your external website">Customer Username</label>
-              <input v-model="draftAssignedUsername" type="text" placeholder="e.g. user123" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px;" />
-            </div>
-            <div style="flex: 2;">
-              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Internal Remarks</label>
-              <textarea v-model="draftAgentRemarks" placeholder="Add notes for other agents..." rows="2" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; resize: vertical;"></textarea>
-            </div>
-            
-            <div style="flex: 1.5; border-left: 1px solid #d1d5db; padding-left: 15px;">
-              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Visitor Info</label>
-              <div style="font-size: 12px; color: #6b7280; display: grid; grid-template-columns: 60px 1fr; gap: 4px;">
-                <strong>IP:</strong> <span>{{ activeConversationData.visitorIp || 'Unknown' }}</span>
-                <strong>Browser:</strong> <span>{{ activeConversationData.visitorBrowser || 'Unknown' }}</span>
-                <strong>OS:</strong> <span>{{ activeConversationData.visitorOs || 'Unknown' }}</span>
-                <strong>Device:</strong> <span style="text-transform: capitalize;">{{ activeConversationData.visitorDevice || 'Desktop' }}</span>
-                <strong>Screen:</strong> <span>{{ activeConversationData.visitorScreenRes || 'Unknown' }}</span>
-              </div>
-            </div>
-            
-            <div style="flex: 1.5; border-left: 1px solid #d1d5db; padding-left: 15px;">
-              <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Session Context</label>
-              <div style="font-size: 12px; color: #6b7280; display: grid; grid-template-columns: 70px 1fr; gap: 4px;">
-                <strong>URL:</strong> <a :href="activeConversationData.visitorCurrentUrl" target="_blank" style="color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block;" :title="activeConversationData.visitorCurrentUrl">{{ activeConversationData.visitorCurrentUrl || 'Unknown' }}</a>
-                <strong>Referrer:</strong> <a v-if="activeConversationData.visitorReferrer" :href="activeConversationData.visitorReferrer" target="_blank" style="color: #4f46e5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block;" :title="activeConversationData.visitorReferrer">{{ activeConversationData.visitorReferrer }}</a><span v-else>Direct / None</span>
-                <strong>Timezone:</strong> <span>{{ activeConversationData.visitorTimezone || 'Unknown' }}</span>
-                <strong>Language:</strong> <span>{{ activeConversationData.visitorLanguage || 'Unknown' }}</span>
-                <template v-if="activeConversationData.status === 'resolved'">
-                  <strong>Resolved By:</strong> <span>@{{ activeConversationData.resolvedByUsername || 'Unknown' }}</span>
-                </template>
-              </div>
-            </div>
-
-            <div style="display: flex; align-items: flex-end;">
-              <button @click="saveConversationDetails" style="background: #10b981; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: 500; cursor: pointer; font-size: 13px;">Save</button>
-            </div>
+        <!-- Drag Overlay -->
+        <div
+          v-if="isDragging"
+          class="drag-overlay"
+        >
+          <div class="drag-overlay-content">
+            <span style="font-size: 40px; margin-bottom: 12px; display: block; text-align: center;">📥</span>
+            <span>Drop file to upload</span>
           </div>
         </div>
+
+        <!-- Conversation Details Panel -->
+        <transition name="slide-down">
+          <div v-if="showConversationDetails" class="conversation-details-panel">
+            <div class="details-grid">
+              <div class="details-col flex-2" style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                  <label class="details-label" title="The visitor's username on your external website">Customer Username</label>
+                  <div class="details-input-wrap">
+                    <span class="input-icon">@</span>
+                    <input v-model="draftAssignedUsername" type="text" placeholder="user123" class="details-input with-icon" />
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; flex: 1;">
+                  <label class="details-label">Internal Remarks</label>
+                  <textarea v-model="draftAgentRemarks" placeholder="Add notes for other agents..." rows="2" class="details-input resize-y" style="flex: 1;"></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-start; margin-top: auto;">
+                  <button @click="saveConversationDetails" class="save-details-btn">Save Changes</button>
+                </div>
+              </div>
+              
+              <div class="details-col border-left">
+                <label class="details-label">Visitor Info</label>
+                <div class="info-list">
+                  <div class="info-row"><span class="info-key">IP</span> <span class="info-val">{{ activeConversationData.visitorIp || 'Unknown' }}</span></div>
+                  <div class="info-row"><span class="info-key">Browser</span> <span class="info-val">{{ activeConversationData.visitorBrowser || 'Unknown' }}</span></div>
+                  <div class="info-row"><span class="info-key">OS</span> <span class="info-val">{{ activeConversationData.visitorOs || 'Unknown' }}</span></div>
+                  <div class="info-row"><span class="info-key">Device</span> <span class="info-val capitalize">{{ activeConversationData.visitorDevice || 'Desktop' }}</span></div>
+                  <div class="info-row"><span class="info-key">Screen</span> <span class="info-val">{{ activeConversationData.visitorScreenRes || 'Unknown' }}</span></div>
+                </div>
+              </div>
+              
+              <div class="details-col border-left">
+                <label class="details-label">Session Context</label>
+                <div class="info-list">
+                  <div class="info-row">
+                    <span class="info-key">URL</span> 
+                    <a :href="activeConversationData.visitorCurrentUrl" target="_blank" class="info-link" :title="activeConversationData.visitorCurrentUrl">{{ activeConversationData.visitorCurrentUrl || 'Unknown' }}</a>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-key">Referrer</span> 
+                    <a v-if="activeConversationData.visitorReferrer" :href="activeConversationData.visitorReferrer" target="_blank" class="info-link" :title="activeConversationData.visitorReferrer">{{ activeConversationData.visitorReferrer }}</a><span v-else class="info-val">Direct / None</span>
+                  </div>
+                  <div class="info-row"><span class="info-key">Timezone</span> <span class="info-val">{{ activeConversationData.visitorTimezone || 'Unknown' }}</span></div>
+                  <div class="info-row"><span class="info-key">Language</span> <span class="info-val">{{ activeConversationData.visitorLanguage || 'Unknown' }}</span></div>
+                  <template v-if="activeConversationData.status === 'resolved'">
+                    <div class="info-row"><span class="info-key">Resolved By</span> <span class="info-val">@{{ activeConversationData.resolvedByUsername || 'Unknown' }}</span></div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
 
         <!-- Messages -->
         <div ref="messagesContainer" class="messages-container" style="flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; overflow-x: hidden !important;">
@@ -1415,35 +1471,32 @@ onUnmounted(() => {
         </div>
 
         <!-- Typing indicator -->
-        <div v-if="isTyping" class="typing-indicator">
-          {{ typingUser }} is typing...
-        </div>
+      <div v-if="isTyping" class="typing-indicator" style="padding-bottom: 12px;">
+        <span>{{ typingUser }} is typing</span>
+      </div>
 
-        <!-- Quick Reply Popover -->
-        <div v-if="showQuickReplyPopover && filteredQuickReplies.length > 0" class="quick-reply-popover" style="position: absolute; bottom: 65px; left: 15px; width: 300px; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); z-index: 10;">
-          <div
-            v-for="(qr, index) in filteredQuickReplies"
-            :key="qr.id"
-            class="quick-reply-item"
-            :style="{ padding: '10px', cursor: 'pointer', borderBottom: index < filteredQuickReplies.length - 1 ? '1px solid #f3f4f6' : 'none', backgroundColor: index === activeQuickReplyIndex ? '#f3f4f6' : 'white' }"
-            @click="insertQuickReply(qr.content)"
-            @mouseover="activeQuickReplyIndex = index"
-          >
-            <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 2px;">/{{ qr.title }}</div>
-            <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ qr.content }}</div>
+        <div class="chat-input-area" style="flex: 0 0 auto !important; min-height: 80px !important; position: relative;">
+          <div v-if="showQuickReplyPopover && filteredQuickReplies.length > 0" class="quick-reply-popover" style="position: absolute; bottom: 100%; left: 24px; width: 320px; max-height: 250px; overflow-y: auto; background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08); z-index: 20; margin-bottom: 12px; padding: 8px;">
+            <div
+              v-for="(qr, index) in filteredQuickReplies"
+              :key="qr.id"
+              class="quick-reply-item"
+              :style="{ padding: '12px', cursor: 'pointer', borderRadius: '8px', marginBottom: index < filteredQuickReplies.length - 1 ? '4px' : '0', backgroundColor: index === activeQuickReplyIndex ? '#f1f5f9' : 'transparent', transition: 'background 0.2s' }"
+              @click="insertQuickReply(qr.content)"
+              @mouseover="activeQuickReplyIndex = index"
+            >
+              <div style="font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 4px;">/{{ qr.title }}</div>
+              <div style="font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ qr.content }}</div>
+            </div>
           </div>
-        </div>
-
-        <!-- Input area — always show when conversation is selected -->
-        <div class="chat-input-area" style="flex: 0 0 auto !important; min-height: 60px !important;">
           <button
             class="attachment-btn"
-            style="background: none; border: none; font-size: 16px; cursor: pointer; padding: 0 8px; color: #6b7280; display: flex; align-items: center; justify-content: center;"
+            style="background: #f1f5f9; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 18px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
             :disabled="!isActive || isUploading"
             @click="triggerFileUpload"
             title="Attach Image (Max size: 5MB. Supported: JPG, PNG, HEIC, WEBP)"
           >
-            &#128206;
+            <span style="transform: rotate(45deg); display: inline-block;">&#128206;</span>
           </button>
           <input
             type="file"
@@ -1452,15 +1505,15 @@ onUnmounted(() => {
             accept="image/*"
             @change="handleFileUpload"
           />
-          <input
+          <textarea
             v-model="newMessage"
             class="chat-input"
-            type="text"
+            rows="1"
             :placeholder="isUploading ? 'Uploading image...' : (isActive ? 'Type a message... (Type / for quick replies)' : 'Conversation resolved')"
             :disabled="!isActive || isUploading"
             @keydown="handleKeyDown"
             @input="handleInputChange"
-          />
+          ></textarea>
           <button
             class="send-btn"
             :style="{ backgroundColor: bubbleColor }"
@@ -1473,36 +1526,44 @@ onUnmounted(() => {
       </template>
 
       <!-- No conversation selected -->
-      <div v-else class="empty-state">
-        Select a conversation to start chatting
+        <div v-else class="empty-state">
+        <div style="text-align: center; color: #94a3b8; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+          <div style="font-size: 48px; opacity: 0.5;">💬</div>
+          <div style="font-size: 16px; font-weight: 500; color: #64748b;">Select a conversation to start chatting</div>
+        </div>
       </div>
     </div>
 
     <!-- Settings Drawer -->
-    <template v-if="showSettings">
-      <div class="settings-overlay" @click="showSettings = false" />
-      <div class="settings-drawer" style="width: 360px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-          <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Settings</h3>
-          <button
-            style="background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280;"
-            @click="showSettings = false"
-          >
-            &times;
+    <!-- Settings Overlay (moved outside drawer) -->
+    <transition name="fade">
+      <div v-if="showSettings" class="settings-overlay" @click="showSettings = false" />
+    </transition>
+    
+    <!-- Settings Drawer -->
+    <transition name="slide-right">
+      <div v-if="showSettings" class="settings-drawer fancy-drawer">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #4f46e5; margin-right: 8px;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Workspace Settings
+          </div>
+          <button class="drawer-close-btn" @click="showSettings = false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
-        <div style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+        <div class="drawer-tabs">
           <button
-            style="flex: 1; padding: 10px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid transparent;"
-            :style="settingsTab === 'widget' ? { borderBottomColor: '#4f46e5', color: '#4f46e5' } : { color: '#6b7280' }"
+            class="drawer-tab"
+            :class="{ active: settingsTab === 'widget' }"
             @click="settingsTab = 'widget'"
           >
             Widget Setup
           </button>
           <button
-            style="flex: 1; padding: 10px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid transparent;"
-            :style="settingsTab === 'quick-replies' ? { borderBottomColor: '#4f46e5', color: '#4f46e5' } : { color: '#6b7280' }"
+            class="drawer-tab"
+            :class="{ active: settingsTab === 'quick-replies' }"
             @click="settingsTab = 'quick-replies'"
           >
             Quick Replies
@@ -1706,7 +1767,7 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
-    </template>
+    </transition>
   </div>
 
   <!-- Lightbox overlay -->
