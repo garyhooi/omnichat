@@ -260,19 +260,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: AuthenticatedSocket) {
     let token = undefined;
 
-    // Check cookie first (most secure)
-    if (client.handshake.headers.cookie) {
-      const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
-      if (match) {
-        token = match[1];
-      }
-    }
+    // Check if explicitly connecting as a visitor from the widget
+    const isVisitorConnection = !!client.handshake.auth?.visitorId;
 
-    // Fallback to auth payload or header
-    if (!token) {
-      const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-      if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
-        token = fallbackToken;
+    if (!isVisitorConnection) {
+      // Check cookie first (most secure)
+      if (client.handshake.headers.cookie) {
+        const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
+        if (match) {
+          token = match[1];
+        }
+      }
+
+      // Fallback to auth payload or header
+      if (!token) {
+        const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
+        if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
+          token = fallbackToken;
+        }
       }
     }
 
@@ -784,31 +789,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: ResolveConversationPayload,
   ) {
-    // Only authenticated agents can resolve conversations
-    if (client.data.isVisitor || !client.data.user) {
-      client.emit('error', { message: 'Unauthorized' });
-      return;
-    }
-
     const { conversationId } = payload;
+
+    const resolvedByUsername = client.data.isVisitor
+      ? 'Visitor'
+      : client.data.user?.username || 'Unknown';
 
     try {
       const conversation =
-        await this.chatService.resolveConversation(conversationId, client.data.user.username);
+        await this.chatService.resolveConversation(conversationId, resolvedByUsername);
 
       this.clearInactivityTimer(conversationId);
 
       // Notify all clients in the room
       this.server.to(`conv:${conversationId}`).emit('conversation_resolved', {
         conversationId,
-        resolvedBy: client.data.user.displayName,
+        resolvedBy: client.data.isVisitor ? 'Visitor' : (client.data.user?.displayName || 'Unknown'),
       });
 
       // Notify all agents of the status change
       this.server.to('agents').emit('conversation_updated', { conversation });
 
       this.logger.log(
-        `Conversation ${conversationId} resolved by ${client.data.user.displayName}`,
+        `Conversation ${conversationId} resolved by ${resolvedByUsername}`,
       );
     } catch (error) {
       this.logger.error(
