@@ -573,12 +573,9 @@ function endChat() {
 
 function confirmEndChat() {
   if (!conversationId.value) return
-  
-  // Visitor optionally ends chat
   socket.value?.emit('resolve_conversation', {
     conversationId: conversationId.value,
   })
-  isResolved.value = true
   showEndChatConfirm.value = false
 }
 
