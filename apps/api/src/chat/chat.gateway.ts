@@ -260,19 +260,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: AuthenticatedSocket) {
     let token = undefined;
 
-    // Check cookie first (most secure)
-    if (client.handshake.headers.cookie) {
-      const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
-      if (match) {
-        token = match[1];
-      }
-    }
+    // Check if explicitly connecting as a visitor from the widget
+    const isVisitorConnection = !!client.handshake.auth?.visitorId;
 
-    // Fallback to auth payload or header
-    if (!token) {
-      const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-      if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
-        token = fallbackToken;
+    if (!isVisitorConnection) {
+      // Check cookie first (most secure)
+      if (client.handshake.headers.cookie) {
+        const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
+        if (match) {
+          token = match[1];
+        }
+      }
+
+      // Fallback to auth payload or header
+      if (!token) {
+        const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
+        if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
+          token = fallbackToken;
+        }
       }
     }
 
