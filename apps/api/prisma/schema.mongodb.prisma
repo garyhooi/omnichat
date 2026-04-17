@@ -26,9 +26,24 @@ model Conversation {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   visitorId String
   status    String   @default("active")
-  agentId   String?  @db.ObjectId
-  metadata  String?
-  createdAt DateTime @default(now())
+  agentId          String?  @db.ObjectId
+  metadata         String?
+  visitorIp        String?
+  visitorBrowser   String?
+  visitorOs        String?
+  visitorDevice    String?
+  visitorCurrentUrl String?
+  visitorTimezone   String?
+  visitorLanguage   String?
+  visitorScreenRes  String?
+  visitorReferrer   String?
+  rating           Int?
+  review           String?
+  agentRemarks     String?
+  assignedUsername String?
+  specialistUsername String?
+  resolvedByUsername String?
+  createdAt        DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   agent    AdminUser? @relation(fields: [agentId], references: [id])
@@ -44,7 +59,11 @@ model Message {
   conversationId String   @db.ObjectId
   senderType     String
   senderId       String?
-  content        String
+  messageType    String   @default("text")
+  content        String?
+  attachmentUrl  String?
+  attachmentThumbnailUrl String?
+  readAt         DateTime?
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id])
@@ -55,26 +74,70 @@ model Message {
 
 model AdminUser {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  email        String   @unique
+  username     String   @unique
   passwordHash String
   displayName  String
   role         String   @default("agent")
   isOnline     Boolean  @default(false)
+  registrationIp String?
+  lastLoginIp    String?
+  userAgent      String?
   lastSeenAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   conversations Conversation[]
+  sessions      Session[]
+}
+
+model Session {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  jti         String   @unique
+  adminUserId String   @db.ObjectId
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  admin       AdminUser @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId])
 }
 
 model SiteConfig {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  siteName       String   @unique
-  bubbleColor    String   @default("#4F46E5")
-  welcomeMessage String   @default("Hello! How can we help you today?")
-  allowedOrigins String
-  isActive       Boolean  @default(true)
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  siteName           String   @unique
+  bubbleColor        String   @default("#4F46E5")
+  welcomeMessage     String   @default("Hello! How can we help you today?")
+  offlineMessage     String   @default("We are currently offline. Please check back later.")
+  bubbleSize         String   @default("medium")
+  bubblePattern      String   @default("solid")
+  websitePosition    String   @default("bottom-right")
+  bubbleIcon         String   @default("💬")
+  allowedOrigins     String
+  isActive           Boolean  @default(true)
+  isOfflineMode      Boolean  @default(false)
+  enableReadReceipts Boolean  @default(true)
   notificationSoundUrl String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model QuickReply {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UploadToken {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  token          String   @unique
+  conversationId String   @db.ObjectId
+  expiresAt      DateTime
+  used           Boolean  @default(false)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([expiresAt])
 }
