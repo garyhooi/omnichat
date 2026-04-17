@@ -12,7 +12,7 @@ export class SiteConfigService {
   async getActiveConfig() {
     return this.prisma.siteConfig.findFirst({
       where: { isActive: true },
-    });
+    }) || null;
   }
 
   /**

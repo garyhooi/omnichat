@@ -116,6 +116,7 @@ import { SiteConfigService } from '../config/site-config.service';
       }
 
       try {
+        // Using require() for Prisma - works with Bun due to Node compatibility
         const { PrismaClient } = require('@prisma/client');
         const prisma = new PrismaClient();
         const config = await prisma.siteConfig.findFirst({
@@ -352,6 +353,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      // Using require() for Prisma - works with Bun due to Node compatibility
       const { PrismaClient } = require('@prisma/client');
       const prisma = new PrismaClient();
       const config = await prisma.siteConfig.findFirst({

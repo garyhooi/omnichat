@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import heic2any from 'heic2any'
 
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes by Vue's defineCustomElement
@@ -625,24 +624,30 @@ async function processFile(file: File) {
   isUploading.value = true
 
   try {
-    if (file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic') {
-      const convertedBlob = await heic2any({
-        blob: file,
-        toType: 'image/jpeg',
-      })
-      const blobArray = Array.isArray(convertedBlob) ? convertedBlob : [convertedBlob]
-      file = new File([blobArray[0]], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' })
-    }
-
-    if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
+    const fileName = file.name.toLowerCase()
+    const isHeicFile = fileName.endsWith('.heic') || fileName.endsWith('.heif') || 
+                       file.type === 'image/heic' || file.type === 'image/heif' ||
+                       file.type === 'image/heic-sequence' || file.type === 'image/heif-sequence'
+    
+    console.log('File details:', {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      isHeicFile
+    })
+    
+    // Only compress non-HEIC images in the browser
+    // HEIC files will be converted on the backend
+    if (isHeicFile) {
+      console.log('HEIC file detected - will be converted on backend')
+    } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
     } else {
-      // Must be an accepted format
-      throw new Error('Unsupported format')
+      throw new Error(`Unsupported format: ${file.type}`)
     }
   } catch (err) {
-    console.error('Image compression/conversion failed', err)
-    alert('Failed to process image. Make sure it is a valid format (JPG, PNG, HEIC, WEBP).')
+    console.error('Image processing failed', err)
+    alert(`Failed to process image: ${err.message}. Make sure it is a valid format (JPG, PNG, HEIC, WEBP).`)
     isUploading.value = false
     if (fileInput.value) fileInput.value.value = ''
     return
@@ -1711,7 +1716,7 @@ onUnmounted(() => {
             Save Settings
           </button>
 
-          <div v-if="settingsSaved" style="color: #10b981; font-size: 13px; margin-top: 8px; text-align: center;">
+          <div v-if="settingsSaved" style="background-color: #10b981; color: white; padding: 8px 12px; border-radius: 4px; font-size: 13px; margin-top: 8px; text-align: center; font-weight: 500;">
             Settings saved successfully
           </div>
           <div v-if="settingsError" style="color: #ef4444; font-size: 13px; margin-top: 8px; text-align: center;">

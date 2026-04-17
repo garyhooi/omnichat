@@ -8,18 +8,15 @@
     "apps/web"
   ],
   "scripts": {
-    "dev:api": "npm run dev --workspace=apps/api",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "build:api": "npm run build --workspace=apps/api",
-    "build:web": "npm run build --workspace=apps/web",
-    "build:admin": "npm run build:admin --workspace=apps/web",
-    "build:client": "npm run build:client --workspace=apps/web",
-    "prisma:generate": "npm run prisma:generate --workspace=apps/api",
-    "prisma:push": "npm run prisma:push --workspace=apps/api",
+    "dev:api": "cd apps/api && bun run dev",
+    "dev:web": "cd apps/web && bun run dev",
+    "build:api": "cd apps/api && bun run build",
+    "build:web": "cd apps/web && bun run build",
+    "build:admin": "cd apps/web && bun run build:admin",
+    "build:client": "cd apps/web && bun run build:client",
+    "prisma:generate": "cd apps/api && bun run prisma:generate",
+    "prisma:push": "cd apps/api && bun run prisma:push",
     "use-provider": "./scripts/use-provider.sh"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",

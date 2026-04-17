@@ -1,136 +1,22 @@
-# =============================================================================
-# OmniChat — Docker Compose
-# =============================================================================
-# Services:
-#   - api:       NestJS backend (Socket.io + REST)
-#   - db-mysql:  MySQL 8 (comment out for MongoDB-only deployments)
-#   - db-mongo:  MongoDB 7 (comment out for MySQL-only deployments)
-#   - nginx:     Static asset host for the JS bundles
-#
-# Usage:
-#   docker-compose up -d              # Start all services
-#   docker-compose up -d api db-mysql # MySQL-only deployment
-#   docker-compose up -d api db-mongo # MongoDB-only deployment
-#
-# Before first run:
-#   1. Copy apps/api/.env.example to apps/api/.env and configure
-#   2. Run: ./scripts/use-provider.sh <mysql|mongodb>
-#   3. Run: docker-compose up -d
-# =============================================================================
-
-version: "3.8"
-
+version: '3.8'
 services:
-  # ---------------------------------------------------------------------------
-  # NestJS API Server
-  # ---------------------------------------------------------------------------
   api:
     build:
-      context: ./apps/api
+      context: .
       dockerfile: Dockerfile
     ports:
       - "3001:3001"
-    env_file:
-      - ./apps/api/.env
-    depends_on:
-      # db-mysql:
-      #   condition: service_healthy
-      # Uncomment for MongoDB:
-      db-mongo:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - omnichat-network
-
-  # ---------------------------------------------------------------------------
-  # MySQL 8 — Comment out this entire block for MongoDB-only deployments
-  # ---------------------------------------------------------------------------
-  # db-mysql:
-  #   image: mysql:8.0
-  #   ports:
-  #     - "3306:3306"
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: root_secret
-  #     MYSQL_DATABASE: omnichat
-  #     MYSQL_USER: omnichat
-  #     MYSQL_PASSWORD: omnichat_secret
-  #   volumes:
-  #     - mysql-data:/var/lib/mysql
-  #   healthcheck:
-  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 30s
-  #   restart: unless-stopped
-  #   networks:
-  #     - omnichat-network
-
-  # ---------------------------------------------------------------------------
-  # MongoDB 7 — Comment out this entire block for MySQL-only deployments
-  # ---------------------------------------------------------------------------
-  db-mongo:
-    image: mongo:7.0
-    ports:
-      - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: omnichat
-      MONGO_INITDB_ROOT_PASSWORD: omnichat_secret
-      MONGO_INITDB_DATABASE: omnichat
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=file:./dev.db
     volumes:
-      - mongo-data:/data/db
+      - ./apps/api/uploads:/app/apps/api/uploads
+      - ./apps/api/prisma/dev.db:/app/apps/api/prisma/dev.db
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - omnichat-network
-
-  # ---------------------------------------------------------------------------
-  # Nginx — Static asset host for JS bundles
-  # ---------------------------------------------------------------------------
-  # Serves omnichat-admin.js and omnichat-client.js to host pages.
-  # In production, you'd typically serve these from a CDN instead.
-  # ---------------------------------------------------------------------------
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
-    volumes:
-      - ./apps/web/dist:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - api
-    restart: unless-stopped
-    networks:
-      - omnichat-network
-
-  # ---------------------------------------------------------------------------
-  # Redis (optional) — Uncomment for multi-instance Socket.io scaling
-  # ---------------------------------------------------------------------------
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis-data:/data
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   restart: unless-stopped
-  #   networks:
-  #     - omnichat-network
-
-volumes:
-  # mysql-data:
-  mongo-data:
-  # redis-data:
-
-networks:
-  omnichat-network:
-    driver: bridge
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

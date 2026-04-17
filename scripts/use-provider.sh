@@ -13,7 +13,7 @@
 # What this script does:
 #   1. Validates the provider argument
 #   2. Copies the matching schema overlay into prisma/schema.prisma
-#   3. Runs `npx prisma generate` to regenerate the Prisma client
+#   3. Runs `bun prisma generate` to regenerate the Prisma client
 #
 # The active schema.prisma is always the file Prisma reads.
 # Provider-specific overlays live alongside it:
@@ -86,7 +86,7 @@ echo "Copied $SOURCE_SCHEMA → $PRISMA_DIR/schema.prisma"
 # ---------------------------------------------------------------------------
 echo "Running prisma generate..."
 cd "$PROJECT_ROOT/apps/api"
-npx prisma generate
+bun prisma generate
 
 echo ""
 echo "Done! Prisma client is now configured for: $PROVIDER"

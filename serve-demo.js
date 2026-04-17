@@ -1,6 +1,6 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+import { serve } from 'bun';
+import { readFile } from 'fs/promises';
+import { join, extname } from 'path';
 
 const PORT = 8081;
 
@@ -22,47 +22,46 @@ const mimeTypes = {
   '.wasm': 'application/wasm'
 };
 
-const server = http.createServer((req, res) => {
-  console.log(`${req.method} ${req.url}`);
-  
-  // Clean URL and handle root path
-  let filePath = '.' + req.url;
-  if (filePath === './') {
-    filePath = './demo/admin.html';
-  } else if (filePath.startsWith('./demo') || filePath.startsWith('./apps')) {
-    // Valid path
-  } else {
-    // Default to resolving in demo folder if not specified
-    filePath = './demo' + req.url;
-  }
+serve({
+  port: PORT,
+  async fetch(req) {
+    console.log(`${req.method} ${req.url}`);
+    
+    const url = new URL(req.url);
+    let filePath = '.' + url.pathname;
+    
+    if (filePath === './') {
+      filePath = './demo/admin.html';
+    } else if (filePath.startsWith('./demo') || filePath.startsWith('./apps')) {
+      // Valid path
+    } else {
+      filePath = './demo' + url.pathname;
+    }
 
-  const extname = String(path.extname(filePath)).toLowerCase();
-  const contentType = mimeTypes[extname] || 'application/octet-stream';
+    const ext = extname(filePath).toLowerCase();
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
 
-  fs.readFile(filePath, (error, content) => {
-    if (error) {
+    try {
+      const content = await readFile(filePath);
+      return new Response(content, {
+        headers: { 'Content-Type': contentType }
+      });
+    } catch (error) {
       if (error.code === 'ENOENT') {
         console.error(`File not found: ${filePath}`);
-        res.writeHead(404);
-        res.end('File not found');
+        return new Response('File not found', { status: 404 });
       } else {
         console.error(`Server error: ${error.code}`);
-        res.writeHead(500);
-        res.end(`Server Error: ${error.code}`);
+        return new Response(`Server Error: ${error.code}`, { status: 500 });
       }
-    } else {
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(content, 'utf-8');
     }
-  });
+  }
 });
 
-server.listen(PORT, () => {
-  console.log(`\n======================================================`);
-  console.log(`🚀 Demo Server running at: http://localhost:${PORT}`);
-  console.log(`======================================================`);
-  console.log(`\nTo test HttpOnly cookies securely, open these URLs in your browser:`);
-  console.log(`- Admin Dashboard: http://localhost:${PORT}/demo/admin.html`);
-  console.log(`- Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
-  console.log(`\n(Make sure the API server is running on port 3001)`);
-});
+console.log(`\n======================================================`);
+console.log(`🚀 Demo Server running at: http://localhost:${PORT}`);
+console.log(`======================================================`);
+console.log(`\nTo test HttpOnly cookies securely, open these URLs in your browser:`);
+console.log(`- Admin Dashboard: http://localhost:${PORT}/demo/admin.html`);
+console.log(`- Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
+console.log(`\n(Make sure the API server is running on port 3001)`);

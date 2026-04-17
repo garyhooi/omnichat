@@ -4,7 +4,7 @@
 
 ```bash
 # 1. Install dependencies
-npm install
+bun install
 
 # 2. Setup database provider
 ./scripts/use-provider.sh mysql
@@ -13,20 +13,20 @@ npm install
 docker-compose up -d
 
 # 4. Push schema to database
-npm run prisma:push
+bun run prisma:push
 
 # 5. Now open 2 terminal windows and run these in parallel:
 ```
 
 **Terminal 1: Start API**
 ```bash
-cd apps/api && npm run dev
+cd apps/api && bun run dev
 # API runs on http://localhost:3001
 ```
 
 **Terminal 2: Start Web Dev Server**
 ```bash
-cd apps/web && npm run dev
+cd apps/web && bun run dev
 # Web runs on http://localhost:5173
 ```
 
@@ -38,7 +38,7 @@ cd apps/web && npm run dev
 ### 1. Start the Local Demo Server
 Run the secure demo server to serve the HTML pages over HTTP so the browser can attach the HttpOnly cookies for security:
 ```bash
-node serve-demo.js
+bun serve-demo.js
 ```
 This will run the demo server at **http://localhost:8081**.
 
@@ -68,16 +68,16 @@ Sign in from the Admin Dashboard and the portal will load. Open the Visitor Widg
 
 ```bash
 # Watch API logs (in Terminal 1)
-cd apps/api && npm run dev
+cd apps/api && bun run dev
 
 # Watch web dev server (in Terminal 2)
-cd apps/web && npm run dev
+cd apps/web && bun run dev
 
 # Watch Docker services (separate terminal)
 docker-compose logs -f
 
 # Open database visual explorer
-npm run prisma:studio
+bun run prisma:studio
 # Then visit http://localhost:5555
 ```
 
@@ -87,7 +87,7 @@ npm run prisma:studio
 
 | Issue | Fix |
 |-------|-----|
-| `Cannot find module '@prisma/client'` | `npm run prisma:generate` then restart API |
+| `Cannot find module '@prisma/client'` | `bun run prisma:generate` then restart API |
 | MySQL connection refused | `docker-compose ps` to check if running, wait 30s |
 | Unauthorized in admin portal | Ensure you are using `http://localhost:8081` instead of `file://` |
 | Widget won't connect | Check API running on 3001, look at browser console |
