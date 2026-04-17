@@ -2,9 +2,12 @@
 // OmniChat — Prisma Schema (PostgreSQL variant)
 // =============================================================================
 // Activated by: scripts/use-provider.sh postgresql
-// Differences from MySQL variant:
+// Key differences from MongoDB variant:
 //   - provider = "postgresql"
-//   - Uses @db.Text for long string fields (same syntax, different backend)
+//   - Uses @db.Text for long string fields
+//   - Uses @default(cuid()) for IDs
+//   - Standard relational indexes and foreign keys
+//   - onDelete: Cascade for SQL relations
 // =============================================================================
 
 generator client {
@@ -22,6 +25,21 @@ model Conversation {
   status    String   @default("active")
   agentId   String?
   metadata  String?  @db.Text
+  visitorIp        String?
+  visitorBrowser   String?
+  visitorOs        String?
+  visitorDevice    String?
+  visitorCurrentUrl String?
+  visitorTimezone   String?
+  visitorLanguage   String?
+  visitorScreenRes  String?
+  visitorReferrer   String?
+  rating           Int?
+  review           String?
+  agentRemarks     String?
+  assignedUsername String?
+  specialistUsername String?
+  resolvedByUsername String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -38,7 +56,11 @@ model Message {
   conversationId String
   senderType     String
   senderId       String?
-  content        String   @db.Text
+  messageType    String   @default("text")
+  content        String?  @db.Text
+  attachmentUrl  String?
+  attachmentThumbnailUrl String?
+  readAt         DateTime?
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -54,21 +76,65 @@ model AdminUser {
   displayName  String
   role         String   @default("agent")
   isOnline     Boolean  @default(false)
+  registrationIp String?
+  lastLoginIp    String?
+  userAgent      String?
   lastSeenAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   conversations Conversation[]
+  sessions      Session[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  jti         String   @unique
+  adminUserId String
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
 }
 
 model SiteConfig {
-  id             String   @id @default(cuid())
-  siteName       String   @unique
-  bubbleColor    String   @default("#4F46E5")
-  welcomeMessage String   @default("Hello! How can we help you today?") @db.Text
-  allowedOrigins String   @db.Text
-  isActive       Boolean  @default(true)
+  id                 String   @id @default(cuid())
+  siteName           String   @unique
+  bubbleColor        String   @default("#4F46E5")
+  welcomeMessage     String   @default("Hello! How can we help you today?") @db.Text
+  offlineMessage     String   @default("We are currently offline. Please check back later.") @db.Text
+  bubbleSize         String   @default("medium")
+  bubblePattern      String   @default("solid")
+  websitePosition    String   @default("bottom-right")
+  bubbleIcon         String   @default("💬")
+  allowedOrigins     String   @db.Text
+  isActive           Boolean  @default(true)
+  isOfflineMode      Boolean  @default(false)
+  enableReadReceipts Boolean  @default(true)
   notificationSoundUrl String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model QuickReply {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UploadToken {
+  id             String   @id @default(cuid())
+  token          String   @unique
+  conversationId String
+  expiresAt      DateTime
+  used           Boolean  @default(false)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([expiresAt])
 }
