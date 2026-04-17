@@ -3,31 +3,31 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package.json ./
-RUN npm install
+RUN bun install
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma
-RUN npx prisma generate
+RUN bun prisma generate
 
 # Copy source and build
 COPY tsconfig.json nest-cli.json ./
 COPY src ./src
-RUN npm run build
+RUN bun run build
 
 # Stage 2: Production
-FROM node:20-alpine AS production
+FROM oven/bun:1-alpine AS production
 
 WORKDIR /app
 
 # Copy package files and install production dependencies only
 COPY package.json ./
-RUN npm install --omit=dev
+RUN bun install --production
 
 # Copy Prisma schema and generated client from builder
 COPY --from=builder /app/prisma ./prisma
@@ -41,4 +41,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3001
 
 # Start the application
-CMD ["node", "dist/main"]
+CMD ["bun", "dist/main"]

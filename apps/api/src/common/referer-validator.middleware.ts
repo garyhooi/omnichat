@@ -43,7 +43,7 @@ export class RefererValidatorMiddleware implements NestMiddleware {
         return next();
       }
 
-      const allowedOrigins = config.allowedOrigins.split(',').map(s => s.trim());
+      const allowedOrigins = config.allowedOrigins.split(',').map((s: string) => s.trim());
       
       // Extract origin from referer
       let refererOrigin: string;
@@ -55,7 +55,7 @@ export class RefererValidatorMiddleware implements NestMiddleware {
       }
 
       // Validate referer origin
-      const isRefererAllowed = allowedOrigins.some(allowedOrigin => {
+      const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
         return refererOrigin === allowedOrigin || 
                refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
       });

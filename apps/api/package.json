@@ -4,13 +4,13 @@
   "private": true,
   "description": "OmniChat NestJS backend API with Socket.io gateway",
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "nest build",
-    "start": "node dist/main",
-    "start:prod": "node dist/main",
-    "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio"
+    "dev": "bun nest start --watch",
+    "build": "bun nest build",
+    "start": "bun dist/main",
+    "start:prod": "bun dist/main",
+    "prisma:generate": "bun prisma generate",
+    "prisma:push": "bun prisma db push",
+    "prisma:studio": "bun prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
@@ -41,6 +41,7 @@
     "@nestjs/cli": "^10.3.0",
     "@nestjs/schematics": "^10.1.0",
     "@types/cookie-parser": "^1.4.10",
+    "@types/heic-convert": "^2.1.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.11.0",
     "@types/passport-jwt": "^4.0.1",

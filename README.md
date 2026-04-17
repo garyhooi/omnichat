@@ -23,9 +23,11 @@
 * **🌐 Cross-Tab Persistence**: Visitors can navigate across your site or open new tabs without losing their chat session.
 * **🕵️ Visitor Context Tracking**: Automatically captures and displays visitor IP, Browser, OS, Device, Current URL, Timezone, Language, and Referrer.
 * **🖼️ Smart Image Uploads**: 
-  * Client-side image compression (Canvas).
-  * Backend thumbnail generation using `sharp`.
-  * Built-in UI Lightbox for viewing high-res images.
+   * Client-side image compression (Canvas).
+   * Backend thumbnail generation using `sharp`.
+   * **HEIC/HEIF support** - Automatic conversion to WebP via ImageMagick.
+   * Built-in UI Lightbox for viewing high-res images.
+   * Cross-platform HEIC conversion (macOS, Ubuntu, Windows Server).
 * **⚡ Quick Replies**: Admins can configure canned responses and trigger them in chat by simply typing `/`.
 * **⏱️ Auto-Resolution**: Automatically sends a 3-minute inactivity warning and resolves inactive chats after 5 minutes.
 * **🎨 Highly Customizable Widget**: Change bubble colors, patterns, sizes, icons, and welcome messages directly from the Admin UI. Dynamic CORS configuration stored in the database.
@@ -33,7 +35,7 @@
 
 ## 🛠️ Tech Stack
 
-This project is structured as an npm workspace monorepo:
+This project is structured as a Bun workspace monorepo:
 
 * **Backend (`apps/api`)**: NestJS, Prisma (MongoDB, PostgreSQL, MySQL), Socket.io, Multer, Sharp.
 * **Frontend (`apps/web`)**: Vue 3 (compiled to Custom Web Components via Vite).
@@ -72,7 +74,113 @@ OmniChat is compiled into native Web Components, meaning you can drop them into 
 
 ## 🚀 Quick Start
 
-### CDN Links
+### 🐳 Docker Deployment (Recommended)
+
+OmniChat includes full HEIC image support and can be deployed using Docker with pre-configured ImageMagick conversion:
+
+#### Quick Start with Docker
+
+**Linux/macOS:**
+```bash
+./deploy-docker.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+PowerShell -ExecutionPolicy Bypass -File deploy-docker.ps1
+```
+
+**Manual:**
+```bash
+docker compose up -d --build
+```
+
+The Docker deployment includes:
+- ✅ Bun runtime for optimal performance
+- ✅ ImageMagick with HEIC support
+- ✅ Cross-platform compatibility (macOS, Ubuntu, Windows Server)
+- ✅ Pre-configured environment
+- ✅ Persistent volume mounts
+
+For detailed Docker deployment instructions, see [HEIC Conversion Guide](HEIC_CONVERSION.md) and [Docker Deployment Guide](DOCKER_DEPLOYMENT.md).
+
+### 💻 Manual Deployment (No Docker)
+
+For developers who prefer manual installation and direct system control, OmniChat can be deployed without Docker by installing ImageMagick and other dependencies directly on the server OS.
+
+#### Quick Start with Manual Setup
+
+**Ubuntu Server:**
+```bash
+# Install ImageMagick with HEIC support
+sudo apt install imagemagick libheif-dev
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Clone and setup
+git clone <repository-url>
+cd omnichat
+bun install
+bun run prisma:generate
+bun run prisma:push
+bun run build:api
+bun run dev:api
+```
+
+**Windows Server:**
+```powershell
+# Download and install ImageMagick
+https://imagemagick.org/script/download.php#windows
+
+# Install Bun
+irm bun.sh/install.ps1 | iex
+
+# Clone and setup
+git clone <repository-url>
+cd omnichat
+bun install
+bun run prisma:generate
+bun run prisma:push
+bun run build:api
+bun run dev:api
+```
+
+**macOS:**
+```bash
+# Install ImageMagick (optional - sips works as fallback)
+brew install imagemagick
+
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Clone and setup
+git clone <repository-url>
+cd omnichat
+bun install
+bun run prisma:generate
+bun run prisma:push
+bun run build:api
+bun run dev:api
+```
+
+For comprehensive manual deployment instructions, see [Manual Deployment Guide](MANUAL_DEPLOYMENT.md).
+
+#### Deployment Comparison
+
+| Aspect | Docker Deployment | Manual Deployment |
+|--------|------------------|-------------------|
+| **Setup Complexity** | Low (single command) | Medium (manual installation) |
+| **HEIC Support** | Pre-configured | Manual ImageMagick setup required |
+| **Cross-platform** | Guaranteed | Platform-specific steps |
+| **Performance** | Slight container overhead | Direct system access |
+| **Maintenance** | Container updates | System package updates |
+| **Code Changes** | None | None |
+| **Functionality** | Identical | Identical |
+
+Both deployment methods provide **identical HEIC conversion functionality**. Choose Docker for simplified setup and consistency, or manual deployment for maximum control and performance.
+
+#### CDN Links
 
 You can easily embed OmniChat via CDN:
 
@@ -80,7 +188,7 @@ You can easily embed OmniChat via CDN:
 * **Client Visitor Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js`
 
 ### Prerequisites
-* Node.js >= 18.0.0
+* Bun
 * A database of your choice (MongoDB, PostgreSQL, or MySQL)
 
 ### Installation
@@ -92,30 +200,61 @@ You can easily embed OmniChat via CDN:
    ```
 
 2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+    ```bash
+    bun install
+    ```
 
 3. **Environment Setup:**
-   * Navigate to `apps/api` and copy `.env.example` to `.env`.
-   * Update the `DATABASE_URL` to point to your database instance.
-   * If not using MongoDB, you can switch providers using the included shell script: `npm run use-provider postgresql` or `npm run use-provider mysql` (Requires `scripts/use-provider.sh` to be executed).
+    * Navigate to `apps/api` and copy `.env.example` to `.env`.
+    * Update the `DATABASE_URL` to point to your database instance.
+    * If not using MongoDB, you can switch providers using the included shell script: `bun run use-provider postgresql` or `bun run use-provider mysql` (Requires `scripts/use-provider.sh` to be executed).
 
 4. **Sync the Database:**
-   ```bash
-   npm run prisma:generate
-   npm run prisma:push
-   ```
+    ```bash
+    bun run prisma:generate
+    bun run prisma:push
+    ```
 
 5. **Run the Development Servers:**
-   * **API Server:** 
-     ```bash
-     npm run dev:api
-     ```
-   * **Web/Frontend Builder:** 
-     ```bash
-     npm run dev:web
-     ```
+    * **API Server:** 
+      ```bash
+      bun run dev:api
+      ```
+    * **Web/Frontend Builder:** 
+      ```bash
+      bun run dev:web
+      ```
+
+## File Structure Reference
+
+```
+omnichat/
+├── apps/
+│   ├── api/                        ← NestJS backend
+│   │   ├── src/
+│   │   │   ├── chat/
+│   │   │   ├── auth/
+│   │   │   └── config/
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   ├── schema.mongodb.prisma
+|   |   |   ├── schema.postgresql.prisma
+│   │   │   └── schema.mysql.prisma
+│   │   └── .env.example
+│   └── web/                        ← Vue 3 Web Components
+│       ├── src/
+│       │   ├── admin/
+│       │   │   ├── App.ce.vue
+│       │   │   └── main.ts
+│       │   └── client/
+│       │       ├── App.ce.vue
+│       │       └── main.ts
+│       └── vite.config.ts
+├── docker-compose.yml
+└── scripts/
+    └── use-provider.sh
+```
+
 
 ## 📚 Documentation
 
@@ -124,6 +263,8 @@ For more detailed setup instructions, including Docker and Production deployment
 * [Local Setup Guide](docs/SETUP_LOCAL.md)
 * [Production Deployment Guide](docs/SETUP_PRODUCTION.md)
 * [Quickstart Overview](docs/QUICKSTART.md)
+* [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md)
+* [Manual Deployment Guide](docs/MANUAL_DEPLOYMENT.md)
 
 ## 🤝 Contributing
 

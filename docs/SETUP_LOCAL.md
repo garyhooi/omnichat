@@ -1,7 +1,7 @@
 # OmniChat — Local Development Setup Guide
 
 ## Prerequisites
-- Node.js 18+ and npm
+- Bun
 - Docker and Docker Compose
 - A terminal/command line
 
@@ -12,7 +12,7 @@
 ### Step 1: Install Dependencies
 ```bash
 # From the project root
-npm install
+bun install
 
 # This installs dependencies for:
 # - Root (monorepo scripts)
@@ -46,7 +46,7 @@ docker-compose ps
 ### Step 4: Initialize Database Schema
 ```bash
 # From project root
-npm run prisma:push
+bun run prisma:push
 
 # This pushes your schema to the MySQL database and creates tables
 ```
@@ -68,7 +68,7 @@ You'll need **3 terminal windows**:
 ### Terminal 1: NestJS API Server
 ```bash
 cd apps/api
-npm run dev
+bun run dev
 
 # Expected output:
 # [Nest] 12345 - 01/20/2025 12:00:00 PM
@@ -80,7 +80,7 @@ npm run dev
 ### Terminal 2: Vite Web Components Dev Server
 ```bash
 cd apps/web
-npm run dev
+bun run dev
 
 # Expected output:
 # VITE v5.x.x  ready in xx ms
@@ -108,7 +108,7 @@ Because browsers strictly enforce CORS and block cookies on `file://` protocols,
 
 Open a new terminal and start the demo server:
 ```bash
-node serve-demo.js
+bun serve-demo.js
 ```
 This runs a tiny server at **http://localhost:8081**.
 
@@ -141,7 +141,7 @@ Sign in with the credentials from Step 2. The admin dashboard will automatically
 ### "Cannot find module '@prisma/client'"
 ```bash
 # Regenerate the client
-npm run prisma:generate
+bun run prisma:generate
 
 # Then restart the API
 ```
@@ -156,7 +156,7 @@ npm run prisma:generate
 - Ensure you have successfully registered and logged in via the Admin Demo login page.
 
 ### Visitor widget won't connect
-- Ensure API is running on port 3001: `npm run dev:api`
+- Ensure API is running on port 3001: `bun run dev:api`
 - Check browser console for Socket.io connection errors
 - Verify `server-url` matches your API endpoint
 
@@ -230,14 +230,14 @@ omnichat/
    - Or pass it as an attribute from your host page
 
 3. **Deploy to Production**
-   - Build: `npm run build:web` (generates `omnichat-admin.js` and `omnichat-client.js`)
-   - Host JS bundles on a CDN
-   - Embed in Blazor/Nuxt/HTML pages with `<script>` tags
-   - Point `server-url` to your production API
+    - Build: `bun run build:web` (generates `omnichat-admin.js` and `omnichat-client.js`)
+    - Host JS bundles on a CDN
+    - Embed in Blazor/Nuxt/HTML pages with `<script>` tags
+    - Point `server-url` to your production API
 
 4. **Explore Prisma Studio**
-   - Run: `npm run prisma:studio`
-   - Browse/edit data visually at http://localhost:5555
+    - Run: `bun run prisma:studio`
+    - Browse/edit data visually at http://localhost:5555
 
 ---
 

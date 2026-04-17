@@ -10,12 +10,12 @@ OmniChat is designed with a decoupled architecture:
 
 ## Phase 1: Deploying the Backend (NestJS API)
 
-The backend needs a Node.js environment and a database (e.g., PostgreSQL). It can be hosted on a VPS (DigitalOcean, AWS, Azure), Railway, Render, or within a Docker container.
+The backend needs a Bun environment and a database (e.g., PostgreSQL). It can be hosted on a VPS (DigitalOcean, AWS, Azure), Railway, Render, or within a Docker container.
 
 ### 1. Setup and Build
 ```bash
 cd apps/api
-npm install
+bun install
 ```
 
 ### 2. Configure Environment Variables
@@ -37,15 +37,15 @@ CORS_ORIGIN="https://www.your-website.com"
 ### 3. Database Migration
 Apply the database schema:
 ```bash
-npx prisma generate
-npx prisma migrate deploy # Use 'deploy' for production, not 'db push'
+bun prisma generate
+bun prisma migrate deploy # Use 'deploy' for production, not 'db push'
 ```
 
 ### 4. Build and Run
 Compile the TypeScript code and start the server:
 ```bash
-npm run build
-npm run start:prod
+bun run build
+bun run start:prod
 ```
 *Note: In production, it is highly recommended to run the app using a process manager like **PM2** (`pm2 start dist/main.js --name omnichat-api`) or run it inside a Docker container to ensure it restarts automatically if it crashes.*
 
@@ -66,18 +66,18 @@ location / {
 
 ## Phase 2: Building and Hosting the Frontend (Web Components)
 
-The frontend consists of Vue components that we compile into raw JavaScript files. These do not require a Node.js server to run; they are purely static files.
+The frontend consists of Vue components that we compile into raw JavaScript files. These do not require a Bun server to run; they are purely static files.
 
 ### 1. Build the Bundles
 ```bash
 cd apps/web
-npm install
+bun install
 
 # Build the chat widget for website visitors
-npm run build:client
+bun run build:client
 
 # Build the admin dashboard
-npm run build:admin
+bun run build:admin
 ```
 
 This will output two files in the `apps/web/dist` directory:

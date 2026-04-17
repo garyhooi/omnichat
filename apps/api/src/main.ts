@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
-import * as cookieParser from 'cookie-parser';
+import cookieParser = require('cookie-parser');
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
-import * as express from 'express';
+import express = require('express');
 import { join } from 'path';
 
 async function bootstrap() {
@@ -65,10 +65,10 @@ async function bootstrap() {
           return callback(null, true);
         }
 
-        const allowed = config.allowedOrigins.split(',').map(s => s.trim());
+        const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
         
         // Exact match or domain match
-        const isAllowed = allowed.some(allowedOrigin => {
+        const isAllowed = allowed.some((allowedOrigin: string) => {
           return origin === allowedOrigin || origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
         });
 

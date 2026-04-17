@@ -45,11 +45,11 @@ export class OriginValidatorMiddleware implements NestMiddleware {
         return next();
       }
 
-      const allowedOrigins = config.allowedOrigins.split(',').map(s => s.trim());
+      const allowedOrigins = config.allowedOrigins.split(',').map((s: string) => s.trim());
       
       // Validate origin header
       if (origin) {
-        const isOriginAllowed = allowedOrigins.some(allowedOrigin => {
+        const isOriginAllowed = allowedOrigins.some((allowedOrigin: string) => {
           return origin === allowedOrigin || 
                  origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
         });
@@ -62,7 +62,7 @@ export class OriginValidatorMiddleware implements NestMiddleware {
       // Fallback to referer validation
       if (referer) {
         const refererOrigin = new URL(referer).origin;
-        const isRefererAllowed = allowedOrigins.some(allowedOrigin => {
+        const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
           return refererOrigin === allowedOrigin || 
                  refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
         });
