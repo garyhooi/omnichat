@@ -332,7 +332,8 @@ function connect() {
   })
 
   s.on('new_conversation', (data: { conversation: Conversation }) => {
-    playSound();
+    // Don't play sound for AI-handled conversations
+    if (data.conversation.status !== 'ai') playSound();
     const newConv = { ...data.conversation, unreadCount: data.conversation._count?.messages || 0 }
     conversations.value.unshift(newConv)
   })
@@ -375,7 +376,9 @@ function connect() {
   })
 
   s.on('new_message', (data: { message: Message }) => {
-    if (data.message.senderType === 'visitor') playSound();
+    // Play sound for visitor messages, but not in AI-handled conversations
+    const msgConv = conversations.value.find((c) => c.id === data.message.conversationId)
+    if (data.message.senderType === 'visitor' && msgConv?.status !== 'ai') playSound();
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
       nextTick(() => {
@@ -1146,7 +1149,7 @@ onUnmounted(() => {
         <div style="display: flex; flex-direction: column;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span>OmniChat</span>
-            <span v-if="isOfflineMode" style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Offline Mode</span>
+            <span v-if="isOfflineMode" style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Offline</span>
             <span v-else style="background-color: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Online</span>
           </div>
           <span v-if="currentUserUsername" style="font-size: 11px; color: #6b7280; margin-top: 2px;">

@@ -9,6 +9,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { QuickReplyModule } from './quick-reply/quick-reply.module';
 import { UploadModule } from './upload/upload.module';
 import { CommonModule } from './common/common.module';
+import { SessionStateModule } from './session-state/session-state.module';
+import { AiModule } from './ai/ai.module';
+import { RagModule } from './rag/rag.module';
+import { HttpLogModule } from './http-log/http-log.module';
 
 @Module({
   imports: [
@@ -41,12 +45,16 @@ import { CommonModule } from './common/common.module';
       },
     ]),
     PrismaModule,
+    SessionStateModule,
     CommonModule, // Security middleware
     AuthModule,
+    AiModule,
+    RagModule,
     ChatModule,
     AppConfigModule,
     QuickReplyModule,
     UploadModule,
+    HttpLogModule,
   ],
   providers: [
     {

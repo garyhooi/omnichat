@@ -12,7 +12,8 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [
     vue({
-      customElement: true,
+      // Only treat .ce.vue files as custom elements
+      customElement: /\.ce\.vue$/,
     }),
   ],
   server: {

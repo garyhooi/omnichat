@@ -37,6 +37,9 @@ async function bootstrap() {
   // Serve static files for uploads
   expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
+  // Serve RAG templates as downloadable files
+  expressApp.use('/rag-templates', express.static(join(process.cwd(), '..', '..', 'rag_templates')));
+
   const prisma = app.get(PrismaService);
   
   // Enable CORS dynamically using the DB config

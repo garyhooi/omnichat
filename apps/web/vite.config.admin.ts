@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import { readdirSync, unlinkSync } from 'fs'
 
 // ---------------------------------------------------------------------------
 // Vite config — Admin Portal build
@@ -13,16 +14,26 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [
     vue({
-      // Enable custom element mode for .ce.vue files
-      customElement: true,
+      // Only treat .ce.vue files as custom elements — page components compile normally
+      customElement: /\.ce\.vue$/,
     }),
+    // Suppress extracted CSS file — all styles are inlined via ?inline imports
+    {
+      name: 'no-css-file',
+      enforce: 'post' as const,
+      generateBundle(_, bundle) {
+        for (const key of Object.keys(bundle)) {
+          if (key.endsWith('.css')) delete bundle[key]
+        }
+      },
+    },
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
   },
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/admin/main.ts'),
+      entry: resolve(__dirname, 'src/admin/main.ce.ts'),
       formats: ['iife'],
       name: 'OmniChatAdmin',
       fileName: () => 'omnichat-admin.js',
@@ -39,7 +50,7 @@ export default defineConfig({
     minify: 'terser',
     // Output to dist/
     outDir: 'dist',
-    // Clear dist before building
+    // Don't clear dist — both admin and client bundles coexist
     emptyOutDir: false,
   },
   resolve: {

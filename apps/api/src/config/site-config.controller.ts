@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,10 @@ class CreateSiteConfigDto {
 class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
+  siteName?: string;
+
+  @IsString()
+  @IsOptional()
   bubbleColor?: string;
 
   @IsString()
@@ -119,15 +124,36 @@ class UpdateSiteConfigDto {
 // ---------------------------------------------------------------------------
 @Controller('config')
 export class SiteConfigController {
-  constructor(private readonly siteConfigService: SiteConfigService) {}
+  constructor(
+    private readonly siteConfigService: SiteConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * Public endpoint — returns the active site config for the visitor widget.
    * No auth required so the widget can fetch its configuration.
+   * Augments the response with `aiEnabled` based on whether an AI agent is configured.
    */
   @Get('active')
   async getActiveConfig() {
-    return this.siteConfigService.getActiveConfig();
+    const config = await this.siteConfigService.getActiveConfig();
+    if (!config) return null;
+
+    // Check if AI is enabled: an AiAgentConfig with an active provider must exist
+    let aiEnabled = false;
+    try {
+      const agentConfig = await this.prisma.aiAgentConfig.findFirst();
+      if (agentConfig?.enabled) {
+        const provider = await this.prisma.aiProvider.findFirst({
+          where: { isActive: true },
+        });
+        aiEnabled = !!provider;
+      }
+    } catch {
+      // AI tables may not exist yet — that's fine, aiEnabled stays false
+    }
+
+    return { ...config, aiEnabled };
   }
 
   /**
