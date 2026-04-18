@@ -35,6 +35,17 @@
 * **🎨 Highly Customizable Widget**: Change bubble colors, patterns, sizes, icons, and welcome messages directly from the Admin UI. Dynamic CORS configuration stored in the database.
 * **⭐ Post-Chat Reviews**: Collect visitor feedback and star ratings after a conversation is resolved.
 
+**🤖 AI Agent**
+
+* OmniChat includes optional AI Agent support for automated visitor conversations and human handoff orchestration.
+* Human Offline Mode: when enabled, visitors are prevented from being routed to human agents. If AI Agent is enabled, visitors will be served by the AI Agent when humans are offline.
+* Handoff logic: transfers to humans only succeed when an agent is truly available (presence is session-aware and requires an active, online agent session).
+* Read receipts: agents can see visitor read status when enabled; visitors never see read receipts in the widget.
+* Character limits: visitor messages are limited to 100 characters and agent/admin messages to 1000 characters (enforced client- and server-side).
+* Quick Replies and canned responses work with both human and AI-driven conversations and are validated server-side (title/content limits).
+* Messages support Markdown rendering (sanitized HTML) for both AI and human messages; streaming behavior is supported but should be tested during integration.
+* Configuration: AI Agent settings (enable/disable, greetings, system prompt, human offline mode, read receipts) are available in the Admin Settings and Ai Setup pages. See docs/ai-agent.md for full details.
+
 ## 🛠️ Tech Stack
 
 This project is structured as a Bun workspace monorepo:

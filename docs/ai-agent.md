@@ -1,11 +1,22 @@
 # AI Agent Setup Guide
 
-OmniChat supports an AI agent that handles visitor conversations automatically using LLM providers (OpenAI, Anthropic, OpenRouter, Ollama). When configured, the AI agent:
+OmniChat supports an AI Agent that can automatically handle visitor conversations using LLM providers (OpenAI, Anthropic, OpenRouter, Ollama). The AI Agent integrates tightly with the platform and includes the following behaviors:
 
-- Greets visitors and answers questions using your knowledge base
+- Greets visitors and answers questions using your knowledge base (RAG)
 - Streams responses token-by-token for a ChatGPT-like experience
-- Automatically hands off to human agents when needed
-- Protects against prompt injection and abuse
+- Automatically triggers handoff to human agents when needed (safety, turn limits, RAG failures)
+- Includes tool support (search_knowledge_base, transfer_to_human, get_business_hours) and a secure tool execution context
+- Protects against prompt injection and abusive inputs via AiSecurityService
+
+Important recent behaviors and configuration additions
+
+- Human Offline Mode: a site configuration that marks human agents as unavailable. If Human Offline Mode is ON and the AI Agent is enabled, visitors can still chat with the AI Agent (AI-only mode). If the AI Agent is disabled while Human Offline Mode is ON, the system is fully offline.
+- Session-aware agent availability: transfers to humans and availability checks now require agents to be truly online (isOnline = true and active non-revoked sessions). The transfer_to_human tool double-checks availability before executing a handoff.
+- Presence & heartbeat: agents emit a heartbeat and the server performs a stale-check. `effectiveOnline` is computed as `isOnline && activeSessions > 0`.
+- Read receipts: when enabled, read receipts are only shown to agents (agents can see whether the visitor read their messages). Visitors/customers never see read receipts on their widget.
+- Character limits: visitor messages are limited to 100 characters client- and server-side; admin/agent messages are limited to 1000 characters client- and server-side. Quick Replies: title max 200 chars, content max 1000 chars.
+- Toast notifications: admin UI now uses bottom-right floating toasts for save success/failure and other transient notices.
+- Markdown rendering: both admin and visitor message bubbles render Markdown (sanitized via DOMPurify). Streaming partial markdown is rendered incrementally; final rendering occurs when the stream completes.
 
 ## Prerequisites
 
@@ -49,6 +60,10 @@ On the same page, configure agent behavior:
 ### 3. Enable the Agent
 
 Toggle **AI Agent Enabled** to activate. When disabled, all conversations go directly to human agents (the default OmniChat behavior).
+
+### Human Offline Mode
+
+If the site is set to Human Offline Mode the system treats human agents as unavailable. When Human Offline Mode is enabled and the AI Agent is enabled, visitors will be served by the AI Agent (AI-only mode). If the AI Agent is disabled as well, visitors see an offline banner and cannot start chats.
 
 ## How It Works
 
