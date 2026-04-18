@@ -19,9 +19,10 @@ export class RagService {
   async searchKnowledgeBase(query: string, topK: number = 5): Promise<VectorSearchResult[]> {
     try {
       const queryEmbedding = await this.aiService.generateEmbedding(query);
-      const results = await this.vectorStore.similaritySearch(queryEmbedding, topK);
+      this.logger.log(`Generated query embedding (${queryEmbedding.length} dimensions) for "${query.slice(0, 50)}..."`);
 
-      this.logger.log(`Knowledge base search for "${query.slice(0, 50)}..." returned ${results.length} results`);
+      const results = await this.vectorStore.similaritySearch(queryEmbedding, topK);
+      this.logger.log(`Knowledge base search returned ${results.length} results`);
       return results;
     } catch (error: any) {
       this.logger.error(`Knowledge base search failed: ${error.message}`);

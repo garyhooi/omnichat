@@ -309,7 +309,8 @@ function connect() {
   )
 
   s.on('new_conversation', (data: { conversation: Conversation }) => {
-    playSound()
+    // Don't play sound for AI-handled conversations — agents don't need alerts for those
+    if (data.conversation.status !== 'ai') playSound()
     const newConv = { ...data.conversation, unreadCount: data.conversation._count?.messages || 0 }
     conversations.value.unshift(newConv)
   })
@@ -353,7 +354,9 @@ function connect() {
   })
 
   s.on('new_message', (data: { message: Message }) => {
-    if (data.message.senderType === 'visitor') playSound()
+    // Play sound for visitor messages, but not in AI-handled conversations
+    const msgConv = conversations.value.find((c) => c.id === data.message.conversationId)
+    if (data.message.senderType === 'visitor' && msgConv?.status !== 'ai') playSound()
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
       nextTick(() => {

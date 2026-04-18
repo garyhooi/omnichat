@@ -169,6 +169,7 @@ model AiAgentConfig {
   ragFailureThreshold    Int      @default(2)
   humanRequestThreshold  Int      @default(2)
   aiRateLimitPerMinute   Int      @default(10)
+  embeddingProviderId    String?  // ID of the provider to use for embeddings (null = use active chat provider)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }

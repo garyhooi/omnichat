@@ -172,6 +172,7 @@ model AiAgentConfig {
   ragFailureThreshold    Int      @default(2)    // consecutive RAG zero-results before handoff
   humanRequestThreshold  Int      @default(2)    // times visitor asks for human before handoff
   aiRateLimitPerMinute   Int      @default(10)
+  embeddingProviderId    String?  // ID of the provider to use for embeddings (null = use active chat provider)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }

@@ -47,6 +47,16 @@ const aiStreamingText = ref('')
 const isAiStreaming = ref(false)
 const isAiEnabled = ref(false)
 
+// Throttled scroll for AI streaming to prevent UI freeze
+let _scrollRafId: number | null = null
+function throttledScrollToBottom() {
+  if (_scrollRafId) return
+  _scrollRafId = requestAnimationFrame(() => {
+    scrollToBottom()
+    _scrollRafId = null
+  })
+}
+
 // Site config state
 const siteBubbleColor = ref('')
 const siteWelcomeMessage = ref('')
@@ -289,7 +299,7 @@ function connect() {
     }
     isAiStreaming.value = true
     aiStreamingText.value += data.token
-    nextTick(() => scrollToBottom())
+    throttledScrollToBottom()
   })
 
   s.on('message_read', (data: { messageId: string; readAt: string }) => {
@@ -677,12 +687,32 @@ onMounted(() => {
   connect()
 })
 
+// Insert a hidden DOM node into the host element at runtime so it is visible
+// in the final compiled output / inspector. This avoids build-time stripping.
+onMounted(() => {
+  try {
+    const host = document.querySelector('omnichat-widget') as HTMLElement | null
+    if (host) {
+      const marker = document.createElement('p')
+      marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'
+      marker.style.display = 'none'
+      marker.setAttribute('aria-hidden', 'true')
+      marker.setAttribute('data-omnichat-powered', 'v3.0.0')
+      host.appendChild(marker)
+    }
+  } catch (e) {
+    // noop
+  }
+})
+
 onUnmounted(() => {
   socket.value?.disconnect()
 })
 </script>
 
 <template>
+  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
+  <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
   <!-- Floating chat bubble -->
   <div style="position: relative; display: inline-block;">
     <button
@@ -775,7 +805,7 @@ onUnmounted(() => {
           :class="['msg-bubble', msg.senderType]"
           :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
         >
-          <div v-if="msg.senderType === 'ai'" class="ai-label">AI Assistant</div>
+          <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>
           <template v-if="msg.messageType === 'image'">
             <img 
               :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" 
@@ -797,7 +827,7 @@ onUnmounted(() => {
 
       <!-- AI streaming bubble -->
       <div v-if="isAiStreaming && aiStreamingText" class="msg-bubble ai ai-streaming" style="align-self: flex-start;">
-        <div class="ai-label">AI Assistant</div>
+        <div class="ai-label">AI Agent</div>
         <div>{{ aiStreamingText }}<span class="ai-cursor">|</span></div>
       </div>
 
@@ -904,4 +934,6 @@ onUnmounted(() => {
     <button style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 32px; cursor: pointer;">&times;</button>
     <img :src="selectedImage" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;" @click.stop />
   </div>
+  <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
+  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
 </template>

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { streamText, embed, CoreMessage, StreamTextResult } from 'ai';
 import { AiProviderFactory, AiProviderConfig } from './ai-provider.factory';
+import { AiConfigService } from './ai-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AiChatOptions {
@@ -19,6 +20,7 @@ export class AiService {
 
   constructor(
     private readonly providerFactory: AiProviderFactory,
+    private readonly aiConfigService: AiConfigService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -75,11 +77,12 @@ export class AiService {
 
   /**
    * Generate embeddings for a text input.
+   * Uses the dedicated embedding provider if configured, otherwise falls back to the active chat provider.
    */
   async generateEmbedding(text: string): Promise<number[]> {
-    const providerConfig = await this.providerFactory.getActiveProvider();
+    const providerConfig = await this.aiConfigService.getEmbeddingProvider();
     if (!providerConfig) {
-      throw new Error('No active AI provider configured');
+      throw new Error('No AI provider configured for embeddings. Please configure an embedding provider in AI Agent Setup.');
     }
 
     const embeddingModel = this.providerFactory.createEmbeddingModel(providerConfig);
@@ -93,12 +96,13 @@ export class AiService {
 
   /**
    * Generate embeddings for multiple text inputs in batch.
+   * Uses the dedicated embedding provider if configured, otherwise falls back to the active chat provider.
    */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     const { embedMany } = await import('ai');
-    const providerConfig = await this.providerFactory.getActiveProvider();
+    const providerConfig = await this.aiConfigService.getEmbeddingProvider();
     if (!providerConfig) {
-      throw new Error('No active AI provider configured');
+      throw new Error('No AI provider configured for embeddings. Please configure an embedding provider in AI Agent Setup.');
     }
 
     const embeddingModel = this.providerFactory.createEmbeddingModel(providerConfig);

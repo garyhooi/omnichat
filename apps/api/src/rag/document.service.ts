@@ -226,12 +226,20 @@ export class DocumentService {
 
       this.logger.log(`Document ${documentId} embedding complete: ${vectorChunks.length} chunks`);
     } catch (error: any) {
-      this.logger.error(`Embedding failed for document ${documentId}: ${error.message}`);
+      const message = error.message || String(error);
+      // Provide a more helpful error message for common embedding failures
+      let userMessage = message;
+      if (message.includes('Not Found') || message.includes('404')) {
+        userMessage = 'Embedding model not found. Your AI provider may not support embeddings. Please configure an embedding model in AI Provider settings, or use a provider that supports embeddings (e.g. OpenAI, Ollama, Qwen).';
+      } else if (message.includes('does not support embeddings')) {
+        userMessage = message;
+      }
+      this.logger.error(`Embedding failed for document ${documentId}: ${message}`);
       await this.prisma.knowledgeDocument.update({
         where: { id: documentId },
         data: {
           embeddingStatus: 'failed',
-          errorMessage: error.message,
+          errorMessage: userMessage,
         },
       });
     }

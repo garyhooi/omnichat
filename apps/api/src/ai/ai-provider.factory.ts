@@ -17,6 +17,73 @@ export interface AiProviderConfig {
   embeddingModelId: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Provider metadata — single source of truth for defaults
+// ---------------------------------------------------------------------------
+interface ProviderMeta {
+  defaultBaseUrl?: string;          // Required for non-OpenAI providers
+  defaultEmbeddingModel?: string;   // null = provider doesn't support embeddings
+  supportsEmbeddings: boolean;
+  sdk: 'openai-compat' | 'anthropic' | 'ollama';
+}
+
+const PROVIDER_META: Record<string, ProviderMeta> = {
+  openai: {
+    sdk: 'openai-compat',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'text-embedding-3-small',
+  },
+  openrouter: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'openai/text-embedding-3-small',
+  },
+  anthropic: {
+    sdk: 'anthropic',
+    supportsEmbeddings: false,
+  },
+  ollama: {
+    sdk: 'ollama',
+    defaultBaseUrl: 'http://localhost:11434/api',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'nomic-embed-text',
+  },
+  deepseek: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    supportsEmbeddings: false,
+  },
+  qwen: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'text-embedding-v3',
+  },
+  glm: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'embedding-3',
+  },
+  gemini: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    supportsEmbeddings: true,
+    defaultEmbeddingModel: 'text-embedding-004',
+  },
+  grok: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://api.x.ai/v1',
+    supportsEmbeddings: false,
+  },
+  mimo: {
+    sdk: 'openai-compat',
+    defaultBaseUrl: 'https://api.mimo.ai/v1',
+    supportsEmbeddings: false,
+  },
+};
+
 @Injectable()
 export class AiProviderFactory {
   private readonly logger = new Logger(AiProviderFactory.name);
@@ -37,6 +104,12 @@ export class AiProviderFactory {
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
+  }
+
+  /** Resolve the base URL: user override > provider default > undefined (SDK default). */
+  private resolveBaseUrl(config: AiProviderConfig): string | undefined {
+    const meta = PROVIDER_META[config.providerType];
+    return config.baseUrl || meta?.defaultBaseUrl || undefined;
   }
 
   /**
@@ -62,82 +135,70 @@ export class AiProviderFactory {
    * Create a Vercel AI SDK language model from the provider config.
    */
   createLanguageModel(config: AiProviderConfig): LanguageModelV1 {
-    switch (config.providerType) {
-      case 'openai': {
-        const openai = createOpenAI({
-          apiKey: config.apiKey || undefined,
-          baseURL: config.baseUrl || undefined,
-        });
-        return openai(config.chatModelId);
-      }
+    const meta = PROVIDER_META[config.providerType];
+    if (!meta) {
+      throw new Error(`Unsupported provider type: ${config.providerType}`);
+    }
+
+    const baseURL = this.resolveBaseUrl(config);
+
+    switch (meta.sdk) {
       case 'anthropic': {
         const anthropic = createAnthropic({
           apiKey: config.apiKey || undefined,
-          baseURL: config.baseUrl || undefined,
+          baseURL,
         });
         return anthropic(config.chatModelId);
       }
-      case 'openrouter': {
-        const openrouter = createOpenAI({
-          apiKey: config.apiKey || undefined,
-          baseURL: config.baseUrl || 'https://openrouter.ai/api/v1',
-        });
-        return openrouter(config.chatModelId);
-      }
       case 'ollama': {
-        const ollama = createOllama({
-          baseURL: config.baseUrl || 'http://localhost:11434/api',
-        });
+        const ollama = createOllama({ baseURL: baseURL! });
         return ollama(config.chatModelId);
       }
-      default:
-        throw new Error(`Unsupported provider type: ${config.providerType}`);
+      case 'openai-compat':
+      default: {
+        const openai = createOpenAI({
+          apiKey: config.apiKey || undefined,
+          baseURL,
+        });
+        return openai(config.chatModelId);
+      }
     }
   }
 
   /**
    * Create an embedding model from the provider config.
-   * Falls back to OpenAI text-embedding-3-small if no embedding model specified.
+   * Uses provider-specific default embedding models when none is configured.
+   * Throws a clear error for providers that don't support embeddings.
    */
   createEmbeddingModel(config: AiProviderConfig): EmbeddingModel<string> {
-    const embeddingId = config.embeddingModelId || 'text-embedding-3-small';
+    const meta = PROVIDER_META[config.providerType];
+    if (!meta) {
+      throw new Error(`Unsupported provider type for embeddings: ${config.providerType}`);
+    }
 
-    switch (config.providerType) {
-      case 'openai':
-      case 'openrouter': {
+    if (!meta.supportsEmbeddings) {
+      throw new Error(
+        `${config.providerType} does not support embeddings. ` +
+        `Please select an embedding provider that supports embeddings (OpenAI, OpenRouter, Ollama, Gemini, Qwen) in AI Agent Setup.`,
+      );
+    }
+
+    const embeddingId = config.embeddingModelId || meta.defaultEmbeddingModel!;
+    const baseURL = this.resolveBaseUrl(config);
+
+    switch (meta.sdk) {
+      case 'ollama': {
+        const ollama = createOllama({ baseURL: baseURL! });
+        return ollama.embedding(embeddingId);
+      }
+      case 'openai-compat':
+      default: {
         const openai = createOpenAI({
           apiKey: config.apiKey || undefined,
-          baseURL: config.providerType === 'openrouter'
-            ? undefined  // Use default OpenAI URL for embeddings even with OpenRouter
-            : (config.baseUrl || undefined),
+          baseURL,
         });
         return openai.embedding(embeddingId);
       }
-      case 'anthropic': {
-        // Anthropic doesn't provide embeddings; fall back to OpenAI if API key available
-        this.logger.warn('Anthropic does not support embeddings. Configure an OpenAI API key or use a different provider for embeddings.');
-        throw new Error('Anthropic does not support embeddings. Use OpenAI or another provider for embedding generation.');
-      }
-      case 'qwen':
-      case 'glm':
-      case 'deepseek':
-      case 'gemini':
-      case 'grok':
-      case 'mimo': {
-        const other = createOpenAI({
-          apiKey: config.apiKey || undefined,
-          baseURL: config.baseUrl || undefined,
-        });
-        return other.embedding(embeddingId);
-      }
-      case 'ollama': {
-        const ollama = createOllama({
-          baseURL: config.baseUrl || 'http://localhost:11434/api',
-        });
-        return ollama.embedding(embeddingId);
-      }
-      default:
-        throw new Error(`Unsupported provider type for embeddings: ${config.providerType}`);
     }
   }
 

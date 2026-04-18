@@ -178,6 +178,7 @@ export class AiConfigService {
     ragFailureThreshold?: number;
     humanRequestThreshold?: number;
     aiRateLimitPerMinute?: number;
+    embeddingProviderId?: string | null;
   }) {
     const existing = await this.prisma.aiAgentConfig.findFirst();
 
@@ -203,5 +204,33 @@ export class AiConfigService {
         aiRateLimitPerMinute: data.aiRateLimitPerMinute ?? 10,
       },
     });
+  }
+
+  // =========================================================================
+  // Embedding Provider
+  // =========================================================================
+
+  /**
+   * Get the provider to use for embeddings.
+   * If an embeddingProviderId is configured in AiAgentConfig, use that provider.
+   * Otherwise, fall back to the active chat provider.
+   */
+  async getEmbeddingProvider() {
+    const agentConfig = await this.prisma.aiAgentConfig.findFirst();
+    if (agentConfig?.embeddingProviderId) {
+      const provider = await this.prisma.aiProvider.findUnique({
+        where: { id: agentConfig.embeddingProviderId },
+      });
+      if (provider?.apiKey) {
+        try {
+          provider.apiKey = this.decrypt(provider.apiKey);
+        } catch {
+          // Key may not be encrypted (legacy), use as-is
+        }
+      }
+      if (provider) return provider;
+      this.logger.warn(`Embedding provider ${agentConfig.embeddingProviderId} not found, falling back to active provider`);
+    }
+    return this.getActiveProvider();
   }
 }

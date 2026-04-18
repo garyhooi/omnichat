@@ -28,14 +28,26 @@ serve({
     console.log(`${req.method} ${req.url}`);
     
     const url = new URL(req.url);
-    let filePath = '.' + url.pathname;
+    let filePath;
     
-    if (filePath === './') {
+    // Serve the demo admin HTML (we no longer build the SPA into dist-admin)
+    if (url.pathname === '/admin' || url.pathname === '/admin/' || url.pathname === '/' || url.pathname === '') {
+      // Serve the developer demo admin page which mounts the custom element
       filePath = './demo/admin.html';
-    } else if (filePath.startsWith('./demo') || filePath.startsWith('./apps')) {
-      // Valid path
+    } else if (url.pathname.startsWith('/admin/')) {
+      // Serve any demo subpaths under demo/ for the admin demo
+      const subPath = url.pathname.replace('/admin/', '');
+      filePath = `./demo/${subPath}`;
+    } else if (url.pathname.startsWith('/assets/')) {
+      // Static assets from the built dist/ directory
+      filePath = `./apps/web/dist${url.pathname}`;
+    } else if (url.pathname.startsWith('/demo')) {
+      filePath = '.' + url.pathname;
+    } else if (url.pathname.startsWith('/apps')) {
+      filePath = '.' + url.pathname;
     } else {
-      filePath = './demo' + url.pathname;
+      // Try dist-admin first, then demo
+      filePath = `./apps/web/dist-admin${url.pathname}`;
     }
 
     const ext = extname(filePath).toLowerCase();
@@ -47,6 +59,18 @@ serve({
         headers: { 'Content-Type': contentType }
       });
     } catch (error) {
+      // For SPA routes, serve admin.html (hash routing handles the rest)
+      if (!ext || ext === '.html') {
+        try {
+          const fallback = await readFile('./apps/web/dist-admin/admin.html');
+          return new Response(fallback, {
+            headers: { 'Content-Type': 'text/html' }
+          });
+        } catch {
+          // Fall through to 404
+        }
+      }
+      
       if (error.code === 'ENOENT') {
         console.error(`File not found: ${filePath}`);
         return new Response('File not found', { status: 404 });
@@ -59,9 +83,9 @@ serve({
 });
 
 console.log(`\n======================================================`);
-console.log(`🚀 Demo Server running at: http://localhost:${PORT}`);
+console.log(`Demo Server running at: http://localhost:${PORT}`);
 console.log(`======================================================`);
-console.log(`\nTo test HttpOnly cookies securely, open these URLs in your browser:`);
-console.log(`- Admin Dashboard: http://localhost:${PORT}/demo/admin.html`);
-console.log(`- Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
+console.log(`\nAdmin SPA:       http://localhost:${PORT}/`);
+console.log(`Legacy CE demo:  http://localhost:${PORT}/demo/admin.html`);
+console.log(`Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
 console.log(`\n(Make sure the API server is running on port 3001)`);

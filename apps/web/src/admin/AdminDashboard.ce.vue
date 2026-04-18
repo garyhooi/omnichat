@@ -59,10 +59,30 @@ watch(() => props.serverUrl, (v) => {
 watch(() => props.token, (v) => {
   authStore.configure(props.serverUrl, v)
 })
+
+// Insert a hidden DOM node into the host element at runtime so it is visible
+// in the final compiled output / inspector. This avoids build-time stripping.
+onMounted(() => {
+  try {
+    const host = document.querySelector('omnichat-admin') as HTMLElement | null
+    if (host) {
+      const marker = document.createElement('p')
+      marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'
+      marker.style.display = 'none'
+      marker.setAttribute('aria-hidden', 'true')
+      marker.setAttribute('data-omnichat-powered', 'v3.0.0')
+      host.appendChild(marker)
+    }
+  } catch (e) {
+    // noop
+  }
+})
 </script>
 
 <template>
+  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
   <div style="display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1e293b; font-size: 14px; overflow: hidden;">
+    <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
     <!-- Sidebar Navigation -->
     <aside
       :style="{
@@ -114,6 +134,28 @@ watch(() => props.token, (v) => {
           <span v-if="!sidebarCollapsed" style="margin-left: 12px;">{{ item.label }}</span>
         </button>
       </nav>
+      <!-- Footer note (bottom of sidebar) -->
+      <div style="padding: 8px 12px; border-top: 1px solid #374151; flex-shrink: 0;">
+        <a
+          v-if="!sidebarCollapsed"
+          href="https://github.com/garyhooi/omnichat"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: #9ca3af; font-size: 12px; text-decoration: none; display: block; text-align: center;"
+        >
+          Powered by OmniChat v3.0.0
+        </a>
+        <a
+          v-else
+          href="https://github.com/garyhooi/omnichat"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="color: #9ca3af; font-size: 12px; text-decoration: none; display: block; text-align: center;"
+          title="Powered by OmniChat v3.0.0"
+        >
+          ·
+        </a>
+      </div>
     </aside>
 
     <!-- Main Content -->
@@ -121,4 +163,6 @@ watch(() => props.token, (v) => {
       <component :is="pages[currentPage]" />
     </main>
   </div>
+  <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
+  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
 </template>

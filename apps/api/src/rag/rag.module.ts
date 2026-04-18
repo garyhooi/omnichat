@@ -15,19 +15,28 @@ import { AiModule } from '../ai/ai.module';
   providers: [
     {
       provide: VECTOR_STORE_PROVIDER,
-      useFactory: (config: ConfigService, prisma: PrismaService) => {
+      useFactory: async (config: ConfigService, prisma: PrismaService) => {
         const provider = config.get<string>('DATABASE_PROVIDER', 'mongodb');
+        let store: MongoDBVectorStore | PostgreSQLVectorStore | MySQLVectorStore;
         switch (provider) {
           case 'postgresql':
           case 'postgres':
-            return new PostgreSQLVectorStore(prisma);
+            store = new PostgreSQLVectorStore(prisma);
+            break;
           case 'mysql':
-            return new MySQLVectorStore(prisma);
+            store = new MySQLVectorStore(prisma);
+            break;
           case 'mongodb':
           case 'mongo':
           default:
-            return new MongoDBVectorStore(prisma);
+            store = new MongoDBVectorStore(prisma);
+            break;
         }
+        // Call onModuleInit if the store implements it (e.g. auto-create vector index)
+        if ('onModuleInit' in store && typeof store.onModuleInit === 'function') {
+          await store.onModuleInit();
+        }
+        return store;
       },
       inject: [ConfigService, PrismaService],
     },

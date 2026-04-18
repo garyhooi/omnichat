@@ -54,6 +54,7 @@ const configForm = ref({
   ragFailureThreshold: 2,
   humanRequestThreshold: 2,
   aiRateLimitPerMinute: 10,
+  embeddingProviderId: null as string | null,
 })
 
 const providerTypes = [
@@ -354,7 +355,24 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
                    class="w-full border rounded px-3 py-2 text-sm" />
           </div>
         </div>
-        <div class="flex justify-end">
+
+        <!-- Embedding Provider -->
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Embedding Provider (for Knowledge Base / RAG)</label>
+          <select v-model="configForm.embeddingProviderId"
+                  class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+            <option :value="null">Use active chat provider</option>
+            <option v-for="p in aiStore.providers" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.providerType }} — {{ p.embeddingModelId || 'default model' }})
+            </option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">
+            Some providers (DeepSeek, Anthropic, Grok) don't support embeddings.
+            Select a provider that supports embeddings (OpenAI, Ollama, Gemini, Qwen) for Knowledge Base to work.
+          </p>
+        </div>
+
+        <div class="flex justify-end mt-4">
           <button @click="saveConfig" :disabled="saving"
                   class="px-6 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50">
             {{ saving ? 'Saving...' : 'Save Configuration' }}
