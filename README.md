@@ -11,7 +11,7 @@
 <div align="center">
   <img src="docs/img/ss-admin.png" alt="OmniChat Admin Dashboard" width="48%" />
   <img src="docs/img/ss-widget.png" alt="OmniChat Visitor Widget" width="48%" />
-  <img src="docs/img/ss-ai" alt="OmniChat AI Agent" width="48%" />
+  <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent" width="48%" />
   <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="48%" />
 </div>
 
