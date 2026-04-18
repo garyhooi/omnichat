@@ -243,7 +243,10 @@
                 try {
                     const response = await fetch(`${SERVER_URL}/auth/login`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-admin-api-key': 'omnichat-admin-key-change-in-production'
+                        },
                         body: JSON.stringify({ username, password }),
                         credentials: 'include'
                     });

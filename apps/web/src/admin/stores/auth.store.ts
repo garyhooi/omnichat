@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 interface User {
   id: string
@@ -12,6 +12,9 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(null)
   const serverUrl = ref('')
+  const adminApiKey = ref('')
+
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   function init() {
     // Read server URL from meta tag, script attribute, or default
@@ -39,6 +42,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function fetchMe(): Promise<void> {
+    try {
+      const res = await fetch(`${serverUrl.value}/auth/me`, {
+        credentials: 'include',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        user.value = data.user
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   async function logout() {
     try {
       await fetch(`${serverUrl.value}/auth/logout`, {
@@ -57,10 +74,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** Configure auth from custom element attributes (CE mode) */
-  function configure(url: string, tok: string) {
+  function configure(url: string, tok: string, apiKey?: string) {
     serverUrl.value = url
     token.value = tok
+    if (apiKey) adminApiKey.value = apiKey
   }
 
-  return { user, token, serverUrl, init, login, logout, setUser, configure }
+  return { user, token, serverUrl, adminApiKey, isAdmin, init, login, logout, setUser, configure, fetchMe }
 })

@@ -142,7 +142,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  scroll-behavior: smooth;
+  /* NOTE: scroll-behavior is controlled programmatically —
+     smooth for user-initiated scrolls, instant during AI streaming
+     to prevent the container from freezing when tokens arrive rapidly. */
 }
 
 .msg-bubble {
@@ -221,6 +223,7 @@
 
 /* Input */
 .input-area {
+  position: relative;
   padding: 16px 20px;
   background: #ffffff;
   border-top: 1px solid #f1f5f9;
@@ -571,4 +574,82 @@
   background: #e0e7ff;
   border-color: #c7d2fe;
   color: #4f46e5;
+}
+
+/* =========================================================================
+   Markdown content in chat messages
+   ========================================================================= */
+.md-content {
+  line-height: 1.5;
+  word-break: break-word;
+}
+.md-content p {
+  margin: 0 0 8px 0;
+}
+.md-content p:last-child {
+  margin-bottom: 0;
+}
+.md-content code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+.md-content pre {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 0.85em;
+}
+.md-content pre code {
+  background: none;
+  padding: 0;
+}
+.md-content ul, .md-content ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.md-content li {
+  margin: 2px 0;
+}
+.md-content blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid rgba(0, 0, 0, 0.2);
+  color: inherit;
+  opacity: 0.85;
+}
+.md-content a {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+.md-content h1, .md-content h2, .md-content h3,
+.md-content h4, .md-content h5, .md-content h6 {
+  margin: 8px 0 4px 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.md-content h1 { font-size: 1.3em; }
+.md-content h2 { font-size: 1.2em; }
+.md-content h3 { font-size: 1.1em; }
+.md-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9em;
+}
+.md-content th, .md-content td {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  padding: 4px 8px;
+}
+.md-content th {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+.md-content hr {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+  margin: 8px 0;
 }

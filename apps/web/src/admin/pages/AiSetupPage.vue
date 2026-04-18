@@ -44,7 +44,7 @@ const providerForm = ref({
 // Agent config form
 const configForm = ref({
   enabled: false,
-  systemPrompt: 'You are a helpful customer support assistant. Be concise and helpful.',
+  systemPrompt: 'You are a helpful customer support AI Agent. Be concise and helpful.',
   greetingMessage: '',
   humanRequestKeywords: defaultHumanRequestKeywords,
   maxTokensPerResponse: 1024,
@@ -307,8 +307,8 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Greeting Message (optional)</label>
           <input v-model="configForm.greetingMessage" type="text"
-                 placeholder="Hi! I'm your AI assistant. How can I help?"
-                 class="w-full border rounded px-3 py-2 text-sm" />
+                  placeholder="Hi! I'm your AI Agent. How can I help?"
+                  class="w-full border rounded px-3 py-2 text-sm" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>

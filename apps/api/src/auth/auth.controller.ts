@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
+import { AdminApiKeyGuard } from './admin-api-key.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -39,6 +40,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseGuards(AdminApiKeyGuard)
   async register(
     @Body() dto: RegisterDto,
     @Ip() ip: string,
@@ -56,6 +58,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @UseGuards(AdminApiKeyGuard)
   async login(
     @Body() dto: LoginDto,
     @Ip() ip: string,
@@ -90,7 +93,7 @@ export class AuthController {
         id: req.user.sub,
         username: req.user.username,
         displayName: req.user.displayName || req.user.username,
-        role: req.user.role || 'admin',
+        role: req.user.role || 'agent',
       },
     };
   }

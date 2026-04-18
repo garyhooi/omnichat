@@ -12,6 +12,7 @@ import { CommonModule } from './common/common.module';
 import { SessionStateModule } from './session-state/session-state.module';
 import { AiModule } from './ai/ai.module';
 import { RagModule } from './rag/rag.module';
+import { HttpLogModule } from './http-log/http-log.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { RagModule } from './rag/rag.module';
     AppConfigModule,
     QuickReplyModule,
     UploadModule,
+    HttpLogModule,
   ],
   providers: [
     {

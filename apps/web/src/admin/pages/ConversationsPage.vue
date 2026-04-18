@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
+import { useToast } from '../stores/toast.store'
 import { io, Socket } from 'socket.io-client'
+import { renderMarkdown } from '../../utils/markdown'
 
 const authStore = useAuthStore()
+const toast = useToast()
 
 /** Build fetch options with auth headers (supports both cookie and token auth) */
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -353,6 +356,10 @@ function connect() {
     }
   })
 
+  s.on('message_error', (data: { error: string }) => {
+    toast.error(data.error)
+  })
+
   s.on('new_message', (data: { message: Message }) => {
     // Play sound for visitor messages, but not in AI-handled conversations
     const msgConv = conversations.value.find((c) => c.id === data.message.conversationId)
@@ -654,6 +661,12 @@ async function processFile(file: File) {
 function sendMessage() {
   if (!newMessage.value.trim() || !activeConversationId.value) return
 
+  const text = newMessage.value.trim()
+  if (text.length > 200) {
+    toast.error(`Message too long (${text.length}/200 characters).`)
+    return
+  }
+
   socket.value?.emit('send_message', {
     conversationId: activeConversationId.value,
     content: newMessage.value.trim(),
@@ -934,7 +947,7 @@ onUnmounted(() => {
                 font-weight: bold;
                 text-transform: uppercase;
               "
-              >Offline Mode</span
+              >Human Offline</span
             >
             <span
               v-else
@@ -1524,10 +1537,10 @@ onUnmounted(() => {
                 "
                 @click="openImage(msg.attachmentUrl || '')"
               />
-              <div v-if="msg.content" style="padding: 8px">{{ msg.content }}</div>
+              <div v-if="msg.content" class="md-content" style="padding: 8px" v-html="renderMarkdown(msg.content)"></div>
             </template>
             <template v-else>
-              <div>{{ msg.content }}</div>
+              <div class="md-content" v-html="renderMarkdown(msg.content || '')"></div>
             </template>
             <div class="message-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
               <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
@@ -1641,6 +1654,7 @@ onUnmounted(() => {
             v-model="newMessage"
             class="chat-input"
             rows="1"
+            maxlength="200"
             :placeholder="
               isUploading
                 ? 'Uploading image...'
@@ -1652,6 +1666,16 @@ onUnmounted(() => {
             @keydown="handleKeyDown"
             @input="handleInputChange"
           ></textarea>
+          <span
+            :style="{
+              fontSize: '11px',
+              color: newMessage.length >= 180 ? '#dc2626' : '#9ca3af',
+              position: 'absolute',
+              bottom: '6px',
+              right: '70px',
+              pointerEvents: 'none',
+            }"
+          >{{ newMessage.length }}/200</span>
           <button
             class="send-btn"
             :style="{ backgroundColor: bubbleColor }"
@@ -1730,5 +1754,109 @@ onUnmounted(() => {
 
 .message-bubble.ai .message-meta {
   color: rgba(255, 255, 255, 0.7);
+}
+
+/* Markdown content in chat messages */
+.md-content {
+  line-height: 1.5;
+  word-break: break-word;
+}
+.md-content :deep(p) {
+  margin: 0 0 8px 0;
+}
+.md-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.md-content :deep(code) {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+.md-content :deep(pre) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 0.85em;
+}
+.md-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+.md-content :deep(ul),
+.md-content :deep(ol) {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.md-content :deep(li) {
+  margin: 2px 0;
+}
+.md-content :deep(blockquote) {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid rgba(0, 0, 0, 0.2);
+  opacity: 0.85;
+}
+.md-content :deep(a) {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+.md-content :deep(h1),
+.md-content :deep(h2),
+.md-content :deep(h3),
+.md-content :deep(h4),
+.md-content :deep(h5),
+.md-content :deep(h6) {
+  margin: 8px 0 4px 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.md-content :deep(h1) { font-size: 1.3em; }
+.md-content :deep(h2) { font-size: 1.2em; }
+.md-content :deep(h3) { font-size: 1.1em; }
+.md-content :deep(table) {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9em;
+}
+.md-content :deep(th),
+.md-content :deep(td) {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  padding: 4px 8px;
+}
+.md-content :deep(th) {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+.md-content :deep(hr) {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+  margin: 8px 0;
+}
+/* White links in AI bubbles */
+.message-bubble.ai .md-content :deep(a) {
+  color: #c7d2fe;
+}
+.message-bubble.ai .md-content :deep(code) {
+  background: rgba(255, 255, 255, 0.15);
+}
+.message-bubble.ai .md-content :deep(pre) {
+  background: rgba(255, 255, 255, 0.1);
+}
+.message-bubble.ai .md-content :deep(blockquote) {
+  border-left-color: rgba(255, 255, 255, 0.4);
+}
+.message-bubble.ai .md-content :deep(th),
+.message-bubble.ai .md-content :deep(td) {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.message-bubble.ai .md-content :deep(th) {
+  background: rgba(255, 255, 255, 0.1);
+}
+.message-bubble.ai .md-content :deep(hr) {
+  border-top-color: rgba(255, 255, 255, 0.25);
 }
 </style>

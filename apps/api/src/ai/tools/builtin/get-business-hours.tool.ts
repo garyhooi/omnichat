@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { ToolHandler, ToolContext } from '../tool.interface';
 
+// This is a simple example of a built-in tool that provides business hours information.
+// In a real application, you might want to make this dynamic based on your business requirements.
 export class GetBusinessHoursTool implements ToolHandler {
   name = 'get_business_hours';
   description = 'Get the current business hours and availability status. Use this when customers ask about operating hours or when agents are available.';

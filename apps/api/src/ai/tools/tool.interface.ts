@@ -15,4 +15,9 @@ export interface ToolContext {
   conversationId: string;
   visitorId?: string;
   metadata?: Record<string, any>;
+  /** Injected services — available for built-in tools that need DB access */
+  services?: {
+    prisma?: any;
+    siteConfigService?: any;
+  };
 }

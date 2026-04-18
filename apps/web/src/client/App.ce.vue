@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
+import { renderMarkdown } from '../utils/markdown'
 
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes by Vue's defineCustomElement
@@ -49,13 +50,37 @@ const isAiEnabled = ref(false)
 
 // Throttled scroll for AI streaming to prevent UI freeze
 let _scrollRafId: number | null = null
+let _userScrolledUp = false
+
+function isNearBottom(): boolean {
+  if (!messagesArea.value) return true
+  const el = messagesArea.value
+  // Consider "near bottom" if within 80px of the bottom
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 80
+}
+
 function throttledScrollToBottom() {
+  // Don't force scroll if user has scrolled up intentionally
+  if (_userScrolledUp) return
   if (_scrollRafId) return
   _scrollRafId = requestAnimationFrame(() => {
-    scrollToBottom()
+    scrollToBottom(true) // instant scroll during streaming
     _scrollRafId = null
   })
 }
+
+// Track user scroll during AI streaming — allow user to scroll up freely
+function onMessagesScroll() {
+  if (isAiStreaming.value) {
+    _userScrolledUp = !isNearBottom()
+  }
+}
+
+// Attach scroll listener when messagesArea becomes available
+watch(messagesArea, (el, oldEl) => {
+  if (oldEl) oldEl.removeEventListener('scroll', onMessagesScroll)
+  if (el) el.addEventListener('scroll', onMessagesScroll, { passive: true })
+})
 
 // Site config state
 const siteBubbleColor = ref('')
@@ -67,6 +92,7 @@ const siteWebsitePosition = ref('bottom-right')
 const siteBubbleIcon = ref('💬')
 const siteEnableReadReceipts = ref(true)
 const siteIsOfflineMode = ref(false)
+const wordLimitError = ref('')
 
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
@@ -264,12 +290,18 @@ function connect() {
     }
   })
 
+  s.on('message_error', (data: { error: string }) => {
+    wordLimitError.value = data.error
+    setTimeout(() => (wordLimitError.value = ''), 4000)
+  })
+
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === conversationId.value) {
       // If AI streaming just completed, don't duplicate the final message
       if (data.message.senderType === 'ai' && isAiStreaming.value) {
         isAiStreaming.value = false
         aiStreamingText.value = ''
+        _userScrolledUp = false // reset scroll lock when streaming ends
         // The persisted message replaces the streaming bubble
       }
       messages.value.push(data.message)
@@ -561,6 +593,14 @@ async function processFile(file: File) {
 function sendMessage() {
   if (!newMessage.value.trim() || !conversationId.value) return
 
+  const text = newMessage.value.trim()
+  if (text.length > 100) {
+    wordLimitError.value = `Message too long (${text.length}/100 characters).`
+    setTimeout(() => (wordLimitError.value = ''), 4000)
+    return
+  }
+  wordLimitError.value = ''
+
   socket.value?.emit('send_message', {
     conversationId: conversationId.value,
     content: newMessage.value.trim(),
@@ -619,9 +659,18 @@ function cancelEndChat() {
   showEndChatConfirm.value = false
 }
 
-function scrollToBottom() {
+function scrollToBottom(instant = false) {
   if (messagesArea.value) {
-    messagesArea.value.scrollTop = messagesArea.value.scrollHeight
+    if (instant) {
+      // Instant scroll — used during AI streaming to prevent freeze
+      messagesArea.value.scrollTop = messagesArea.value.scrollHeight
+    } else {
+      // Smooth scroll for normal messages
+      messagesArea.value.scrollTo({
+        top: messagesArea.value.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }
 }
 
@@ -767,7 +816,7 @@ onUnmounted(() => {
     <!-- Welcome screen (no active conversation) -->
     <template v-if="!conversationId">
       <div class="welcome-screen">
-        <template v-if="siteIsOfflineMode">
+        <template v-if="siteIsOfflineMode && !isAiEnabled">
           <div style="background: rgba(254, 226, 226, 0.8); border: 1px solid #fca5a5; padding: 16px; border-radius: 12px; margin-bottom: 24px; text-align: center; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);">
             <p style="color: #b91c1c; font-weight: 600; margin: 0 0 8px 0; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
               <span style="font-size: 18px;">🌙</span> Agents are offline
@@ -805,7 +854,7 @@ onUnmounted(() => {
           :class="['msg-bubble', msg.senderType]"
           :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
         >
-          <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>
+            <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>
           <template v-if="msg.messageType === 'image'">
             <img 
               :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" 
@@ -813,14 +862,14 @@ onUnmounted(() => {
               style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" 
               @click="openImage(msg.attachmentUrl || '')" 
             />
-            <div v-if="msg.content" style="padding: 8px;">{{ msg.content }}</div>
+            <div v-if="msg.content" class="md-content" style="padding: 8px;" v-html="renderMarkdown(msg.content)"></div>
           </template>
           <template v-else>
-            <div>{{ msg.content }}</div>
+            <div class="md-content" v-html="renderMarkdown(msg.content || '')"></div>
           </template>
           <div class="msg-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
             <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
-            <span v-if="siteEnableReadReceipts && msg.senderType === 'visitor' && msg.readAt" class="msg-read-receipt" title="Read">&#10003;&#10003;</span>
+            <!-- Read receipts are never shown to customers -->
           </div>
         </div>
       </div>
@@ -828,7 +877,7 @@ onUnmounted(() => {
       <!-- AI streaming bubble -->
       <div v-if="isAiStreaming && aiStreamingText" class="msg-bubble ai ai-streaming" style="align-self: flex-start;">
         <div class="ai-label">AI Agent</div>
-        <div>{{ aiStreamingText }}<span class="ai-cursor">|</span></div>
+        <div class="md-content" v-html="renderMarkdown(aiStreamingText)"></div><span class="ai-cursor">|</span>
       </div>
 
       <!-- Typing indicator -->
@@ -880,6 +929,7 @@ onUnmounted(() => {
         </div>
 
         <div v-else class="input-area">
+          <div v-if="wordLimitError" style="position: absolute; top: -32px; left: 12px; right: 12px; background: #fef2f2; color: #dc2626; font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #fecaca;">{{ wordLimitError }}</div>
           <button
             type="button"
             class="attachment-btn"
@@ -901,12 +951,14 @@ onUnmounted(() => {
             v-model="newMessage"
             class="msg-input"
             rows="1"
+            maxlength="100"
             :placeholder="isUploading ? 'Uploading...' : 'Type your message...'"
             :disabled="isUploading"
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.enter.shift.exact="() => {}"
             @input="handleInput"
           ></textarea>
+          <span :style="{ fontSize: '10px', color: newMessage.length >= 85 ? '#dc2626' : '#9ca3af', position: 'absolute', bottom: '4px', right: '65px', pointerEvents: 'none' }">{{ newMessage.length }}/100</span>
           <button
             type="button"
             class="send-msg-btn"

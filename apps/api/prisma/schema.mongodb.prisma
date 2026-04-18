@@ -79,6 +79,7 @@ model AdminUser {
   displayName  String
   role         String   @default("agent")
   isOnline     Boolean  @default(false)
+  isLocked     Boolean  @default(false)
   registrationIp String?
   lastLoginIp    String?
   userAgent      String?
@@ -244,4 +245,25 @@ model AiLog {
   message       String?
   details       String?
   createdAt     DateTime @default(now())
+}
+
+model HttpLog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  method         String
+  url            String
+  statusCode     Int?
+  clientIp       String?
+  userAgent      String?
+  userId         String?
+  username       String?
+  requestHeaders String?
+  requestBody    String?
+  responseBody   String?
+  contentLength  Int?
+  duration       Int?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([method])
+  @@index([statusCode])
 }

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
+import { useToast } from '../stores/toast.store'
 
 const auth = useAuthStore()
+const toast = useToast()
 const base = () => auth.serverUrl
 
 // --- State ---
@@ -26,14 +28,25 @@ const notificationSoundUrl = ref('')
 const isUploadingSound = ref(false)
 const soundFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
-const settingsSaved = ref(false)
-const settingsError = ref('')
 
 // Quick replies
 const quickReplies = ref<{ id: string; title: string; content: string }[]>([])
 const editingQuickReplyId = ref<string | null>(null)
 const qrDraftTitle = ref('')
 const qrDraftContent = ref('')
+
+// Quick reply input handlers to enforce client-side maxlength (defensive)
+function handleQrTitleInput(e: Event) {
+  if (qrDraftTitle.value.length > 200) {
+    qrDraftTitle.value = qrDraftTitle.value.slice(0, 200)
+  }
+}
+
+function handleQrContentInput(e: Event) {
+  if (qrDraftContent.value.length > 1000) {
+    qrDraftContent.value = qrDraftContent.value.slice(0, 1000)
+  }
+}
 
 // Emoji options
 const emojiOptions = ['💬', '👋', '🤖', '💡', '❓', '🎉', '⭐', '🔔', '📩', '🛎️']
@@ -68,9 +81,17 @@ async function loadConfig() {
     bubbleSize.value = data.bubbleSize ?? 'medium'
     bubblePattern.value = data.bubblePattern ?? 'solid'
     websitePosition.value = data.websitePosition ?? 'bottom-right'
-    bubbleIconType.value = data.bubbleIconType ?? 'emoji'
-    bubbleIconEmoji.value = data.bubbleIconEmoji ?? '💬'
-    bubbleIconUrl.value = data.bubbleIconUrl ?? ''
+    // bubbleIcon is stored as a single string: emoji char or "custom:url"
+    const icon = data.bubbleIcon ?? '💬'
+    if (icon.startsWith('custom:')) {
+      bubbleIconType.value = 'custom'
+      bubbleIconUrl.value = icon.slice(7)
+      bubbleIconEmoji.value = '💬'
+    } else {
+      bubbleIconType.value = 'emoji'
+      bubbleIconEmoji.value = icon
+      bubbleIconUrl.value = ''
+    }
     enableReadReceipts.value = data.enableReadReceipts ?? false
     isOfflineMode.value = data.isOfflineMode ?? false
     notificationSoundUrl.value = data.notificationSoundUrl ?? ''
@@ -96,8 +117,10 @@ onMounted(() => {
 
 // --- Save settings ---
 async function saveSettings() {
-  settingsSaved.value = false
-  settingsError.value = ''
+  // Combine icon fields into a single string for the API
+  const bubbleIconValue = bubbleIconType.value === 'custom' && bubbleIconUrl.value
+    ? `custom:${bubbleIconUrl.value}`
+    : bubbleIconEmoji.value
   const body = {
     bubbleColor: bubbleColor.value,
     welcomeMessage: welcomeMessage.value,
@@ -105,9 +128,7 @@ async function saveSettings() {
     bubbleSize: bubbleSize.value,
     bubblePattern: bubblePattern.value,
     websitePosition: websitePosition.value,
-    bubbleIconType: bubbleIconType.value,
-    bubbleIconEmoji: bubbleIconEmoji.value,
-    bubbleIconUrl: bubbleIconUrl.value,
+    bubbleIcon: bubbleIconValue,
     enableReadReceipts: enableReadReceipts.value,
     isOfflineMode: isOfflineMode.value,
     notificationSoundUrl: notificationSoundUrl.value,
@@ -128,10 +149,9 @@ async function saveSettings() {
     if (!res.ok) throw new Error('Failed to save')
     const data = await res.json()
     siteConfigId.value = data.id ?? data._id ?? siteConfigId.value
-    settingsSaved.value = true
-    setTimeout(() => (settingsSaved.value = false), 3000)
+    toast.success('Settings saved successfully')
   } catch (e: any) {
-    settingsError.value = e.message || 'Failed to save settings'
+    toast.error(e.message || 'Failed to save settings')
   }
 }
 
@@ -171,7 +191,7 @@ async function uploadCustomIcon(e: Event) {
     bubbleIconUrl.value = data.url
     bubbleIconType.value = 'custom'
   } catch {
-    settingsError.value = 'Icon upload failed'
+    toast.error('Icon upload failed')
   } finally {
     isUploadingIcon.value = false
     if (iconFileInput.value) iconFileInput.value.value = ''
@@ -196,7 +216,7 @@ async function uploadCustomSound(e: Event) {
     const data = await res.json()
     notificationSoundUrl.value = data.url
   } catch {
-    settingsError.value = 'Sound upload failed'
+    toast.error('Sound upload failed')
   } finally {
     isUploadingSound.value = false
     if (soundFileInput.value) soundFileInput.value.value = ''
@@ -209,8 +229,18 @@ function removeSound() {
 
 function playSound() {
   if (!notificationSoundUrl.value) return
-  const audio = new Audio(notificationSoundUrl.value)
-  audio.play()
+
+  // Ensure the audio src is absolute. The stored URL may be a relative path
+  // (eg. "/uploads/..") so prefix with the server base if needed — this
+  // mirrors the logic used in the admin App where sounds play correctly.
+  const src = notificationSoundUrl.value.startsWith('http')
+    ? notificationSoundUrl.value
+    : `${base()}${notificationSoundUrl.value}`
+
+  const audio = new Audio(src)
+  audio.currentTime = 0
+  // Guard the play promise to avoid uncaught exceptions when playback fails
+  audio.play().catch((e) => console.warn('Audio play failed:', e))
 }
 
 // --- Quick Reply CRUD ---
@@ -234,6 +264,19 @@ function cancelEditQuickReply() {
 
 async function saveQuickReply() {
   const body = { title: qrDraftTitle.value, content: qrDraftContent.value }
+  // Client-side validation
+  if (!body.title || body.title.trim().length === 0) {
+    toast.error('Title is required')
+    return
+  }
+  if (body.title.length > 200) {
+    toast.error('Title is too long (max 200 characters)')
+    return
+  }
+  if (body.content.length > 1000) {
+    toast.error('Content is too long (max 1000 characters)')
+    return
+  }
   try {
     if (editingQuickReplyId.value === '__new__') {
       const res = await apiFetch('/quick-replies', {
@@ -251,7 +294,7 @@ async function saveQuickReply() {
     cancelEditQuickReply()
     await loadQuickReplies()
   } catch {
-    settingsError.value = 'Failed to save quick reply'
+    toast.error('Failed to save quick reply')
   }
 }
 
@@ -261,7 +304,7 @@ async function deleteQuickReply(id: string) {
     if (!res.ok) throw new Error()
     await loadQuickReplies()
   } catch {
-    settingsError.value = 'Failed to delete quick reply'
+    toast.error('Failed to delete quick reply')
   }
 }
 </script>
@@ -291,15 +334,6 @@ async function deleteQuickReply(id: string) {
         >
           Quick Replies
         </button>
-      </div>
-
-      <!-- Feedback banners -->
-      <div v-if="settingsSaved" class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-700">
-        Settings saved successfully.
-      </div>
-      <div v-if="settingsError" class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 flex justify-between items-center">
-        <span>{{ settingsError }}</span>
-        <button @click="settingsError = ''" class="text-red-400 hover:text-red-600">&times;</button>
       </div>
 
       <!-- Widget Setup Tab -->
@@ -385,14 +419,58 @@ async function deleteQuickReply(id: string) {
 
         <!-- Checkboxes -->
         <div class="space-y-3">
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" v-model="enableReadReceipts" class="accent-indigo-600 w-4 h-4" />
-            <span class="text-gray-700">Enable Read Receipts</span>
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" v-model="isOfflineMode" class="accent-indigo-600 w-4 h-4" />
-            <span class="text-gray-700">Offline Mode</span>
-          </label>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Read Receipts</label>
+            <div class="inline-flex rounded-md overflow-hidden border border-gray-300 text-sm">
+              <button
+                type="button"
+                :class="[
+                  'px-4 py-1.5 font-medium transition-colors',
+                  !enableReadReceipts
+                    ? 'bg-gray-500 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                ]"
+                @click="enableReadReceipts = false"
+              >Off</button>
+              <button
+                type="button"
+                :class="[
+                  'px-4 py-1.5 font-medium transition-colors',
+                  enableReadReceipts
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                ]"
+                @click="enableReadReceipts = true"
+              >On</button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">When on, agents can see if customers have read their messages. Customers never see read receipts.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Human Agent Status</label>
+            <div class="inline-flex rounded-md overflow-hidden border border-gray-300 text-sm">
+              <button
+                type="button"
+                :class="[
+                  'px-4 py-1.5 font-medium transition-colors',
+                  isOfflineMode
+                    ? 'bg-red-500 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                ]"
+                @click="isOfflineMode = true"
+              >Offline</button>
+              <button
+                type="button"
+                :class="[
+                  'px-4 py-1.5 font-medium transition-colors',
+                  !isOfflineMode
+                    ? 'bg-green-500 text-white'
+                    : 'bg-white text-gray-500 hover:bg-gray-50'
+                ]"
+                @click="isOfflineMode = false"
+              >Online</button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">When offline, human agents are unavailable. If AI agent is active, customers can still chat with AI.</p>
+          </div>
         </div>
 
         <!-- Notification Sound -->
@@ -432,14 +510,16 @@ async function deleteQuickReply(id: string) {
         <div v-if="editingQuickReplyId" class="mb-6 border border-indigo-200 rounded-md p-4 bg-indigo-50/30 space-y-3">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <input v-model="qrDraftTitle" type="text" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. Greeting" />
+            <input v-model="qrDraftTitle" @input="handleQrTitleInput" type="text" maxlength="200" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. Greeting" />
+            <div class="text-xs text-gray-400 mt-1">{{ qrDraftTitle.length }}/200</div>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Content</label>
-            <textarea v-model="qrDraftContent" rows="3" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Reply content..." />
+            <textarea v-model="qrDraftContent" @input="handleQrContentInput" rows="3" maxlength="1000" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Reply content..." />
+            <div class="text-xs text-gray-400 mt-1">{{ qrDraftContent.length }}/1000</div>
           </div>
           <div class="flex gap-2">
-            <button @click="saveQuickReply" class="px-4 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+            <button :disabled="!qrDraftTitle.trim()" @click="saveQuickReply" class="px-4 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50">
               {{ editingQuickReplyId === '__new__' ? 'Create' : 'Update' }}
             </button>
             <button @click="cancelEditQuickReply" class="px-4 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors">

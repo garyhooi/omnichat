@@ -7,7 +7,7 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Logger, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Logger, UnauthorizedException, ForbiddenException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { AuthService } from '../auth/auth.service';
@@ -24,6 +24,7 @@ import { AiLogService } from '../ai/ai-log.service';
 import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-base.tool';
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
 import { GetBusinessHoursTool } from '../ai/tools/builtin/get-business-hours.tool';
+import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { CoreMessage } from 'ai';
 
 // ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ import { SiteConfigService } from '../config/site-config.service';
   //   require('redis').createClient({ url: process.env.REDIS_URL }),
   // ),
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer()
   server: Server;
 
@@ -177,11 +178,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private inactivityWarnings = new Map<string, NodeJS.Timeout>();
   private inactivityResolves = new Map<string, NodeJS.Timeout>();
 
+  // Heartbeat stale-check interval
+  private staleCheckInterval: NodeJS.Timeout | null = null;
+  private static readonly STALE_CHECK_INTERVAL_MS = 60_000; // every 60s
+  private static readonly STALE_THRESHOLD_MS = 2 * 60_000; // 2 minutes without heartbeat
+
   constructor(
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
     private readonly uploadTokenService: UploadTokenService,
     private readonly siteConfigService: SiteConfigService,
+    private readonly prisma: PrismaService,
     private readonly aiService: AiService,
     private readonly aiConfigService: AiConfigService,
     private readonly handoffService: HandoffService,
@@ -194,6 +201,75 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.toolRegistry.registerBuiltin(new SearchKnowledgeBaseTool(this.ragService));
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
     this.toolRegistry.registerBuiltin(new GetBusinessHoursTool());
+    this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
+  }
+
+  // =========================================================================
+  // LIFECYCLE — startup reset & periodic stale-check
+  // =========================================================================
+
+  /**
+   * On server boot, reset all users to offline. Any previously-online users
+   * whose WebSocket connections were lost (e.g. server crash/restart) are
+   * cleaned up here.
+   */
+  async onModuleInit() {
+    const result = await this.prisma.adminUser.updateMany({
+      where: { isOnline: true },
+      data: { isOnline: false },
+    });
+    this.logger.log(`Startup: reset ${result.count} user(s) to offline`);
+
+    // Start periodic stale-check for heartbeat timeout
+    this.staleCheckInterval = setInterval(
+      () => this.markStaleUsersOffline(),
+      ChatGateway.STALE_CHECK_INTERVAL_MS,
+    );
+    this.logger.log('Heartbeat stale-check started (every 60s, threshold 2min)');
+  }
+
+  onModuleDestroy() {
+    if (this.staleCheckInterval) {
+      clearInterval(this.staleCheckInterval);
+      this.staleCheckInterval = null;
+    }
+  }
+
+  /**
+   * Periodically mark users offline if their lastSeenAt is older than
+   * STALE_THRESHOLD_MS and they have no active WebSocket connections.
+   */
+  private async markStaleUsersOffline() {
+    try {
+      const threshold = new Date(Date.now() - ChatGateway.STALE_THRESHOLD_MS);
+      const staleUsers = await this.prisma.adminUser.findMany({
+        where: {
+          isOnline: true,
+          lastSeenAt: { lt: threshold },
+        },
+        select: { id: true, displayName: true },
+      });
+
+      if (staleUsers.length === 0) return;
+
+      // Double-check each stale user has no active sockets before marking offline
+      for (const user of staleUsers) {
+        const sockets = await this.server.in(`agent:${user.id}`).fetchSockets();
+        if (sockets.length === 0) {
+          await this.prisma.adminUser.update({
+            where: { id: user.id },
+            data: { isOnline: false, lastSeenAt: new Date() },
+          });
+          this.logger.log(`Heartbeat timeout: marked ${user.displayName} offline (stale lastSeenAt)`);
+        }
+      }
+
+      // Broadcast updated presence
+      const onlineAgents = await this.chatService.getOnlineAgents();
+      this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
+    } catch (err) {
+      this.logger.error(`Stale-check error: ${err.message}`);
+    }
   }
 
   /**
@@ -322,6 +398,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Join global agents room for broadcasts
         client.join('agents');
+
+        // Join agent-specific room for presence tracking (multi-tab awareness)
+        client.join(`agent:${user.id}`);
 
         // Mark agent as online
         await this.chatService.setAgentOnline(user.id, true);
@@ -462,6 +541,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // =========================================================================
 
   /**
+   * Agent heartbeat — keeps lastSeenAt fresh to prevent stale-check timeout.
+   * The admin dashboard should emit this every ~30 seconds.
+   */
+  @SubscribeMessage('heartbeat')
+  async handleHeartbeat(@ConnectedSocket() client: AuthenticatedSocket) {
+    if (client.data.user && !client.data.isVisitor) {
+      await this.prisma.adminUser.update({
+        where: { id: client.data.user.id },
+        data: { lastSeenAt: new Date() },
+      });
+    }
+  }
+
+  /**
    * Start a new conversation (visitor-initiated).
    * Creates a Conversation record and auto-joins the visitor to the room.
    */
@@ -472,8 +565,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const config = await this.siteConfigService.getActiveConfig() as any;
     if (config?.isOfflineMode) {
-      client.emit('error', { message: 'All agents are currently offline. Please check back later.' });
-      return;
+      // Human offline mode is on — check if AI agent is available
+      const aiEnabled = await this.aiService.isEnabled();
+      const agentConfig = await this.aiConfigService.getAgentConfig();
+      if (!aiEnabled || !agentConfig?.enabled) {
+        // No AI either — fully offline
+        client.emit('error', { message: 'All agents are currently offline. Please check back later.' });
+        return;
+      }
+      // AI is available — allow conversation to proceed (AI-only mode)
     }
 
     const visitorId = payload.visitorId || client.data.visitorId || client.id;
@@ -570,12 +670,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           messageType: 'text',
         });
 
-        this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
-          message: {
-            ...greetingMsg,
-            senderDisplayName: 'AI Assistant',
-          },
-        });
+          this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+            message: {
+              ...greetingMsg,
+              senderDisplayName: 'AI Agent',
+            },
+          });
       }
     } catch (error: any) {
       this.logger.error(`Failed to initialize AI for conversation ${conversationId}: ${error.message}`);
@@ -649,6 +749,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         error: 'You are sending messages too quickly. Please slow down.',
       });
       return;
+    }
+
+    // Character limit enforcement
+    if (content) {
+      const maxChars = senderType === 'visitor' ? 100 : 1000; // admin agents can send up to 1000 chars
+      if (content.trim().length > maxChars) {
+        client.emit('message_error', {
+          conversationId,
+          error: `Message too long (${content.trim().length}/${maxChars} characters).`,
+        });
+        return;
+      }
     }
 
     // Determine sender type and ID based on socket identity
@@ -1000,12 +1112,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId: conversation.visitorId,
+        services: {
+          prisma: this.prisma,
+          siteConfigService: this.siteConfigService,
+        },
       });
 
       // Emit typing indicator
       this.server.to(`conv:${conversationId}`).emit('agent_typing', {
         conversationId,
-        user: 'AI Assistant',
+        user: 'AI Agent',
         isTyping: true,
       });
 
@@ -1114,7 +1230,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Stop typing indicator
       this.server.to(`conv:${conversationId}`).emit('agent_typing', {
         conversationId,
-        user: 'AI Assistant',
+        user: 'AI Agent',
         isTyping: false,
       });
 
@@ -1148,9 +1264,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           const toolResult = tr as any;
           // Check for transfer_to_human tool call
           if (toolResult?.toolName === 'transfer_to_human') {
-            const reason = toolResult?.result?.reason || 'AI initiated transfer';
-            await this.triggerHandoff(conversationId, reason);
-            handoffTriggered = true;
+            if (toolResult?.result?.action === 'handoff') {
+              const reason = toolResult?.result?.reason || 'AI initiated transfer';
+              await this.triggerHandoff(conversationId, reason);
+              handoffTriggered = true;
+            }
+            // If action is 'unavailable', AI already told the customer — no handoff
           }
           // Check for RAG failures
           if (toolResult?.toolName === 'search_knowledge_base') {
@@ -1183,10 +1302,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
 
         // Emit complete message
-        this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+          this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
           message: {
             ...aiMessage,
-            senderDisplayName: 'AI Assistant',
+            senderDisplayName: 'AI Agent',
           },
         });
 
@@ -1209,7 +1328,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Stop typing indicator since we have nothing to show
         this.server.to(`conv:${conversationId}`).emit('agent_typing', {
           conversationId,
-          user: 'AI Assistant',
+          user: 'AI Agent',
           isTyping: false,
         });
 
@@ -1236,11 +1355,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.error(`AI response error for ${conversationId}: ${error.message}`);
 
       // Stop typing indicator on error
-      this.server.to(`conv:${conversationId}`).emit('agent_typing', {
-        conversationId,
-        user: 'AI Assistant',
-        isTyping: false,
-      });
+        this.server.to(`conv:${conversationId}`).emit('agent_typing', {
+          conversationId,
+          user: 'AI Agent',
+          isTyping: false,
+        });
 
       // Send a visible error message to the visitor so they're not left hanging
       const errorMsg = await this.chatService.createMessage({

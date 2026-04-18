@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AiConfigService } from './ai-config.service';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 // ---------------------------------------------------------------------------
@@ -53,7 +55,8 @@ class UpsertAgentConfigDto {
 // Controller
 // ---------------------------------------------------------------------------
 @Controller('ai/config')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('admin')
 export class AiConfigController {
   constructor(private readonly aiConfigService: AiConfigService) {}
 

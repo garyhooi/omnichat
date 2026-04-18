@@ -14,6 +14,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentService } from './document.service';
 import { RagService } from './rag.service';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, Max } from 'class-validator';
 
 class SearchKnowledgeDto {
@@ -22,7 +24,8 @@ class SearchKnowledgeDto {
 }
 
 @Controller('ai/knowledge')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('admin')
 export class DocumentController {
   constructor(
     private readonly documentService: DocumentService,

@@ -13,6 +13,8 @@ import { AiConfigService } from './ai-config.service';
 import { HandoffService } from './handoff.service';
 import { AiSecurityService } from './ai-security.service';
 import { ToolRegistry } from './tools/tool-registry';
+import { PrismaService } from '../prisma/prisma.service';
+import { SiteConfigService } from '../config/site-config.service';
 import { CoreMessage } from 'ai';
 
 interface ChatRequestBody {
@@ -34,6 +36,8 @@ export class AiChatController {
     private readonly handoffService: HandoffService,
     private readonly securityService: AiSecurityService,
     private readonly toolRegistry: ToolRegistry,
+    private readonly prisma: PrismaService,
+    private readonly siteConfigService: SiteConfigService,
   ) {}
 
   @Post()
@@ -103,6 +107,10 @@ export class AiChatController {
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId,
+        services: {
+          prisma: this.prisma,
+          siteConfigService: this.siteConfigService,
+        },
       });
 
       // Stream AI response

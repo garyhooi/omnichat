@@ -85,7 +85,6 @@ serve({
 console.log(`\n======================================================`);
 console.log(`Demo Server running at: http://localhost:${PORT}`);
 console.log(`======================================================`);
-console.log(`\nAdmin SPA:       http://localhost:${PORT}/`);
-console.log(`Legacy CE demo:  http://localhost:${PORT}/demo/admin.html`);
+console.log(`Admin CE demo:  http://localhost:${PORT}/demo/admin.html`);
 console.log(`Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
 console.log(`\n(Make sure the API server is running on port 3001)`);

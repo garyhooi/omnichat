@@ -50,8 +50,10 @@ export class SiteConfigService {
   async updateConfig(
     id: string,
     data: {
+      siteName?: string;
       bubbleColor?: string;
       welcomeMessage?: string;
+      offlineMessage?: string;
       bubbleSize?: string;
       bubblePattern?: string;
       websitePosition?: string;

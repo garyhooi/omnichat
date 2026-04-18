@@ -68,6 +68,10 @@ class CreateSiteConfigDto {
 class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
+  siteName?: string;
+
+  @IsString()
+  @IsOptional()
   bubbleColor?: string;
 
   @IsString()

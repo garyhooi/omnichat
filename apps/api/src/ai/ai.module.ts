@@ -9,9 +9,10 @@ import { AiSecurityService } from './ai-security.service';
 import { ToolRegistry } from './tools/tool-registry';
 import { AiLogService } from './ai-log.service';
 import { SessionStateModule } from '../session-state/session-state.module';
+import { AppConfigModule } from '../config/config.module';
 
 @Module({
-  imports: [SessionStateModule],
+  imports: [SessionStateModule, AppConfigModule],
   providers: [
     AiProviderFactory,
     AiService,

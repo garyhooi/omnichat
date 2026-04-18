@@ -80,6 +80,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if user is locked
+    if (user.isLocked) {
+      this.securityLogger.logAuthAttempt(username, false, ip || 'unknown', 'Account locked');
+      throw new UnauthorizedException('Account is locked. Please contact an administrator.');
+    }
+
     this.securityLogger.logAuthAttempt(username, true, ip || 'unknown');
 
     // Update last login info
@@ -118,6 +124,9 @@ export class AuthService {
       });
       if (!user) {
         throw new UnauthorizedException('User not found');
+      }
+      if (user.isLocked) {
+        throw new UnauthorizedException('Account is locked');
       }
       return {
         id: user.id,

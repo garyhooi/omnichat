@@ -57,6 +57,9 @@ export const useAiStore = defineStore('ai', () => {
     if (authStore.token && authStore.token !== 'cookie-auth') {
       headers['Authorization'] = `Bearer ${authStore.token}`
     }
+    if (authStore.adminApiKey) {
+      headers['x-admin-api-key'] = authStore.adminApiKey
+    }
     const res = await fetch(`${authStore.serverUrl}${path}`, {
       ...options,
       credentials: 'include',
@@ -147,6 +150,9 @@ export const useAiStore = defineStore('ai', () => {
     const uploadHeaders: Record<string, string> = {}
     if (authStore.token && authStore.token !== 'cookie-auth') {
       uploadHeaders['Authorization'] = `Bearer ${authStore.token}`
+    }
+    if (authStore.adminApiKey) {
+      uploadHeaders['x-admin-api-key'] = authStore.adminApiKey
     }
     const res = await fetch(`${authStore.serverUrl}/ai/knowledge/documents`, {
       method: 'POST',

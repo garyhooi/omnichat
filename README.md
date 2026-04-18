@@ -9,8 +9,10 @@
 **OmniChat** is a high-performance, self-hosted, and open-source live chat system designed for modern websites. It provides a lightweight embeddable Vue 3 widget for your visitors and a powerful dashboard for your support agents.
 
 <div align="center">
-  <img src="docs/img/Screenshot-Admin.png" alt="OmniChat Admin Dashboard" width="48%" />
-  <img src="docs/img/Screenshot-Widget.png" alt="OmniChat Visitor Widget" width="48%" />
+  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Dashboard" width="48%" />
+  <img src="docs/img/ss-widget.png" alt="OmniChat Visitor Widget" width="48%" />
+  <img src="docs/img/ss-ai" alt="OmniChat AI Agent" width="48%" />
+  <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="48%" />
 </div>
 
 ## ✨ Features
