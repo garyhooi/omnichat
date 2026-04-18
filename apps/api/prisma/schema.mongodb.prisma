@@ -141,3 +141,106 @@ model UploadToken {
   @@index([conversationId])
   @@index([expiresAt])
 }
+
+// =============================================================================
+// AI Agent Models
+// =============================================================================
+
+model AiProvider {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String   @unique
+  providerType   String   // openai, anthropic, openrouter, ollama, deepseek, gemini, grok
+  apiKey         String?  // encrypted; null for ollama
+  baseUrl        String?  // custom endpoint (required for ollama/openrouter)
+  chatModelId    String   // e.g. "gpt-4o", "claude-sonnet-4-20250514"
+  embeddingModelId String? // e.g. "text-embedding-3-small"; null = use chat provider default
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AiAgentConfig {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  enabled                Boolean  @default(false)
+  systemPrompt           String   @default("You are a helpful customer support assistant. Be concise and helpful.")
+  greetingMessage        String?  // sent when AI starts handling a conversation
+  humanRequestKeywords   String?  // comma-separated list of phrases that trigger human handoff
+  maxTokensPerResponse   Int      @default(1024)
+  temperature            Float    @default(0.7)
+  maxTurnsPerConversation Int     @default(50)
+  maxTokensPerSession    Int      @default(50000)
+  ragFailureThreshold    Int      @default(2)    // consecutive RAG zero-results before handoff
+  humanRequestThreshold  Int      @default(2)    // times visitor asks for human before handoff
+  aiRateLimitPerMinute   Int      @default(10)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model KnowledgeDocument {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  fileName        String
+  fileType        String   // txt, md, pdf, docx, csv
+  fileSize        Int
+  content         String   // raw extracted text
+  embeddingStatus String   @default("pending") // pending, processing, completed, failed
+  errorMessage    String?
+  chunkCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  chunks DocumentChunk[]
+}
+
+model DocumentChunk {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  documentId String   @db.ObjectId
+  content    String
+  embedding  Float[]  // vector stored as array of floats (MongoDB Atlas Vector Search)
+  chunkIndex Int
+  metadata   String?  // JSON metadata
+  createdAt  DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+}
+
+model AiConversationState {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId     String   @unique
+  failureCount       Int      @default(0)
+  ragFailureCount    Int      @default(0)
+  humanRequestCount  Int      @default(0)
+  tokensUsed         Int      @default(0)
+  turnCount          Int      @default(0)
+  handoffTriggered   Boolean  @default(false)
+  handoffReason      String?
+  isAiHandling       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ToolRegistration {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  name               String   @unique
+  description        String
+  parametersSchema   String   // JSON Schema for tool parameters
+  handlerType        String   @default("builtin") // builtin, external
+  endpoint           String?  // HTTP endpoint for external tools
+  isActive           Boolean  @default(true)
+  requiredPermission String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// AI Logs (stores AI provider failures and important events)
+model AiLog {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String?
+  providerId    String?
+  eventType     String   // e.g. authentication_error, stream_error, empty_response, tool_error
+  message       String?
+  details       String?
+  createdAt     DateTime @default(now())
+}

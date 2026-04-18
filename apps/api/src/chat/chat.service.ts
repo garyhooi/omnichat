@@ -7,7 +7,7 @@ import * as sanitizeHtml from 'sanitize-html';
 // ---------------------------------------------------------------------------
 export interface CreateMessageInput {
   conversationId: string;
-  senderType: 'visitor' | 'agent';
+  senderType: 'visitor' | 'agent' | 'ai' | 'system';
   senderId?: string;
   content?: string;
   messageType?: string;
@@ -173,6 +173,16 @@ export class ChatService {
         status: 'resolved',
         resolvedByUsername
       },
+    });
+  }
+
+  /**
+   * Update the status of a conversation (e.g. 'ai' -> 'active' on handoff).
+   */
+  async updateConversationStatus(conversationId: string, status: string) {
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status },
     });
   }
 

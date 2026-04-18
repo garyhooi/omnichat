@@ -14,6 +14,17 @@ import { AuthService } from '../auth/auth.service';
 import { UploadTokenService } from '../upload/upload-token.service';
 import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
+import { AiService } from '../ai/ai.service';
+import { AiConfigService } from '../ai/ai-config.service';
+import { HandoffService } from '../ai/handoff.service';
+import { AiSecurityService } from '../ai/ai-security.service';
+import { ToolRegistry } from '../ai/tools/tool-registry';
+import { RagService } from '../rag/rag.service';
+import { AiLogService } from '../ai/ai-log.service';
+import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-base.tool';
+import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
+import { GetBusinessHoursTool } from '../ai/tools/builtin/get-business-hours.tool';
+import { CoreMessage } from 'ai';
 
 // ---------------------------------------------------------------------------
 // Types for inbound/outbound events
@@ -171,7 +182,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly authService: AuthService,
     private readonly uploadTokenService: UploadTokenService,
     private readonly siteConfigService: SiteConfigService,
-  ) {}
+    private readonly aiService: AiService,
+    private readonly aiConfigService: AiConfigService,
+    private readonly handoffService: HandoffService,
+    private readonly securityService: AiSecurityService,
+    private readonly toolRegistry: ToolRegistry,
+    private readonly ragService: RagService,
+    private readonly aiLogService: AiLogService,
+  ) {
+    // Register built-in tools
+    this.toolRegistry.registerBuiltin(new SearchKnowledgeBaseTool(this.ragService));
+    this.toolRegistry.registerBuiltin(new TransferToHumanTool());
+    this.toolRegistry.registerBuiltin(new GetBusinessHoursTool());
+  }
 
   /**
    * Internal Simple Rate Limiter
@@ -508,11 +531,55 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Start inactivity timer
     this.resetInactivityTimer(conversation.id);
 
+    // Initialize AI agent if enabled
+    await this.initAiForConversation(conversation.id, client);
+
     this.logger.log(
       `Conversation started: ${conversation.id} by visitor ${visitorId}`,
     );
 
     return { conversationId: conversation.id };
+  }
+
+  /**
+   * Initialize AI agent for a new conversation.
+   * Sends greeting message if configured.
+   */
+  private async initAiForConversation(conversationId: string, client: AuthenticatedSocket) {
+    try {
+      const aiEnabled = await this.aiService.isEnabled();
+      if (!aiEnabled) return;
+
+      const agentConfig = await this.aiConfigService.getAgentConfig();
+      if (!agentConfig?.enabled) return;
+
+      // Initialize AI conversation state
+      await this.handoffService.initConversation(conversationId);
+
+      // Set conversation status to 'ai' so it appears under the AI tab in the admin dashboard
+      const aiConv = await this.chatService.updateConversationStatus(conversationId, 'ai');
+      this.server.to('agents').emit('conversation_updated', { conversation: aiConv });
+
+      // Send AI greeting message if configured
+      if (agentConfig.greetingMessage) {
+        const greetingMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'ai',
+          senderId: 'ai-agent',
+          content: agentConfig.greetingMessage,
+          messageType: 'text',
+        });
+
+        this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+          message: {
+            ...greetingMsg,
+            senderDisplayName: 'AI Assistant',
+          },
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to initialize AI for conversation ${conversationId}: ${error.message}`);
+    }
   }
 
   /**
@@ -612,6 +679,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Reset the inactivity timer for this conversation
       this.resetInactivityTimer(conversationId);
+
+      // If sender is visitor, trigger AI response (if enabled and not handed off)
+      if (senderType === 'visitor') {
+        this.handleAiResponse(conversationId, client).catch((err) => {
+          this.logger.error(`AI response failed for ${conversationId}: ${err.message}`);
+        });
+      }
     } catch (error) {
       // Failed write — do NOT emit. Notify only the sender of the failure.
       this.logger.error(
@@ -848,5 +922,386 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         role: client.data.user.role
       }
     });
+  }
+
+  // =========================================================================
+  // AI AGENT RESPONSE HANDLING
+  // =========================================================================
+
+  /**
+   * Handle AI response for a visitor message.
+   * Checks if AI is enabled, not handed off, and streams a response.
+   */
+  private async handleAiResponse(conversationId: string, client: AuthenticatedSocket) {
+    try {
+      // Check if AI is enabled
+      const aiEnabled = await this.aiService.isEnabled();
+      if (!aiEnabled) return;
+
+      const agentConfig = await this.aiConfigService.getAgentConfig();
+      if (!agentConfig?.enabled) return;
+
+      // Check if conversation has a human agent assigned or is already handed off
+      const conversation = await this.chatService.getConversation(conversationId);
+      if (!conversation) return;
+      if (conversation.agentId) return; // Human agent is handling
+      
+      const isAiHandling = await this.handoffService.isAiHandling(conversationId);
+      if (!isAiHandling) return;
+
+      // Security check on the last visitor message
+      const lastVisitorMsg = conversation.messages
+        ?.filter((m) => m.senderType === 'visitor')
+        .pop();
+      if (!lastVisitorMsg?.content) return;
+
+      const visitorIp = conversation.visitorIp || 'unknown';
+      const securityCheck = await this.securityService.checkMessage(
+        conversationId,
+        lastVisitorMsg.content,
+        visitorIp,
+        agentConfig.aiRateLimitPerMinute,
+      );
+
+      if (!securityCheck.allowed) {
+        this.logger.warn(`AI security check failed for ${conversationId}: ${securityCheck.reason}`);
+        return; // Silently skip AI response, human can still respond
+      }
+
+      // Check for human request keywords
+      if (await this.handoffService.detectHumanRequest(lastVisitorMsg.content)) {
+        const humanCheck = await this.handoffService.recordHumanRequest(
+          conversationId,
+          agentConfig.humanRequestThreshold,
+        );
+        if (humanCheck.shouldHandoff) {
+          await this.triggerHandoff(conversationId, humanCheck.reason!);
+          return;
+        }
+      }
+
+      // Check turn limit
+      const turnCheck = await this.handoffService.recordTurn(
+        conversationId,
+        agentConfig.maxTurnsPerConversation,
+      );
+      if (turnCheck.shouldHandoff) {
+        await this.triggerHandoff(conversationId, turnCheck.reason!);
+        return;
+      }
+
+      // Build message history for AI context
+      const messages: CoreMessage[] = (conversation.messages || []).map((m) => ({
+        role: m.senderType === 'visitor' ? 'user' as const : 'assistant' as const,
+        content: m.content || '',
+      }));
+
+      // Get tools
+      const tools = await this.toolRegistry.getTools({
+        conversationId,
+        visitorId: conversation.visitorId,
+      });
+
+      // Emit typing indicator
+      this.server.to(`conv:${conversationId}`).emit('agent_typing', {
+        conversationId,
+        user: 'AI Assistant',
+        isTyping: true,
+      });
+
+      // Stream AI response
+      let fullText = '';
+      let handoffTriggered = false;
+
+      this.logger.log(`AI response starting for conversation ${conversationId}`);
+
+      const onFinish = async ({ text, usage }: { text: string; usage: { totalTokens: number } }) => {
+        this.logger.log(`[AI:${conversationId}] onFinish called. text length: ${text.length}, totalTokens: ${usage.totalTokens}, text preview: "${text.substring(0, 200)}"`);
+        if (usage.totalTokens > 0) {
+          const tokenCheck = await this.handoffService.recordTokenUsage(
+            conversationId,
+            usage.totalTokens,
+            agentConfig.maxTokensPerSession,
+          );
+          if (tokenCheck.shouldHandoff) {
+            handoffTriggered = true;
+            await this.triggerHandoff(conversationId, tokenCheck.reason!);
+          }
+        }
+        this.securityService.resetGlobalFailure();
+      };
+
+      let result: any;
+      try {
+        // First attempt: with tools
+        const hasTools = Object.keys(tools).length > 0;
+        this.logger.log(`Calling streamChat for ${conversationId} (hasTools=${hasTools})`);
+        result = await this.aiService.streamChat({
+          conversationId,
+          messages,
+          systemPrompt: agentConfig.systemPrompt,
+          tools: hasTools ? tools : undefined,
+          maxTokens: agentConfig.maxTokensPerResponse,
+          temperature: agentConfig.temperature,
+          onFinish,
+        });
+
+        // Consume stream: emit text deltas to visitor; on errors record to DB
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            fullText += part.textDelta;
+            this.server.to(`conv:${conversationId}`).emit('ai_stream', {
+              conversationId,
+              token: part.textDelta,
+              isComplete: false,
+            });
+          } else if (part.type === 'error') {
+            // Record stream error to DB
+            await this.aiLogService.createLog({
+              conversationId,
+              providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+              eventType: 'stream_error',
+              message: part.error?.message || 'stream_error',
+              details: part.error || part,
+            });
+            this.logger.error(`AI stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+          }
+        }
+      } catch (toolError: any) {
+        // Retry without tools — some providers don't support tool calling
+        // Record tool error and retry without tools
+        await this.aiLogService.createLog({
+          conversationId,
+          providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+          eventType: 'tool_error',
+          message: toolError.message,
+          details: toolError.stack || toolError,
+        });
+        this.logger.warn(`Streaming with tools failed for ${conversationId}, retrying without tools`);
+        fullText = '';
+
+        result = await this.aiService.streamChat({
+          conversationId,
+          messages,
+          systemPrompt: agentConfig.systemPrompt,
+          maxTokens: agentConfig.maxTokensPerResponse,
+          temperature: agentConfig.temperature,
+          onFinish,
+        });
+
+        // Consume retry stream and emit text deltas
+        for await (const part of result.fullStream) {
+          if (part.type === 'text-delta') {
+            fullText += part.textDelta;
+            this.server.to(`conv:${conversationId}`).emit('ai_stream', {
+              conversationId,
+              token: part.textDelta,
+              isComplete: false,
+            });
+          } else if (part.type === 'error') {
+            await this.aiLogService.createLog({
+              conversationId,
+              providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+              eventType: 'stream_error_retry',
+              message: part.error?.message || 'stream_error',
+              details: part.error || part,
+            });
+            this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+          }
+        }
+      }
+
+      // Stop typing indicator
+      this.server.to(`conv:${conversationId}`).emit('agent_typing', {
+        conversationId,
+        user: 'AI Assistant',
+        isTyping: false,
+      });
+
+      // Check tool results for handoff or RAG failures
+      let toolResults: any;
+      try {
+        toolResults = await result.toolResults;
+        // Persist toolResults as a debug log entry if any tool failed
+        if (toolResults && toolResults.length > 0) {
+          await this.aiLogService.createLog({
+            conversationId,
+            providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+            eventType: 'tool_results',
+            message: 'tool_results_received',
+            details: toolResults,
+          });
+        }
+      } catch (trError: any) {
+        await this.aiLogService.createLog({
+          conversationId,
+          providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+          eventType: 'tool_results_error',
+          message: trError.message,
+          details: trError.stack || trError,
+        });
+        this.logger.warn(`Error reading toolResults for ${conversationId}: ${trError.message}`);
+        toolResults = [];
+      }
+      if (Array.isArray(toolResults)) {
+        for (const tr of toolResults) {
+          const toolResult = tr as any;
+          // Check for transfer_to_human tool call
+          if (toolResult?.toolName === 'transfer_to_human') {
+            const reason = toolResult?.result?.reason || 'AI initiated transfer';
+            await this.triggerHandoff(conversationId, reason);
+            handoffTriggered = true;
+          }
+          // Check for RAG failures
+          if (toolResult?.toolName === 'search_knowledge_base') {
+            const ragResult = toolResult?.result;
+            if (ragResult && !ragResult.found) {
+              const ragCheck = await this.handoffService.recordRagFailure(
+                conversationId,
+                agentConfig.ragFailureThreshold,
+              );
+              if (ragCheck.shouldHandoff) {
+                await this.triggerHandoff(conversationId, ragCheck.reason!);
+                handoffTriggered = true;
+              }
+            } else {
+              await this.handoffService.resetRagFailure(conversationId);
+            }
+          }
+        }
+      }
+
+      // Persist the AI message
+      if (fullText.trim()) {
+        this.logger.log(`Persisting AI message for ${conversationId}`);
+        const aiMessage = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'ai',
+          senderId: 'ai-agent',
+          content: fullText,
+          messageType: 'text',
+        });
+
+        // Emit complete message
+        this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+          message: {
+            ...aiMessage,
+            senderDisplayName: 'AI Assistant',
+          },
+        });
+
+        // Signal stream completion
+        this.server.to(`conv:${conversationId}`).emit('ai_stream', {
+          conversationId,
+          token: '',
+          isComplete: true,
+          fullText,
+        });
+      } else {
+        await this.aiLogService.createLog({
+          conversationId,
+          providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+          eventType: 'empty_response',
+          message: 'fullText empty after streaming',
+          details: { fullTextLength: fullText.length },
+        });
+
+        // Stop typing indicator since we have nothing to show
+        this.server.to(`conv:${conversationId}`).emit('agent_typing', {
+          conversationId,
+          user: 'AI Assistant',
+          isTyping: false,
+        });
+
+        // Send a visible error so the visitor isn't left hanging
+        const emptyMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'system',
+          senderId: 'system',
+          content: 'Sorry, I was unable to generate a response. Please try again.',
+          messageType: 'text',
+        });
+        this.server.to(`conv:${conversationId}`).emit('new_message', { message: emptyMsg });
+      }
+
+    } catch (error: any) {
+      await this.aiLogService.createLog({
+        conversationId,
+        providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+        eventType: 'response_exception',
+        message: error.message,
+        details: error.stack || error,
+      });
+      this.securityService.recordGlobalFailure();
+      this.logger.error(`AI response error for ${conversationId}: ${error.message}`);
+
+      // Stop typing indicator on error
+      this.server.to(`conv:${conversationId}`).emit('agent_typing', {
+        conversationId,
+        user: 'AI Assistant',
+        isTyping: false,
+      });
+
+      // Send a visible error message to the visitor so they're not left hanging
+      const errorMsg = await this.chatService.createMessage({
+        conversationId,
+        senderType: 'system',
+        senderId: 'system',
+        content: 'Sorry, I encountered an issue processing your request. Please try again or a human agent will assist you shortly.',
+        messageType: 'text',
+      });
+      this.server.to(`conv:${conversationId}`).emit('new_message', { message: errorMsg });
+
+      // Record failure and check for handoff
+      const failureResult = await this.handoffService.recordAiFailure(conversationId);
+      if (failureResult.shouldHandoff) {
+        await this.triggerHandoff(conversationId, failureResult.reason!);
+      }
+
+      // Check for credit/quota errors
+      if (error.status === 402 || error.status === 429 || 
+          error.message?.includes('quota') || error.message?.includes('credit')) {
+        await this.triggerHandoff(conversationId, 'AI provider credit/quota exhausted');
+      }
+    }
+  }
+
+  /**
+   * Trigger a handoff to human agents.
+   * Persists state, sends system message, notifies agents.
+   */
+  private async triggerHandoff(conversationId: string, reason: string) {
+    await this.handoffService.executeHandoff(conversationId, reason);
+
+    // Move conversation from AI tab to active (human) tab
+    const updatedConv = await this.chatService.updateConversationStatus(conversationId, 'active');
+
+    // Notify agents so the conversation moves from AI tab to Active tab
+    this.server.to('agents').emit('conversation_updated', { conversation: updatedConv });
+
+    // Send system message
+    const systemMsg = await this.chatService.createMessage({
+      conversationId,
+      senderType: 'system',
+      senderId: 'system',
+      content: 'Transferring you to a human agent. Please wait...',
+      messageType: 'text',
+    });
+
+    this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+      message: {
+        ...systemMsg,
+        senderDisplayName: 'System',
+      },
+    });
+
+    // Notify all agents of the handoff
+    this.server.to('agents').emit('ai_handoff', {
+      conversationId,
+      reason,
+      timestamp: new Date().toISOString(),
+    });
+
+    this.logger.log(`AI handoff triggered for ${conversationId}: ${reason}`);
   }
 }

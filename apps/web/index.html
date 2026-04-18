@@ -24,14 +24,9 @@
 <body>
   <h1>OmniChat — Development Preview</h1>
 
-  <!-- Admin Portal Demo -->
-  <div class="demo-section">
-    <h2>Admin Portal</h2>
-    <p>The admin portal is embedded below as a web component:</p>
-    <omnichat-admin
-      server-url="http://localhost:3001"
-      token='cookie-auth'
-    ></omnichat-admin>
+  <!-- Admin Portal (SPA mode in dev) -->
+  <div class="demo-section" style="height: 90vh; padding: 0;">
+    <div id="omnichat-admin" style="height: 100%;"></div>
   </div>
 
   <!-- Visitor Widget (floating) -->

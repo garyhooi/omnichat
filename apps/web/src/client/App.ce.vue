@@ -20,7 +20,7 @@ const props = defineProps({
 interface Message {
   id: string
   conversationId: string
-  senderType: 'visitor' | 'agent' | 'system'
+  senderType: 'visitor' | 'agent' | 'ai' | 'system'
   senderId?: string
   content: string
   messageType?: string
@@ -41,6 +41,11 @@ const typingUser = ref('')
 const isResolved = ref(false)
 const visitorId = ref('')
 const messagesArea = ref<HTMLElement | null>(null)
+
+// AI streaming state
+const aiStreamingText = ref('')
+const isAiStreaming = ref(false)
+const isAiEnabled = ref(false)
 
 // Site config state
 const siteBubbleColor = ref('')
@@ -251,17 +256,22 @@ function connect() {
 
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === conversationId.value) {
+      // If AI streaming just completed, don't duplicate the final message
+      if (data.message.senderType === 'ai' && isAiStreaming.value) {
+        isAiStreaming.value = false
+        aiStreamingText.value = ''
+        // The persisted message replaces the streaming bubble
+      }
       messages.value.push(data.message)
-      if (data.message.senderType === 'agent') playSound()
+      if (data.message.senderType === 'agent' || data.message.senderType === 'ai') playSound()
       
-      if (!isOpen.value && data.message.senderType === 'agent') {
+      if (!isOpen.value && (data.message.senderType === 'agent' || data.message.senderType === 'ai')) {
         unreadCount.value++
       }
 
       nextTick(() => {
         scrollToBottom()
-        if (isOpen.value && data.message.senderType === 'agent') {
-          // If panel is open and agent sent a message, mark it read
+        if (isOpen.value && (data.message.senderType === 'agent' || data.message.senderType === 'ai')) {
           socket.value?.emit('read_message', {
             messageId: data.message.id,
             conversationId: conversationId.value
@@ -269,6 +279,17 @@ function connect() {
         }
       })
     }
+  })
+
+  s.on('ai_stream', (data: { conversationId: string; token: string; isComplete: boolean; fullText?: string }) => {
+    if (data.conversationId !== conversationId.value) return
+    if (data.isComplete) {
+      // Stream finished — the new_message event will add the final message
+      return
+    }
+    isAiStreaming.value = true
+    aiStreamingText.value += data.token
+    nextTick(() => scrollToBottom())
   })
 
   s.on('message_read', (data: { messageId: string; readAt: string }) => {
@@ -606,7 +627,18 @@ function startNewChat() {
   reviewSubmitted.value = false
   reviewRating.value = 0
   reviewComment.value = ''
+  aiStreamingText.value = ''
+  isAiStreaming.value = false
   localStorage.removeItem('omnichat_conversation_id')
+}
+
+function requestHuman() {
+  if (!conversationId.value) return
+  socket.value?.emit('send_message', {
+    conversationId: conversationId.value,
+    content: 'I would like to talk to a human agent please.',
+    messageType: 'text',
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -627,6 +659,7 @@ onMounted(() => {
       if (config.enableReadReceipts !== undefined) siteEnableReadReceipts.value = config.enableReadReceipts
       if (config.isOfflineMode !== undefined) siteIsOfflineMode.value = config.isOfflineMode
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
+      if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       
       // Apply position to the host element
       if (siteWebsitePosition.value === 'bottom-left') {
@@ -742,6 +775,7 @@ onUnmounted(() => {
           :class="['msg-bubble', msg.senderType]"
           :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
         >
+          <div v-if="msg.senderType === 'ai'" class="ai-label">AI Assistant</div>
           <template v-if="msg.messageType === 'image'">
             <img 
               :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" 
@@ -759,6 +793,12 @@ onUnmounted(() => {
             <span v-if="siteEnableReadReceipts && msg.senderType === 'visitor' && msg.readAt" class="msg-read-receipt" title="Read">&#10003;&#10003;</span>
           </div>
         </div>
+      </div>
+
+      <!-- AI streaming bubble -->
+      <div v-if="isAiStreaming && aiStreamingText" class="msg-bubble ai ai-streaming" style="align-self: flex-start;">
+        <div class="ai-label">AI Assistant</div>
+        <div>{{ aiStreamingText }}<span class="ai-cursor">|</span></div>
       </div>
 
       <!-- Typing indicator -->

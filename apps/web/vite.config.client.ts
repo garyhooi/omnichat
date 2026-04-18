@@ -16,6 +16,16 @@ export default defineConfig({
       // Enable custom element mode for .ce.vue files
       customElement: true,
     }),
+    // Suppress extracted CSS file — all styles are inlined in the custom element
+    {
+      name: 'no-css-file',
+      enforce: 'post' as const,
+      generateBundle(_, bundle) {
+        for (const key of Object.keys(bundle)) {
+          if (key.endsWith('.css')) delete bundle[key]
+        }
+      },
+    },
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),

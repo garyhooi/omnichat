@@ -138,3 +138,109 @@ model UploadToken {
   @@index([conversationId])
   @@index([expiresAt])
 }
+
+// =============================================================================
+// AI Agent Models
+// =============================================================================
+
+model AiProvider {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  providerType   String   // openai, anthropic, openrouter, ollama, deepseek, gemini, grok
+  apiKey         String?  @db.Text // encrypted; null for ollama
+  baseUrl        String?  // custom endpoint (required for ollama/openrouter)
+  chatModelId    String   // e.g. "gpt-4o", "claude-sonnet-4-20250514"
+  embeddingModelId String? // e.g. "text-embedding-3-small"
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AiAgentConfig {
+  id                     String   @id @default(cuid())
+  enabled                Boolean  @default(false)
+  systemPrompt           String   @default("You are a helpful customer support assistant. Be concise and helpful.") @db.Text
+  greetingMessage        String?  @db.Text
+  humanRequestKeywords   String?  @db.Text
+  maxTokensPerResponse   Int      @default(1024)
+  temperature            Float    @default(0.7)
+  maxTurnsPerConversation Int     @default(50)
+  maxTokensPerSession    Int      @default(50000)
+  ragFailureThreshold    Int      @default(2)
+  humanRequestThreshold  Int      @default(2)
+  aiRateLimitPerMinute   Int      @default(10)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model KnowledgeDocument {
+  id              String   @id @default(cuid())
+  title           String
+  fileName        String
+  fileType        String
+  fileSize        Int
+  content         String   @db.Text
+  embeddingStatus String   @default("pending")
+  errorMessage    String?  @db.Text
+  chunkCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  chunks DocumentChunk[]
+}
+
+/// For MySQL 9.0+: embeddings stored via native VECTOR type.
+/// Embedding column managed via raw SQL (Prisma doesn't natively support MySQL VECTOR).
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  content    String   @db.Text
+  /// Embedding stored as MySQL VECTOR(1536) — managed via raw SQL
+  /// For MySQL < 9.0, embeddings are stored as JSON and searched in application code
+  chunkIndex Int
+  metadata   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model AiConversationState {
+  id                 String   @id @default(cuid())
+  conversationId     String   @unique
+  failureCount       Int      @default(0)
+  ragFailureCount    Int      @default(0)
+  humanRequestCount  Int      @default(0)
+  tokensUsed         Int      @default(0)
+  turnCount          Int      @default(0)
+  handoffTriggered   Boolean  @default(false)
+  handoffReason      String?
+  isAiHandling       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ToolRegistration {
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  description        String   @db.Text
+  parametersSchema   String   @db.Text
+  handlerType        String   @default("builtin")
+  endpoint           String?
+  isActive           Boolean  @default(true)
+  requiredPermission String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// AI Logs (stores AI provider failures and important events)
+model AiLog {
+  id            String   @id @default(cuid())
+  conversationId String?
+  providerId    String?
+  eventType     String   // e.g. authentication_error, stream_error, empty_response, tool_error
+  message       String?  @db.Text
+  details       String?  @db.Text
+  createdAt     DateTime @default(now())
+}

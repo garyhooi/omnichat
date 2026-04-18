@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -80,5 +80,18 @@ export class AuthController {
     }
     res.clearCookie('omnichat_auth_token');
     return { success: true };
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  async me(@Request() req: any) {
+    return {
+      user: {
+        id: req.user.sub,
+        username: req.user.username,
+        displayName: req.user.displayName || req.user.username,
+        role: req.user.role || 'admin',
+      },
+    };
   }
 }
