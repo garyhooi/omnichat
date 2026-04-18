@@ -6,7 +6,7 @@
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)
 ![Socket.io](https://img.shields.io/badge/Socket.io-010101?logo=socket.io&logoColor=white)
 
-**OmniChat** is a high-performance, self-hosted, and open-source live chat system designed for modern websites. It provides a lightweight embeddable Vue 3 widget for your visitors and a powerful dashboard for your support agents.
+**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight Vue 3 widget for instant visitor engagement and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website and integrate the powerful agent dashboard directly into their existing backoffice.
 
 <div align="center">
   <img src="docs/img/ss-admin.png" alt="OmniChat Admin Dashboard" width="48%" />
