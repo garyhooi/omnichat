@@ -115,8 +115,6 @@ The Docker deployment includes:
 - ✅ Pre-configured environment
 - ✅ Persistent volume mounts
 
-For detailed Docker deployment instructions, see [HEIC Conversion Guide](HEIC_CONVERSION.md) and [Docker Deployment Guide](DOCKER_DEPLOYMENT.md).
-
 ### 💻 Manual Deployment (No Docker)
 
 For developers who prefer manual installation and direct system control, OmniChat can be deployed without Docker by installing ImageMagick and other dependencies directly on the server OS.
