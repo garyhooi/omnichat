@@ -1243,7 +1243,7 @@ onUnmounted(() => {
               <span
                 v-if="activeConversationData.assignedUsername"
                 style="background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 4px; font-size: 11px"
-                title="Customer username"
+                title="Visitor username"
               >
                 @{{ activeConversationData.assignedUsername }}
               </span>
