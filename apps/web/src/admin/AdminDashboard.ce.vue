@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch, defineAsyncComponent, markRaw, comp
 import { useAuthStore } from './stores/auth.store'
 import { useToast } from './stores/toast.store'
 import { io, type Socket } from 'socket.io-client'
+import { appVersion } from '../version'
 
 const { toasts, dismiss } = useToast()
 
@@ -146,7 +147,7 @@ onMounted(() => {
       marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'
       marker.style.display = 'none'
       marker.setAttribute('aria-hidden', 'true')
-      marker.setAttribute('data-omnichat-powered', 'v3.0.0')
+      marker.setAttribute('data-omnichat-powered', appVersion)
       host.appendChild(marker)
     }
   } catch (e) {
@@ -233,7 +234,7 @@ onUnmounted(() => {
           rel="noopener noreferrer"
           style="color: #9ca3af; font-size: 12px; text-decoration: none; display: block; text-align: center; margin-top: 6px;"
         >
-          Powered by OmniChat v3.0.0
+          Powered by OmniChat {{ appVersion }}
         </a>
         <a
           v-else
@@ -241,7 +242,7 @@ onUnmounted(() => {
           target="_blank"
           rel="noopener noreferrer"
           style="color: #9ca3af; font-size: 12px; text-decoration: none; display: block; text-align: center;"
-          title="Powered by OmniChat v3.0.0"
+          :title="`Powered by OmniChat ${appVersion}`"
         >
           ·
         </a>

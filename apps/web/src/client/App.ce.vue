@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
+import { appVersion } from '../version'
 
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes by Vue's defineCustomElement
@@ -746,7 +747,7 @@ onMounted(() => {
       marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'
       marker.style.display = 'none'
       marker.setAttribute('aria-hidden', 'true')
-      marker.setAttribute('data-omnichat-powered', 'v3.0.0')
+      marker.setAttribute('data-omnichat-powered', appVersion)
       host.appendChild(marker)
     }
   } catch (e) {
