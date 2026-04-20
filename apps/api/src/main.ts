@@ -8,6 +8,22 @@ import express = require('express');
 import { join } from 'path';
 
 async function bootstrap() {
+  // Reject known default secrets in production
+  if (process.env.NODE_ENV === 'production') {
+    const KNOWN_DEFAULTS = [
+      'omnichat-local-dev-secret-change-in-production',
+      'omnichat-admin-key-change-in-production',
+    ];
+    if (KNOWN_DEFAULTS.includes(process.env.JWT_SECRET || '')) {
+      console.error('FATAL: JWT_SECRET is using the default development value. Set a strong, unique secret for production.');
+      process.exit(1);
+    }
+    if (KNOWN_DEFAULTS.includes(process.env.ADMIN_API_KEY || '')) {
+      console.error('FATAL: ADMIN_API_KEY is using the default development value. Set a strong, unique key for production.');
+      process.exit(1);
+    }
+  }
+
   const app = await NestFactory.create(AppModule);
 
   // Apply HTTP security headers
@@ -70,9 +86,16 @@ async function bootstrap() {
 
         const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
         
-        // Exact match or domain match
+        // Exact match or genuine subdomain match (parse as URL to prevent spoofing)
         const isAllowed = allowed.some((allowedOrigin: string) => {
-          return origin === allowedOrigin || origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
+          try {
+            const candidateHost = new URL(origin).hostname;
+            const allowedHost = new URL(allowedOrigin).hostname;
+            if (candidateHost === allowedHost) return true;
+            return candidateHost.endsWith('.' + allowedHost);
+          } catch {
+            return origin === allowedOrigin;
+          }
         });
 
         if (isAllowed) {

@@ -3,6 +3,23 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityLoggerService } from './security-logger.service';
 
+/**
+ * Safely compare a candidate origin against an allowed origin.
+ * Parses as URLs and compares hostnames to prevent subdomain spoofing
+ * (e.g. "evil-example.com" must NOT match "example.com").
+ */
+function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolean {
+  try {
+    const candidateHost = new URL(candidateOrigin).hostname;
+    const allowedHost = new URL(allowedOrigin).hostname;
+    if (candidateHost === allowedHost) return true;
+    // Genuine subdomain: "sub.example.com" ends with ".example.com"
+    return candidateHost.endsWith('.' + allowedHost);
+  } catch {
+    return candidateOrigin === allowedOrigin;
+  }
+}
+
 @Injectable()
 export class OriginValidatorMiddleware implements NestMiddleware {
   constructor(
@@ -11,16 +28,17 @@ export class OriginValidatorMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const origin = req.headers.origin;
-    const referer = req.headers.referer;
+    const origin = req.headers.origin as string | undefined;
+    const referer = req.headers.referer as string | undefined;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
-    // Skip validation for admin endpoints (they use JWT auth)
-    if (req.path.startsWith('/auth/') || req.path.startsWith('/config/') && req.method !== 'GET') {
+    // Skip validation for admin endpoints (they use JWT auth / master website API calls).
+    // These endpoints are called from the master website API which may not send an Origin header.
+    if (req.path.startsWith('/auth/') || req.path.startsWith('/config/')) {
       return next();
     }
 
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Allow requests with no origin (server-to-server, mobile apps, etc.)
     if (!origin && !referer) {
       return next();
     }
@@ -49,31 +67,25 @@ export class OriginValidatorMiddleware implements NestMiddleware {
       
       // Validate origin header
       if (origin) {
-        const isOriginAllowed = allowedOrigins.some((allowedOrigin: string) => {
-          return origin === allowedOrigin || 
-                 origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
-        });
-
-        if (isOriginAllowed) {
-          return next();
-        }
+        const originAllowed = allowedOrigins.some((allowed: string) => isOriginAllowed(origin, allowed));
+        if (originAllowed) return next();
       }
 
       // Fallback to referer validation
       if (referer) {
-        const refererOrigin = new URL(referer).origin;
-        const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
-          return refererOrigin === allowedOrigin || 
-                 refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
-        });
-
-        if (isRefererAllowed) {
-          return next();
+        try {
+          const refererOrigin = new URL(referer).origin;
+          const refererAllowed = allowedOrigins.some((allowed: string) => isOriginAllowed(refererOrigin, allowed));
+          if (refererAllowed) return next();
+        } catch {
+          // Invalid referer URL — fall through to rejection
         }
       }
 
+      // Sanitize reflected values: truncate and strip control characters
+      const safeOrigin = (origin || referer || '').substring(0, 100).replace(/[\r\n\t]/g, '');
       this.securityLogger.logOriginViolation(origin || '', referer || '', ip);
-      throw new ForbiddenException(`Origin not allowed: ${origin || referer}`);
+      throw new ForbiddenException(`Origin not allowed: ${safeOrigin}`);
     } catch (error) {
       if (error instanceof ForbiddenException) {
         throw error;

@@ -43,7 +43,7 @@ export class UploadController {
       throw new BadRequestException('No file uploaded');
     }
 
-    // Check for upload token or JWT auth
+    // Require either a valid upload token or JWT Bearer token
     let token = '';
     
     if (authHeader) {
@@ -54,22 +54,42 @@ export class UploadController {
       }
     }
 
-    if (token && token.startsWith('upload_')) {
+    if (!token) {
+      throw new ForbiddenException('Authentication required: provide an upload token or JWT');
+    }
+
+    if (token.startsWith('upload_')) {
+      // Validate visitor upload token
       try {
         await this.uploadTokenService.validateToken(token);
-        // allow reusing the token for subsequent uploads
       } catch (error) {
         throw new ForbiddenException('Invalid or expired upload token');
+      }
+    } else {
+      // Validate as JWT — if it's not a valid upload token, it must be a valid JWT.
+      // JWT validation is handled by the auth middleware on protected routes,
+      // but since this endpoint accepts both token types, we verify manually.
+      try {
+        const { JwtService } = require('@nestjs/jwt');
+        const jwt = new JwtService({ secret: process.env.JWT_SECRET });
+        jwt.verify(token);
+      } catch (error) {
+        throw new ForbiddenException('Invalid authentication token');
       }
     }
 
     
     const isAudio = file.mimetype.startsWith('audio/');
     const uniqueSuffix = randomUUID();
-    const prefix = conversationId ? `${conversationId}-` : '';
+
+    // Sanitize conversationId to prevent path traversal (covers MongoDB ObjectId and SQL cuid)
+    const safeConversationId = conversationId ? conversationId.replace(/[^a-zA-Z0-9]/g, '') : '';
+    const prefix = safeConversationId ? `${safeConversationId}-` : '';
     
     if (isAudio) {
-      const ext = file.originalname.split('.').pop()?.toLowerCase() || 'mp3';
+      // Sanitize extension: lowercase alphanumeric only
+      const rawExt = file.originalname.split('.').pop()?.toLowerCase() || 'mp3';
+      const ext = rawExt.replace(/[^a-z0-9]/g, '') || 'bin';
       const filename = `${prefix}${uniqueSuffix}.${ext}`;
       const uploadDir = join('./uploads', 'sounds');
       const filePath = join(uploadDir, filename);

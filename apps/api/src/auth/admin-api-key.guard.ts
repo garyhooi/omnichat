@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 
 /**
  * Guard that verifies the request contains a valid admin API key
@@ -22,7 +23,10 @@ export class AdminApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('Missing admin API key');
     }
 
-    if (authHeader !== adminApiKey) {
+    // Use timing-safe comparison to prevent timing attacks
+    const a = Buffer.from(authHeader);
+    const b = Buffer.from(adminApiKey);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new UnauthorizedException('Invalid admin API key');
     }
 

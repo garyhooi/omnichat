@@ -110,9 +110,41 @@ interface AuthenticatedSocket extends Socket {
 }
 
 // ---------------------------------------------------------------------------
-// Chat Gateway — Socket.io WebSocket handler
+// Shared PrismaClient for WebSocket CORS checks (static context).
+// Reuses a single instance to prevent connection pool leaks.
 // ---------------------------------------------------------------------------
 import { SiteConfigService } from '../config/site-config.service';
+
+let _sharedPrisma: any = null;
+function getSharedPrisma() {
+  if (!_sharedPrisma) {
+    const { PrismaClient } = require('@prisma/client');
+    _sharedPrisma = new PrismaClient();
+  }
+  return _sharedPrisma;
+}
+
+/**
+ * Parse a URL origin and compare hostnames safely.
+ * Returns true if candidateHost exactly matches allowedHost,
+ * or is a genuine subdomain (e.g. "sub.example.com" matches "example.com"
+ * but "evil-example.com" does not).
+ */
+function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolean {
+  try {
+    const candidateHost = new URL(candidateOrigin).hostname;
+    const allowedHost = new URL(allowedOrigin).hostname;
+    if (candidateHost === allowedHost) return true;
+    // Genuine subdomain check: must end with ".allowedHost"
+    return candidateHost.endsWith('.' + allowedHost);
+  } catch {
+    return candidateOrigin === allowedOrigin;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chat Gateway — Socket.io WebSocket handler
+// ---------------------------------------------------------------------------
 
 @WebSocketGateway({
   cors: {
@@ -128,9 +160,7 @@ import { SiteConfigService } from '../config/site-config.service';
       }
 
       try {
-        // Using require() for Prisma - works with Bun due to Node compatibility
-        const { PrismaClient } = require('@prisma/client');
-        const prisma = new PrismaClient();
+        const prisma = getSharedPrisma();
         const config = await prisma.siteConfig.findFirst({
           where: { isActive: true },
         });
@@ -144,11 +174,9 @@ import { SiteConfigService } from '../config/site-config.service';
         }
 
         const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
-        const isAllowed = allowed.some((allowedOrigin: string) => {
-          return origin === allowedOrigin || origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
-        });
+        const matched = allowed.some((allowedOrigin: string) => isOriginAllowed(origin, allowedOrigin));
 
-        if (isAllowed) {
+        if (matched) {
           callback(null, origin);
         } else {
           callback(new Error('Not allowed by CORS'));
@@ -440,12 +468,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   /**
-   * Validate visitor connection origin against allowed origins in database
+   * Validate visitor connection origin against allowed origins in database.
+   * Visitors MUST provide an origin or referer header.
    */
   private async validateVisitorOrigin(origin: string | undefined, referer: string | undefined): Promise<void> {
-    // Allow requests with no origin (mobile apps, curl, etc.)
+    // Visitors must provide an origin or referer — reject bare requests
     if (!origin && !referer) {
-      return;
+      throw new ForbiddenException('Origin header required for visitor connections');
     }
 
     // Allow localhost for development
@@ -455,10 +484,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
 
     try {
-      // Using require() for Prisma - works with Bun due to Node compatibility
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
-      const config = await prisma.siteConfig.findFirst({
+      const config = await this.prisma.siteConfig.findFirst({
         where: { isActive: true },
       });
 
@@ -475,30 +501,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
       // Validate origin header
       if (origin) {
-        const isOriginAllowed = allowedOrigins.some((allowedOrigin: string) => {
-          return origin === allowedOrigin ||
-                 origin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
-        });
-
-        if (isOriginAllowed) {
-          return;
-        }
+        const originAllowed = allowedOrigins.some((allowed: string) => isOriginAllowed(origin, allowed));
+        if (originAllowed) return;
       }
 
       // Fallback to referer validation
       if (referer) {
-        const refererOrigin = new URL(referer).origin;
-        const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
-          return refererOrigin === allowedOrigin ||
-                 refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
-        });
-
-        if (isRefererAllowed) {
-          return;
+        try {
+          const refererOrigin = new URL(referer).origin;
+          const refererAllowed = allowedOrigins.some((allowed: string) => isOriginAllowed(refererOrigin, allowed));
+          if (refererAllowed) return;
+        } catch {
+          // Invalid referer URL — fall through to rejection
         }
       }
 
-      throw new ForbiddenException(`Origin not allowed: ${origin || referer}`);
+      const safeOrigin = (origin || referer || '').substring(0, 100).replace(/[\r\n]/g, '');
+      throw new ForbiddenException(`Origin not allowed: ${safeOrigin}`);
     } catch (error) {
       if (error instanceof ForbiddenException) {
         throw error;
@@ -586,7 +605,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
 
     // Combine any existing metadata with the new pre-chat form details
-    const parsedMetadata = payload.metadata ? JSON.parse(payload.metadata) : {};
+    let parsedMetadata: Record<string, any> = {};
+    if (payload.metadata) {
+      try {
+        parsedMetadata = JSON.parse(payload.metadata);
+      } catch {
+        parsedMetadata = {};
+      }
+    }
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
@@ -698,6 +724,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (!conversation) {
       client.emit('error', { message: 'Conversation not found' });
       return;
+    }
+
+    // Visitors can only join their own conversations
+    if (client.data.isVisitor) {
+      if (conversation.visitorId !== client.data.visitorId) {
+        client.emit('error', { message: 'Conversation not found' });
+        return;
+      }
     }
 
     const roomName = `conv:${conversationId}`;

@@ -120,10 +120,10 @@
     </style>
 
     <!-- Load OmniChat Admin Bundle from jsDelivr CDN -->
-    <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script> -->
     
     <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
-    <!-- <script src="../apps/web/dist/omnichat-admin.js"></script> -->
+    <script src="../apps/web/dist/omnichat-admin.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
