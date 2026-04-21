@@ -1,6 +1,6 @@
 {
   "name": "omnichat",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "private": true,
   "description": "High-performance self-hosted open-source live chat system",
   "workspaces": [
