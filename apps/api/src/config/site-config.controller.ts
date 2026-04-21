@@ -1,16 +1,24 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+
+type AuthenticatedRequest = {
+  user?: {
+    role?: string;
+  };
+};
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -182,7 +190,12 @@ export class SiteConfigController {
   async updateConfig(
     @Param('id') id: string,
     @Body() dto: UpdateSiteConfigDto,
+    @Req() req: AuthenticatedRequest,
   ) {
+    if (dto.allowedOrigins !== undefined && req.user?.role !== 'admin') {
+      throw new ForbiddenException('Only admins can update allowed origins');
+    }
+
     return this.siteConfigService.updateConfig(id, dto);
   }
 }
