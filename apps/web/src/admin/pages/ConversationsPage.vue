@@ -848,7 +848,7 @@ async function loadAdminList() {
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${authStore.serverUrl}/config/active`, {
+    const res = await fetch(`${authStore.serverUrl}/config/admin-active`, {
       credentials: 'include',
       headers: authHeaders(),
     })

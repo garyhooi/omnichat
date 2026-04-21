@@ -16,6 +16,7 @@ import { DocumentService } from './document.service';
 import { RagService } from './rag.service';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, Max } from 'class-validator';
 
 class SearchKnowledgeDto {
@@ -24,7 +25,7 @@ class SearchKnowledgeDto {
 }
 
 @Controller('ai/knowledge')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
 @Roles('admin')
 export class DocumentController {
   constructor(

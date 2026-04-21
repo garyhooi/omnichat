@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
+import { AdminIpAllowlistGuard } from './admin-ip-allowlist.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -40,7 +41,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(AdminIpAllowlistGuard, AdminApiKeyGuard)
   async register(
     @Body() dto: RegisterDto,
     @Ip() ip: string,
@@ -58,7 +59,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(AdminIpAllowlistGuard, AdminApiKeyGuard)
   async login(
     @Body() dto: LoginDto,
     @Ip() ip: string,
@@ -76,7 +77,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
     if (req.user && req.user.jti) {
       await this.authService.logout(req.user.jti);
@@ -86,7 +87,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async me(@Request() req: any) {
     return {
       user: {

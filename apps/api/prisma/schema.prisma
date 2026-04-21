@@ -115,6 +115,7 @@ model SiteConfig {
   websitePosition    String   @default("bottom-right")
   bubbleIcon         String   @default("💬")
   allowedOrigins     String
+  adminAllowedIps    String?
   isActive           Boolean  @default(true)
   isOfflineMode      Boolean  @default(false)
   enableReadReceipts Boolean  @default(true)

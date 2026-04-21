@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { QuickReplyService } from './quick-reply.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
 @Controller('quick-replies')
 export class QuickReplyController {
   constructor(private readonly quickReplyService: QuickReplyService) {}

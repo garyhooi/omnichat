@@ -4,6 +4,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ChatModule } from './chat/chat.module';
 import { AuthModule } from './auth/auth.module';
+import { AdminSecurityModule } from './auth/admin-security.module';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QuickReplyModule } from './quick-reply/quick-reply.module';
@@ -45,6 +46,7 @@ import { HttpLogModule } from './http-log/http-log.module';
       },
     ]),
     PrismaModule,
+    AdminSecurityModule,
     SessionStateModule,
     CommonModule, // Security middleware
     AuthModule,

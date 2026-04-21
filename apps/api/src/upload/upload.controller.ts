@@ -10,12 +10,16 @@ import * as fs from 'fs/promises';
 import { UploadTokenService } from './upload-token.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
 
 const execPromise = promisify(exec);
 
 @Controller('upload')
 export class UploadController {
-  constructor(private readonly uploadTokenService: UploadTokenService) {}
+  constructor(
+    private readonly uploadTokenService: UploadTokenService,
+    private readonly adminIpAllowlistService: AdminIpAllowlistService,
+  ) {}
 
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // Restrict uploads to 10 per minute
@@ -37,6 +41,7 @@ export class UploadController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Headers('authorization') authHeader: string,
+    @Headers('x-forwarded-for') forwardedFor: string,
     @Body('conversationId') conversationId?: string,
   ) {
     if (!file) {
@@ -69,6 +74,11 @@ export class UploadController {
       // Validate as JWT — if it's not a valid upload token, it must be a valid JWT.
       // JWT validation is handled by the auth middleware on protected routes,
       // but since this endpoint accepts both token types, we verify manually.
+      const requestIp = this.adminIpAllowlistService.extractRequestIp({
+        headers: { 'x-forwarded-for': forwardedFor },
+      });
+      await this.adminIpAllowlistService.assertIpAllowed(requestIp);
+
       try {
         const { JwtService } = require('@nestjs/jwt');
         const jwt = new JwtService({ secret: process.env.JWT_SECRET });

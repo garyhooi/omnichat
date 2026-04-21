@@ -112,6 +112,7 @@ model SiteConfig {
   websitePosition    String   @default("bottom-right")
   bubbleIcon         String   @default("💬")
   allowedOrigins     String   @db.Text
+  adminAllowedIps    String?  @db.Text
   isActive           Boolean  @default(true)
   isOfflineMode      Boolean  @default(false)
   enableReadReceipts Boolean  @default(true)

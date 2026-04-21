@@ -13,6 +13,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 
 type AuthenticatedRequest = {
   user?: {
@@ -64,6 +65,10 @@ class CreateSiteConfigDto {
   @IsNotEmpty()
   allowedOrigins: string;
 
+  @IsString()
+  @IsOptional()
+  adminAllowedIps?: string;
+
   @IsBoolean()
   @IsOptional()
   enableReadReceipts?: boolean;
@@ -114,6 +119,10 @@ class UpdateSiteConfigDto {
   @IsOptional()
   allowedOrigins?: string;
 
+  @IsString()
+  @IsOptional()
+  adminAllowedIps?: string;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
@@ -161,39 +170,50 @@ export class SiteConfigController {
       // AI tables may not exist yet — that's fine, aiEnabled stays false
     }
 
-    return { ...config, aiEnabled };
+    const { allowedOrigins, adminAllowedIps, ...publicConfig } = config as any;
+    return { ...publicConfig, aiEnabled };
+  }
+
+  @Get('admin-active')
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
+  async getAdminActiveConfig() {
+    return this.siteConfigService.getActiveConfig();
   }
 
   /**
    * Protected endpoints — admin only.
    */
   @Get()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async listConfigs() {
     return this.siteConfigService.listConfigs();
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async getConfig(@Param('id') id: string) {
     return this.siteConfigService.getConfig(id);
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'))
-  async createConfig(@Body() dto: CreateSiteConfigDto) {
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
+  async createConfig(@Body() dto: CreateSiteConfigDto, @Req() req: AuthenticatedRequest) {
+    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'admin') {
+      throw new ForbiddenException('Only admins can update site security settings');
+    }
+
     return this.siteConfigService.createConfig(dto);
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async updateConfig(
     @Param('id') id: string,
     @Body() dto: UpdateSiteConfigDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    if (dto.allowedOrigins !== undefined && req.user?.role !== 'admin') {
-      throw new ForbiddenException('Only admins can update allowed origins');
+    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'admin') {
+      throw new ForbiddenException('Only admins can update site security settings');
     }
 
     return this.siteConfigService.updateConfig(id, dto);

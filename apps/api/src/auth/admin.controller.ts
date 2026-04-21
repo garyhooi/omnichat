@@ -11,6 +11,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
+import { AdminIpAllowlistGuard } from './admin-ip-allowlist.guard';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
@@ -43,7 +44,7 @@ export class AdminController {
    * Admin only.
    */
   @Get('users')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
   async getUsers(
     @Query('search') search?: string,
@@ -118,7 +119,7 @@ export class AdminController {
    * Update user role or lock status. Admin only.
    */
   @Patch('users/:id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
   async updateUser(
     @Param('id') id: string,
@@ -159,7 +160,7 @@ export class AdminController {
    * Force logout a user — revokes ALL their active sessions. Admin only.
    */
   @Delete('users/:id/sessions')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
   async forceLogoutUser(@Param('id') id: string) {
     const result = await this.prisma.session.updateMany({

@@ -846,7 +846,7 @@ function getLastMessage(conv: Conversation) {
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${props.serverUrl}/config/active`, {
+    const res = await fetch(`${props.serverUrl}/config/admin-active`, {
       credentials: "include",
     })
     if (res.ok) {

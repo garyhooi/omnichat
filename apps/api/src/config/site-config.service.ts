@@ -38,6 +38,7 @@ export class SiteConfigService {
     bubbleIcon?: string;
     notificationSoundUrl?: string;
     allowedOrigins: string;
+    adminAllowedIps?: string;
     enableReadReceipts?: boolean;
     isOfflineMode?: boolean;
   }) {
@@ -60,6 +61,7 @@ export class SiteConfigService {
       bubbleIcon?: string;
       notificationSoundUrl?: string;
       allowedOrigins?: string;
+      adminAllowedIps?: string;
       isActive?: boolean;
       enableReadReceipts?: boolean;
       isOfflineMode?: boolean;

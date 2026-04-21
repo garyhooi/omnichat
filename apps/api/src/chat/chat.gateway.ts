@@ -114,6 +114,7 @@ interface AuthenticatedSocket extends Socket {
 // Reuses a single instance to prevent connection pool leaks.
 // ---------------------------------------------------------------------------
 import { SiteConfigService } from '../config/site-config.service';
+import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
 
 let _sharedPrisma: any = null;
 function getSharedPrisma() {
@@ -214,6 +215,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   constructor(
     private readonly chatService: ChatService,
     private readonly authService: AuthService,
+    private readonly adminIpAllowlistService: AdminIpAllowlistService,
     private readonly uploadTokenService: UploadTokenService,
     private readonly siteConfigService: SiteConfigService,
     private readonly prisma: PrismaService,
@@ -421,6 +423,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       try {
         // Agent connection — validate JWT
         const user = await this.authService.validateToken(token);
+        const clientIp = this.adminIpAllowlistService.extractRequestIp({
+          ip: client.handshake.address,
+          headers: client.handshake.headers as Record<string, string | string[] | undefined>,
+        });
+        await this.adminIpAllowlistService.assertIpAllowed(clientIp);
+
         client.data.user = user;
         client.data.isVisitor = false;
 

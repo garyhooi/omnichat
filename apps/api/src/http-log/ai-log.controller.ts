@@ -7,10 +7,11 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('logs/ai')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
 @Roles('admin')
 export class AiLogController {
   constructor(private readonly prisma: PrismaService) {}
