@@ -73,7 +73,10 @@ export class AiChatController {
       conversationId,
       messageContent,
       visitorIp,
-      agentConfig.aiRateLimitPerMinute,
+      {
+        rateLimitPerMinute: agentConfig.aiRateLimitPerMinute,
+        spamIpBlacklistMinutes: agentConfig.spamIpBlacklistMinutes,
+      },
     );
 
     if (!securityCheck.allowed) {

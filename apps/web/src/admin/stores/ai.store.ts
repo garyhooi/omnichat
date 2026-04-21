@@ -26,6 +26,7 @@ interface AiAgentConfig {
   ragFailureThreshold: number
   humanRequestThreshold: number
   aiRateLimitPerMinute: number
+  spamIpBlacklistMinutes: number
   embeddingProviderId: string | null
 }
 

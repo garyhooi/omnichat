@@ -20,6 +20,12 @@ const builtinTools = [
     type: 'builtin',
     active: true,
   },
+  {
+    name: 'ip_spam_blacklist',
+    description: 'Built-in backend protection that temporarily blacklists IPs when the same IP repeatedly spams the AI across conversations.',
+    type: 'builtin',
+    active: true,
+  },
 ]
 </script>
 

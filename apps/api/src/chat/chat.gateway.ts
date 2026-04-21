@@ -1114,7 +1114,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         conversationId,
         lastVisitorMsg.content,
         visitorIp,
-        agentConfig.aiRateLimitPerMinute,
+        {
+          rateLimitPerMinute: agentConfig.aiRateLimitPerMinute,
+          spamIpBlacklistMinutes: agentConfig.spamIpBlacklistMinutes,
+        },
       );
 
       if (!securityCheck.allowed) {

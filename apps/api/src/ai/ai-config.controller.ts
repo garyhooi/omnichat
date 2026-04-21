@@ -49,6 +49,7 @@ class UpsertAgentConfigDto {
   @IsNumber() @IsOptional() @Min(1) @Max(10) ragFailureThreshold?: number;
   @IsNumber() @IsOptional() @Min(1) @Max(10) humanRequestThreshold?: number;
   @IsNumber() @IsOptional() @Min(1) @Max(60) aiRateLimitPerMinute?: number;
+  @IsNumber() @IsOptional() @Min(1) @Max(1440) spamIpBlacklistMinutes?: number;
   @IsString() @IsOptional() embeddingProviderId?: string | null;
 }
 

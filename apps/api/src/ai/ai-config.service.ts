@@ -178,6 +178,7 @@ export class AiConfigService {
     ragFailureThreshold?: number;
     humanRequestThreshold?: number;
     aiRateLimitPerMinute?: number;
+    spamIpBlacklistMinutes?: number;
     embeddingProviderId?: string | null;
   }) {
     const existing = await this.prisma.aiAgentConfig.findFirst();
@@ -202,6 +203,7 @@ export class AiConfigService {
         ragFailureThreshold: data.ragFailureThreshold ?? 2,
         humanRequestThreshold: data.humanRequestThreshold ?? 2,
         aiRateLimitPerMinute: data.aiRateLimitPerMinute ?? 10,
+        spamIpBlacklistMinutes: data.spamIpBlacklistMinutes ?? 15,
       },
     });
   }

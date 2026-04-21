@@ -54,6 +54,7 @@ const configForm = ref({
   ragFailureThreshold: 2,
   humanRequestThreshold: 2,
   aiRateLimitPerMinute: 10,
+  spamIpBlacklistMinutes: 15,
   embeddingProviderId: null as string | null,
 })
 
@@ -353,6 +354,12 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
             <label class="block text-sm font-medium text-gray-700 mb-1">AI Rate Limit/Minute</label>
             <input v-model.number="configForm.aiRateLimitPerMinute" type="number" min="1" max="60"
                    class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Spam IP Blacklist (Minutes)</label>
+            <input v-model.number="configForm.spamIpBlacklistMinutes" type="number" min="1" max="1440"
+                   class="w-full border rounded px-3 py-2 text-sm" />
+            <p class="text-xs text-gray-400 mt-1">If the same IP repeatedly spams AI across conversations, block that IP for this many minutes.</p>
           </div>
         </div>
 

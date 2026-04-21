@@ -6,6 +6,11 @@ export interface SecurityCheckResult {
   reason?: string;
 }
 
+interface SecurityPolicy {
+  rateLimitPerMinute: number;
+  spamIpBlacklistMinutes: number;
+}
+
 // Known prompt injection patterns
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+(instructions|prompts)/i,
@@ -42,8 +47,10 @@ export class AiSecurityService {
     conversationId: string,
     message: string,
     visitorIp: string,
-    rateLimitPerMinute: number,
+    policy: number | SecurityPolicy,
   ): Promise<SecurityCheckResult> {
+    const securityPolicy = this.normalizePolicy(policy);
+
     // 1. Check circuit breaker
     if (this.circuitBreakerOpen) {
       if (Date.now() > this.globalFailureResetTime) {
@@ -54,46 +61,82 @@ export class AiSecurityService {
       }
     }
 
-    // 2. Message length check (prevent token abuse)
+    // 2. Check if the IP is temporarily blacklisted.
+    if (visitorIp !== 'unknown') {
+      const blacklistKey = this.getIpBlacklistKey(visitorIp);
+      const blacklistState = await this.stateStore.get(blacklistKey);
+      if (blacklistState > 0) {
+        return { allowed: false, reason: 'Too many spam requests from this IP. Please try again later.' };
+      }
+    }
+
+    // 3. Message length check (prevent token abuse)
     if (message.length > 5000) {
       return { allowed: false, reason: 'Message too long for AI processing' };
     }
 
-    // 3. Prompt injection detection
+    // 4. Prompt injection detection
     if (this.detectInjection(message)) {
       this.logger.warn(`Potential prompt injection detected from ${visitorIp}: "${message.slice(0, 100)}..."`);
       return { allowed: false, reason: 'Message flagged by security filter' };
     }
 
-    // 4. Per-conversation rate limiting
+    // 5. Per-conversation rate limiting
     const rateKey = `ai_rate:${conversationId}`;
     const requestCount = await this.stateStore.increment(rateKey, 60);
-    if (requestCount > rateLimitPerMinute) {
+    if (requestCount > securityPolicy.rateLimitPerMinute) {
       return { allowed: false, reason: 'AI request rate limit exceeded. Please wait.' };
     }
 
-    // 5. Per-IP rate limiting (prevents one IP from spamming multiple conversations)
+    // 6. Per-IP rate limiting (prevents one IP from spamming multiple conversations)
     const ipRateKey = `ai_ip_rate:${visitorIp}`;
     const ipCount = await this.stateStore.increment(ipRateKey, 60);
-    if (ipCount > rateLimitPerMinute * 3) {
-      this.logger.warn(`IP rate limit exceeded: ${visitorIp}`);
+    if (ipCount > securityPolicy.rateLimitPerMinute * 3) {
+      await this.blacklistIp(visitorIp, securityPolicy.spamIpBlacklistMinutes, 'rate limit exceeded');
       return { allowed: false, reason: 'Too many requests. Please try again later.' };
     }
 
-    // 6. Spam detection (repeated identical messages)
-    const spamKey = `ai_spam:${conversationId}`;
-    const lastMsg = await this.stateStore.get(spamKey);
+    // 7. Spam detection (repeated identical messages from the same IP)
     const msgHash = this.hashMessage(message);
-    if (lastMsg === msgHash) {
-      const repeatKey = `ai_repeat:${conversationId}`;
+    const spamKey = `ai_spam:${visitorIp}:${msgHash}`;
+    const seenSameMessage = await this.stateStore.get(spamKey);
+    if (seenSameMessage > 0) {
+      const repeatKey = `ai_repeat_ip:${visitorIp}`;
       const repeatCount = await this.stateStore.increment(repeatKey, 300);
       if (repeatCount >= 3) {
+        await this.blacklistIp(visitorIp, securityPolicy.spamIpBlacklistMinutes, 'repeated duplicate messages');
         return { allowed: false, reason: 'Duplicate messages detected. Please rephrase your question.' };
       }
+    } else {
+      await this.stateStore.set(spamKey, 1, 300);
     }
-    await this.stateStore.set(spamKey, msgHash, 300);
 
     return { allowed: true };
+  }
+
+  private normalizePolicy(policy: number | SecurityPolicy): SecurityPolicy {
+    if (typeof policy === 'number') {
+      return {
+        rateLimitPerMinute: policy,
+        spamIpBlacklistMinutes: 15,
+      };
+    }
+
+    return {
+      rateLimitPerMinute: policy.rateLimitPerMinute ?? 10,
+      spamIpBlacklistMinutes: policy.spamIpBlacklistMinutes ?? 15,
+    };
+  }
+
+  private getIpBlacklistKey(visitorIp: string): string {
+    return `ai_ip_blacklist:${visitorIp}`;
+  }
+
+  private async blacklistIp(visitorIp: string, blacklistMinutes: number, reason: string): Promise<void> {
+    if (!visitorIp || visitorIp === 'unknown') return;
+
+    await this.stateStore.set(this.getIpBlacklistKey(visitorIp), 1, blacklistMinutes * 60);
+    this.logger.warn(`Blacklisted IP ${visitorIp} for ${blacklistMinutes} minute(s): ${reason}`);
   }
 
   /**
