@@ -10,9 +10,18 @@
   display: block;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  inset: 0;
   z-index: 999999;
+  pointer-events: none;
+}
+
+.chat-bubble-wrap,
+.chat-panel {
+  pointer-events: auto;
+}
+
+.chat-bubble-wrap {
+  position: fixed;
 }
 
 /* Chat bubble trigger */
@@ -27,6 +36,8 @@
   transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
   color: #ffffff;
   backdrop-filter: blur(8px);
+  touch-action: none;
+  user-select: none;
 }
 
 .chat-bubble:hover {
@@ -34,14 +45,14 @@
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2), 0 6px 15px rgba(0, 0, 0, 0.15);
 }
 
+.chat-bubble.dragging {
+  cursor: grabbing;
+  transform: scale(1.03);
+}
+
 /* Chat panel */
 .chat-panel {
-  position: absolute;
-  bottom: 80px;
-  right: 0;
-  width: 380px;
-  height: 600px;
-  max-height: 85vh;
+  position: fixed;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -68,6 +79,16 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.panel-header.draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-header.draggable:active {
+  cursor: grabbing;
 }
 
 .panel-header h3 {
@@ -521,6 +542,37 @@
   font-weight: 600;
   font-size: 16px;
   pointer-events: none; /* Prevent flickering on dragleave */
+}
+
+@media (max-width: 640px) {
+  .chat-panel.chat-panel-mobile {
+    border-radius: 20px;
+    max-width: none;
+    max-height: none;
+  }
+
+  .welcome-screen {
+    padding: 24px 18px;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+
+  .panel-header,
+  .messages-area,
+  .input-area,
+  .confirm-action-area {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .input-area {
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .msg-input {
+    min-height: 42px;
+  }
 }
 
 /* =========================================================================

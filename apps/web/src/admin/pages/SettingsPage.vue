@@ -11,13 +11,25 @@ const base = () => auth.serverUrl
 const settingsTab = ref<'widget' | 'security' | 'quick-replies'>('widget')
 const canManageSecurity = computed(() => auth.isAdmin)
 
+function parseWidgetPosition(value?: string | null) {
+  if (!value?.startsWith('xy:')) return null
+
+  const [xRaw, yRaw] = value.slice(3).split(',')
+  const x = Number.parseInt(xRaw ?? '', 10)
+  const y = Number.parseInt(yRaw ?? '', 10)
+
+  if (Number.isNaN(x) || Number.isNaN(y)) return null
+  return { x, y }
+}
+
 // Widget settings
 const bubbleColor = ref('#4F46E5')
 const welcomeMessage = ref('')
 const offlineMessage = ref('')
 const bubbleSize = ref('medium')
 const bubblePattern = ref('solid')
-const websitePosition = ref('bottom-right')
+const widgetPositionX = ref(20)
+const widgetPositionY = ref(20)
 const bubbleIconType = ref<'emoji' | 'custom'>('emoji')
 const bubbleIconEmoji = ref('💬')
 const bubbleIconUrl = ref('')
@@ -83,7 +95,9 @@ async function loadConfig() {
     offlineMessage.value = data.offlineMessage ?? ''
     bubbleSize.value = data.bubbleSize ?? 'medium'
     bubblePattern.value = data.bubblePattern ?? 'solid'
-    websitePosition.value = data.websitePosition ?? 'bottom-right'
+    const widgetPosition = parseWidgetPosition(data.websitePosition)
+    widgetPositionX.value = widgetPosition?.x ?? 20
+    widgetPositionY.value = widgetPosition?.y ?? 20
     // bubbleIcon is stored as a single string: emoji char or "custom:url"
     const icon = data.bubbleIcon ?? '💬'
     if (icon.startsWith('custom:')) {
@@ -132,7 +146,7 @@ async function saveSettings() {
     offlineMessage: offlineMessage.value,
     bubbleSize: bubbleSize.value,
     bubblePattern: bubblePattern.value,
-    websitePosition: websitePosition.value,
+    websitePosition: `xy:${widgetPositionX.value},${widgetPositionY.value}`,
     bubbleIcon: bubbleIconValue,
     enableReadReceipts: enableReadReceipts.value,
     isOfflineMode: isOfflineMode.value,
@@ -420,13 +434,20 @@ async function deleteQuickReply(id: string) {
           </select>
         </div>
 
-        <!-- Website Position -->
+        <!-- Widget Position -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Website Position</label>
-          <select v-model="websitePosition" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            <option value="bottom-right">Bottom Right</option>
-            <option value="bottom-left">Bottom Left</option>
-          </select>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Widget Position</label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block">
+              <span class="block text-xs text-gray-500 mb-1">X offset</span>
+              <input v-model.number="widgetPositionX" type="number" min="0" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            </label>
+            <label class="block">
+              <span class="block text-xs text-gray-500 mb-1">Y offset</span>
+              <input v-model.number="widgetPositionY" type="number" min="0" step="1" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            </label>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">These are the widget's top-left screen coordinates. Visitors can still drag the widget, and their browser will keep the last position locally.</p>
         </div>
 
         <!-- Bubble Icon -->

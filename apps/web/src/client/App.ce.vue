@@ -4,6 +4,10 @@ import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
 import { appVersion } from '../version'
 
+const WIDGET_MARGIN = 12
+const DESKTOP_PANEL_GAP = 16
+const MOBILE_PANEL_MARGIN = 12
+
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes by Vue's defineCustomElement
 // Usage: <omnichat-widget server-url="https://api.yoursite.com"></omnichat-widget>
@@ -12,7 +16,7 @@ const props = defineProps({
   serverUrl: { type: String, required: true },
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
-  position: { type: String, default: 'bottom-right' }, // future: bottom-left
+  position: { type: String, default: 'bottom-right' },
   assignUsername: { type: String, default: '' },
 })
 
@@ -94,6 +98,32 @@ const siteBubbleIcon = ref('💬')
 const siteEnableReadReceipts = ref(true)
 const siteIsOfflineMode = ref(false)
 const wordLimitError = ref('')
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+const viewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 720)
+const widgetPosition = ref({ x: 20, y: 20 })
+const isWidgetDragging = ref(false)
+
+let dragPointerId: number | null = null
+let dragStartX = 0
+let dragStartY = 0
+let dragOriginX = 0
+let dragOriginY = 0
+let dragMoved = false
+let dragSuppressClickUntil = 0
+
+const bubbleDiameter = computed(() => {
+  if (siteBubbleSize.value === 'small') return 48
+  if (siteBubbleSize.value === 'large') return 64
+  return 56
+})
+
+const widgetPositionStorageKey = computed(
+  () => `omnichat_widget_position_${encodeURIComponent(props.serverUrl)}`,
+)
+
+const isSmallScreen = computed(
+  () => viewportWidth.value <= 640,
+)
 
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
@@ -142,7 +172,7 @@ function playSound() {
 const currentBubbleColor = computed(() => siteBubbleColor.value || props.bubbleColor)
 const dynamicBubbleStyle = computed(() => {
   let bg = currentBubbleColor.value
-  let size = '56px'
+  const size = `${bubbleDiameter.value}px`
   let fontSize = '24px'
 
   // Pattern handling
@@ -156,10 +186,8 @@ const dynamicBubbleStyle = computed(() => {
 
   // Size handling
   if (siteBubbleSize.value === 'small') {
-    size = '48px'
     fontSize = '20px'
   } else if (siteBubbleSize.value === 'large') {
-    size = '64px'
     fontSize = '28px'
   }
 
@@ -181,10 +209,37 @@ const dynamicBubbleStyle = computed(() => {
   return baseStyle
 })
 
+const bubbleWrapperStyle = computed(() => ({
+  left: `${widgetPosition.value.x}px`,
+  top: `${widgetPosition.value.y}px`,
+}))
+
 const dynamicPanelStyle = computed(() => {
-  return siteWebsitePosition.value === 'bottom-left' 
-    ? { left: '0', right: 'auto' } 
-    : { right: '0', left: 'auto' }
+  if (isSmallScreen.value) {
+    return {
+      left: `${MOBILE_PANEL_MARGIN}px`,
+      top: `${MOBILE_PANEL_MARGIN}px`,
+      width: `calc(100vw - ${MOBILE_PANEL_MARGIN * 2}px)`,
+      height: `calc(100dvh - ${MOBILE_PANEL_MARGIN * 2}px)`,
+    }
+  }
+
+  const panelWidth = Math.min(380, Math.max(280, viewportWidth.value - WIDGET_MARGIN * 2))
+  const panelHeight = Math.min(600, Math.max(320, viewportHeight.value - WIDGET_MARGIN * 2))
+  const preferredLeft = widgetPosition.value.x + bubbleDiameter.value - panelWidth
+  const maxLeft = Math.max(WIDGET_MARGIN, viewportWidth.value - panelWidth - WIDGET_MARGIN)
+  let top = widgetPosition.value.y - panelHeight - DESKTOP_PANEL_GAP
+
+  if (top < WIDGET_MARGIN) {
+    top = widgetPosition.value.y + bubbleDiameter.value + DESKTOP_PANEL_GAP
+  }
+
+  return {
+    left: `${clamp(preferredLeft, WIDGET_MARGIN, maxLeft)}px`,
+    top: `${clamp(top, WIDGET_MARGIN, Math.max(WIDGET_MARGIN, viewportHeight.value - panelHeight - WIDGET_MARGIN))}px`,
+    width: `${panelWidth}px`,
+    height: `${panelHeight}px`,
+  }
 })
 
 // Pre-chat form state
@@ -208,6 +263,135 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadToken = ref<string | null>(null)
 
 const selectedImage = ref<string | null>(null)
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function formatWidgetPosition(x: number, y: number) {
+  return `xy:${Math.round(x)},${Math.round(y)}`
+}
+
+function parseWidgetPosition(value?: string | null) {
+  if (!value?.startsWith('xy:')) return null
+
+  const [xRaw, yRaw] = value.slice(3).split(',')
+  const x = Number.parseInt(xRaw ?? '', 10)
+  const y = Number.parseInt(yRaw ?? '', 10)
+
+  if (Number.isNaN(x) || Number.isNaN(y)) return null
+  return { x, y }
+}
+
+function getLegacyWidgetPosition(value?: string | null) {
+  const y = viewportHeight.value - bubbleDiameter.value - 20
+  if (value === 'bottom-left') {
+    return { x: 20, y }
+  }
+
+  return {
+    x: viewportWidth.value - bubbleDiameter.value - 20,
+    y,
+  }
+}
+
+function clampWidgetPosition(position: { x: number; y: number }) {
+  const maxX = Math.max(WIDGET_MARGIN, viewportWidth.value - bubbleDiameter.value - WIDGET_MARGIN)
+  const maxY = Math.max(WIDGET_MARGIN, viewportHeight.value - bubbleDiameter.value - WIDGET_MARGIN)
+
+  return {
+    x: clamp(Math.round(position.x), WIDGET_MARGIN, maxX),
+    y: clamp(Math.round(position.y), WIDGET_MARGIN, maxY),
+  }
+}
+
+function setWidgetPosition(position: { x: number; y: number }, persist = false) {
+  widgetPosition.value = clampWidgetPosition(position)
+
+  if (persist) {
+    localStorage.setItem(
+      widgetPositionStorageKey.value,
+      formatWidgetPosition(widgetPosition.value.x, widgetPosition.value.y),
+    )
+  }
+}
+
+function initializeWidgetPosition(configPosition?: string | null) {
+  const saved = parseWidgetPosition(localStorage.getItem(widgetPositionStorageKey.value))
+  if (saved) {
+    setWidgetPosition(saved)
+    return
+  }
+
+  const parsedConfigPosition = parseWidgetPosition(configPosition)
+  if (parsedConfigPosition) {
+    setWidgetPosition(parsedConfigPosition)
+    return
+  }
+
+  setWidgetPosition(getLegacyWidgetPosition(configPosition || props.position))
+}
+
+function refreshViewport() {
+  viewportWidth.value = window.innerWidth
+  viewportHeight.value = window.innerHeight
+}
+
+function startWidgetDrag(event: PointerEvent) {
+  if (event.button !== 0 && event.pointerType !== 'touch') return
+  if (isSmallScreen.value && isOpen.value) return
+
+  const interactiveTarget = (event.target as HTMLElement | null)?.closest(
+    'button, input, textarea, select, a',
+  )
+  if (interactiveTarget && interactiveTarget !== event.currentTarget) return
+
+  isWidgetDragging.value = true
+  dragPointerId = event.pointerId
+  dragStartX = event.clientX
+  dragStartY = event.clientY
+  dragOriginX = widgetPosition.value.x
+  dragOriginY = widgetPosition.value.y
+  dragMoved = false
+
+  window.addEventListener('pointermove', onWidgetDragMove)
+  window.addEventListener('pointerup', stopWidgetDrag)
+  window.addEventListener('pointercancel', stopWidgetDrag)
+
+  ;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId)
+  event.preventDefault()
+}
+
+function onWidgetDragMove(event: PointerEvent) {
+  if (!isWidgetDragging.value || dragPointerId !== event.pointerId) return
+
+  const deltaX = event.clientX - dragStartX
+  const deltaY = event.clientY - dragStartY
+  if (!dragMoved && Math.hypot(deltaX, deltaY) > 4) {
+    dragMoved = true
+  }
+
+  setWidgetPosition({
+    x: dragOriginX + deltaX,
+    y: dragOriginY + deltaY,
+  })
+}
+
+function stopWidgetDrag(event: PointerEvent) {
+  if (dragPointerId !== null && dragPointerId !== event.pointerId) return
+
+  window.removeEventListener('pointermove', onWidgetDragMove)
+  window.removeEventListener('pointerup', stopWidgetDrag)
+  window.removeEventListener('pointercancel', stopWidgetDrag)
+
+  isWidgetDragging.value = false
+  dragPointerId = null
+
+  if (dragMoved) {
+    dragSuppressClickUntil = performance.now() + 250
+    setWidgetPosition(widgetPosition.value, true)
+  }
+}
 
 function openImage(url: string) {
   selectedImage.value = url
@@ -419,6 +603,8 @@ function onPanelDrop(event: DragEvent) {
 }
 
 function toggleWidget() {
+  if (performance.now() < dragSuppressClickUntil) return
+
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     unreadCount.value = 0
@@ -705,6 +891,9 @@ function requestHuman() {
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(() => {
+  refreshViewport()
+  initializeWidgetPosition(props.position)
+
   // Fetch config from server to apply site-level settings
   fetch(`${props.serverUrl}/config/active`)
     .then((res) => res.json())
@@ -720,20 +909,14 @@ onMounted(() => {
       if (config.isOfflineMode !== undefined) siteIsOfflineMode.value = config.isOfflineMode
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
-      
-      // Apply position to the host element
-      if (siteWebsitePosition.value === 'bottom-left') {
-        const host = document.querySelector('omnichat-widget') as HTMLElement
-        if (host) {
-          host.style.right = 'auto'
-          host.style.left = '20px'
-        }
-      }
+
+      initializeWidgetPosition(siteWebsitePosition.value)
     })
     .catch(() => {
       // Config endpoint is optional — widget still works with prop defaults
     })
 
+  window.addEventListener('resize', refreshViewport)
   connect()
 })
 
@@ -756,7 +939,15 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', refreshViewport)
+  window.removeEventListener('pointermove', onWidgetDragMove)
+  window.removeEventListener('pointerup', stopWidgetDrag)
+  window.removeEventListener('pointercancel', stopWidgetDrag)
   socket.value?.disconnect()
+})
+
+watch([bubbleDiameter, viewportWidth, viewportHeight], () => {
+  setWidgetPosition(widgetPosition.value)
 })
 </script>
 
@@ -764,13 +955,14 @@ onUnmounted(() => {
   <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
   <!-- Floating chat bubble -->
-  <div style="position: relative; display: inline-block;">
+  <div class="chat-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
       type="button"
-      :class="['chat-bubble', { 'has-unread': unreadCount > 0 }]"
+      :class="['chat-bubble', { 'has-unread': unreadCount > 0, dragging: isWidgetDragging }]"
       :style="dynamicBubbleStyle"
       @click="toggleWidget"
+      @pointerdown="startWidgetDrag"
       aria-label="Open chat"
     >
       <img v-if="siteBubbleIcon.startsWith('/') || siteBubbleIcon.startsWith('http')" :src="siteBubbleIcon.startsWith('http') ? siteBubbleIcon : props.serverUrl + siteBubbleIcon" alt="Chat Icon" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none; border-radius: 50%;" />
@@ -785,9 +977,9 @@ onUnmounted(() => {
   </div>
 
   <!-- Chat panel -->
-  <div v-if="isOpen" class="chat-panel" :style="dynamicPanelStyle" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
+  <div v-if="isOpen" :class="['chat-panel', { 'chat-panel-mobile': isSmallScreen }]" :style="dynamicPanelStyle" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
     <!-- Header -->
-    <div class="panel-header" :style="{ backgroundColor: currentBubbleColor }">
+    <div class="panel-header" :class="{ draggable: !isSmallScreen }" :style="{ backgroundColor: currentBubbleColor }" @pointerdown="startWidgetDrag">
       <div style="display: flex; flex-direction: column;">
         <h3 style="margin: 0; font-size: 16px;">Chat with us</h3>
         <span v-if="conversationId" style="font-size: 12px; opacity: 0.85; margin-top: 2px;">
@@ -826,7 +1018,7 @@ onUnmounted(() => {
           </div>
         </template>
         <template v-else>
-          <p>{{ currentWelcomeMessage || siteWelcomeMessage || welcomeMessage }}</p>
+          <p>{{ siteWelcomeMessage || welcomeMessage }}</p>
           
           <div class="pre-chat-form">
             <input v-model="visitorName" type="text" placeholder="Your Name" class="form-input" />
