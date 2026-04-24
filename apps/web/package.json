@@ -1,6 +1,6 @@
 {
   "name": "@omnichat/web",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "private": true,
   "type": "module",
   "description": "OmniChat Vue 3 Web Components (Admin Portal & Visitor Widget)",
