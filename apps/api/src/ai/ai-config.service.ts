@@ -180,6 +180,8 @@ export class AiConfigService {
     aiRateLimitPerMinute?: number;
     spamIpBlacklistMinutes?: number;
     embeddingProviderId?: string | null;
+    translateProviderId?: string | null;
+    translationEnabled?: boolean;
   }) {
     const existing = await this.prisma.aiAgentConfig.findFirst();
 
@@ -232,6 +234,30 @@ export class AiConfigService {
       }
       if (provider) return provider;
       this.logger.warn(`Embedding provider ${agentConfig.embeddingProviderId} not found, falling back to active provider`);
+    }
+    return this.getActiveProvider();
+  }
+
+  /**
+   * Get the provider to use for translation.
+   * If a translateProviderId is configured in AiAgentConfig, use that provider.
+   * Otherwise, fall back to the active chat provider.
+   */
+  async getTranslationProvider() {
+    const agentConfig = await this.prisma.aiAgentConfig.findFirst();
+    if (agentConfig?.translateProviderId) {
+      const provider = await this.prisma.aiProvider.findUnique({
+        where: { id: agentConfig.translateProviderId },
+      });
+      if (provider?.apiKey) {
+        try {
+          provider.apiKey = this.decrypt(provider.apiKey);
+        } catch {
+          // Key may not be encrypted (legacy), use as-is
+        }
+      }
+      if (provider) return provider;
+      this.logger.warn(`Translation provider ${agentConfig.translateProviderId} not found, falling back to active provider`);
     }
     return this.getActiveProvider();
   }

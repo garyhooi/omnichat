@@ -1,0 +1,754 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   OmniChat Admin Widget — Shadow DOM scoped styles
+   ========================================================================= */
+
+:host {
+  display: block;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  pointer-events: none;
+}
+
+.aw-bubble-wrap,
+.aw-panel {
+  pointer-events: auto;
+}
+
+.aw-bubble-wrap {
+  position: fixed;
+}
+
+/* ------ Bubble ------ */
+.aw-bubble {
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  touch-action: none;
+  user-select: none;
+}
+
+.aw-bubble:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2), 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.aw-bubble.aw-dragging {
+  cursor: grabbing;
+  transform: scale(1.03);
+}
+
+/* Unread badge */
+.aw-unread-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 9999px;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  border: 2px solid white;
+  z-index: 10;
+  padding: 0 4px;
+}
+
+/* Unread shake animation */
+@keyframes unread-shake {
+  0% { transform: scale(1) rotate(0deg); }
+  5% { transform: scale(1.1) rotate(-5deg); }
+  10% { transform: scale(1.1) rotate(5deg); }
+  15% { transform: scale(1.1) rotate(-5deg); }
+  20% { transform: scale(1.1) rotate(5deg); }
+  25% { transform: scale(1) rotate(0deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.aw-bubble.aw-has-unread {
+  animation: unread-shake 2.5s infinite;
+}
+
+.aw-bubble.aw-has-unread:hover {
+  animation: none;
+  transform: scale(1.08) translateY(-2px);
+}
+
+/* ------ Panel ------ */
+.aw-panel {
+  position: fixed;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 8px 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom right;
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ------ Panel header ------ */
+.aw-header {
+  padding: 14px 16px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.aw-header-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.aw-header-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* ------ Panel body ------ */
+.aw-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ------ Tabs ------ */
+.aw-tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.aw-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.aw-tab:hover {
+  color: #374151;
+}
+
+.aw-tab.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+/* ------ Conversation list ------ */
+.aw-conv-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.aw-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.aw-conv-item {
+  width: 100%;
+  padding: 12px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.aw-conv-item:hover {
+  background: #f9fafb;
+}
+
+.aw-conv-item:last-child {
+  border-bottom: none;
+}
+
+.aw-conv-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.aw-conv-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.aw-conv-time {
+  font-size: 10px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.aw-conv-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.aw-conv-preview {
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80%;
+}
+
+.aw-conv-unread {
+  background: #ef4444;
+  color: white;
+  border-radius: 9999px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  flex-shrink: 0;
+}
+
+/* ------ Chat top bar ------ */
+.aw-chat-topbar {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.aw-back-btn {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.aw-back-btn:hover {
+  background: #eef2ff;
+}
+
+/* ------ Messages ------ */
+.aw-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aw-msg {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.aw-msg.agent {
+  align-self: flex-end;
+  background: #4f46e5;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.aw-msg.visitor {
+  align-self: flex-start;
+  background: #f3f4f6;
+  color: #1f2937;
+  border-bottom-left-radius: 4px;
+}
+
+.aw-msg.ai {
+  align-self: flex-start;
+  background: #eef2ff;
+  color: #374151;
+  border-bottom-left-radius: 4px;
+  border: 1px solid #c7d2fe;
+}
+
+.aw-msg.system {
+  align-self: center;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 8px;
+  text-align: center;
+  max-width: 100%;
+  box-shadow: none;
+}
+
+.aw-msg-content {
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.aw-msg-content p {
+  margin: 0 0 4px 0;
+}
+.aw-msg-content p:last-child { margin-bottom: 0; }
+.aw-msg-content code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.aw-msg-content pre {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 4px 0;
+  font-size: 0.85em;
+}
+.aw-msg-content ul, .aw-msg-content ol {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+.aw-msg-content blockquote {
+  margin: 4px 0;
+  padding: 2px 8px;
+  border-left: 2px solid rgba(0, 0, 0, 0.15);
+  opacity: 0.85;
+}
+.aw-msg-content a {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.aw-msg-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.aw-msg-time {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.aw-msg-read {
+  font-size: 10px;
+  color: #10b981;
+}
+
+/* Typing hint */
+.aw-typing-hint {
+  font-size: 11px;
+  color: #64748b;
+  padding: 4px 12px;
+  font-style: italic;
+}
+
+/* ------ Input ------ */
+.aw-input-area {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+
+.aw-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #334155;
+  outline: none;
+  resize: none;
+  min-height: 34px;
+  max-height: 90px;
+  overflow-y: auto;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.aw-input:focus {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.aw-send-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 16px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.aw-send-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+.aw-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.aw-resolve-btn {
+  background: #f1f5f9;
+  border: none;
+  color: #64748b;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.aw-resolve-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* ------ Resolve confirm ------ */
+.aw-resolve-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-top: 1px solid #f3f4f6;
+  background: #fef2f2;
+  flex-shrink: 0;
+}
+
+.aw-btn-resolve-yes {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 12px;
+  background: #ef4444;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.aw-btn-resolve-yes:hover {
+  background: #dc2626;
+}
+
+.aw-btn-resolve-cancel {
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.aw-btn-resolve-cancel:hover {
+  background: #f8fafc;
+}
+
+/* ------ Resolved banner ------ */
+.aw-resolved-banner {
+  padding: 16px;
+  text-align: center;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  border-top: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+
+/* ------ Resize handle ------ */
+.aw-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 10;
+  background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%);
+  border-bottom-right-radius: 12px;
+}
+
+.aw-resize-handle:hover {
+  background: linear-gradient(135deg, transparent 50%, rgba(79,70,229,0.2) 50%);
+}
+
+/* ------ Lightbox ------ */
+.aw-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.aw-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 32px;
+  cursor: pointer;
+}
+
+/* ------ Action buttons (Details, Transfer, Translate, etc) ------ */
+.aw-action-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #4b5563;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.aw-action-btn:hover {
+  background: #f3f4f6;
+}
+
+.aw-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ------ Language popover ------ */
+.aw-lang-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 130px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.aw-lang-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+/* ------ Transfer select ------ */
+.aw-transfer-select {
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  padding: 3px 4px;
+  font-size: 11px;
+  max-width: 100px;
+  flex-shrink: 0;
+  background: white;
+}
+
+/* ------ Details panel ------ */
+.aw-details-panel {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafafa;
+  flex-shrink: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.aw-details-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #374151;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.aw-details-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.aw-details-info {
+  margin-bottom: 8px;
+}
+
+.aw-details-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 11px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.aw-details-row:last-child {
+  border-bottom: none;
+}
+
+.aw-details-key {
+  color: #9ca3af;
+  font-weight: 500;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.aw-details-val {
+  color: #374151;
+  text-align: right;
+}
+
+.aw-save-details-btn {
+  width: 100%;
+  padding: 5px 0;
+  border: none;
+  border-radius: 5px;
+  background: #4f46e5;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.aw-save-details-btn:hover {
+  opacity: 0.9;
+}
+
+/* ------ Translate button on messages ------ */
+.aw-translate-btn {
+  background: none;
+  border: 1px solid rgba(0,0,0,0.15);
+  color: inherit;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  cursor: pointer;
+  opacity: 0.6;
+  line-height: 1.4;
+}
+
+.aw-translate-btn:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.aw-translate-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ------ Header draggable cursor ------ */
+.aw-header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.aw-header:active {
+  cursor: grabbing;
+}

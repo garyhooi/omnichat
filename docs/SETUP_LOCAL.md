@@ -197,10 +197,12 @@ omnichat/
 │   ├── src/
 │   │   ├── admin/           ← Admin portal web component
 │   │   ├── client/          ← Visitor widget web component
+│   │   ├── admin-widget/    ← Admin floating widget web component
 │   │   └── env.d.ts         ← TypeScript types
 │   ├── dist/                ← Compiled JS bundles (build output)
-│   │   ├── omnichat-admin.js    ← Embed this
-│   │   └── omnichat-client.js   ← Embed this
+│   │   ├── omnichat-admin.js         ← Admin portal
+│   │   ├── omnichat-admin-widget.js  ← Admin floating widget
+│   │   └── omnichat-client.js        ← Visitor widget
 │   ├── index.html           ← Dev preview page
 │   └── vite.config.ts       ← Dev server config
 └── docker-compose.yml       ← Local database + nginx
@@ -230,7 +232,7 @@ omnichat/
    - Or pass it as an attribute from your host page
 
 3. **Deploy to Production**
-    - Build: `bun run build:web` (generates `omnichat-admin.js` and `omnichat-client.js`)
+    - Build: `bun run build:web` (generates `omnichat-admin.js`, `omnichat-admin-widget.js`, and `omnichat-client.js`)
     - Host JS bundles on a CDN
     - Embed in Blazor/Nuxt/HTML pages with `<script>` tags
     - Point `server-url` to your production API

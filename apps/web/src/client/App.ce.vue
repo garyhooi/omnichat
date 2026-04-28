@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
+import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../utils/translationCache'
 import { appVersion } from '../version'
 
 const WIDGET_MARGIN = 12
@@ -52,6 +53,7 @@ const messagesArea = ref<HTMLElement | null>(null)
 const aiStreamingText = ref('')
 const isAiStreaming = ref(false)
 const isAiEnabled = ref(false)
+const isTranslationEnabled = ref(true)
 
 // Throttled scroll for AI streaming to prevent UI freeze
 let _scrollRafId: number | null = null
@@ -103,6 +105,10 @@ const viewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 
 const widgetPosition = ref({ x: 20, y: 20 })
 const isWidgetDragging = ref(false)
 
+// Panel free-positioning anchor (used when panel is open and dragged via header)
+const panelAnchorX = ref(0)
+const panelAnchorY = ref(0)
+
 let dragPointerId: number | null = null
 let dragStartX = 0
 let dragStartY = 0
@@ -121,6 +127,10 @@ const widgetPositionStorageKey = computed(
   () => `omnichat_widget_position_${encodeURIComponent(props.serverUrl)}`,
 )
 
+const panelAnchorStorageKey = computed(
+  () => `omnichat_client_panel_anchor_${encodeURIComponent(props.serverUrl)}`,
+)
+
 const isSmallScreen = computed(
   () => viewportWidth.value <= 640,
 )
@@ -131,6 +141,39 @@ const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
 function toggleMute() {
   isMuted.value = !isMuted.value
   localStorage.setItem('omnichat_client_muted', isMuted.value ? 'true' : 'false')
+}
+
+const translateLang = ref(getDefaultLang('omnichat_client_translate_lang'))
+const showLangPopover = ref(false)
+const translatingMessageIds = ref<Set<string>>(new Set())
+const translatedMessages = ref<Record<string, string>>({})
+
+function setTranslateLang(lang: string) {
+  translateLang.value = lang
+  localStorage.setItem('omnichat_client_translate_lang', lang)
+}
+
+async function toggleTranslation(msg: Message) {
+  if (translatedMessages.value[msg.id]) {
+    delete translatedMessages.value[msg.id]
+    return
+  }
+  if (translatingMessageIds.value.has(msg.id)) return
+
+  const text = msg.content || ''
+  if (!text.trim()) return
+
+  translatingMessageIds.value = new Set([...translatingMessageIds.value, msg.id])
+  try {
+    const translated = await fetchTranslation(props.serverUrl, text, translateLang.value)
+    translatedMessages.value = { ...translatedMessages.value, [msg.id]: translated }
+  } catch (e: any) {
+    console.warn('Translation failed:', e.message)
+  } finally {
+    const next = new Set(translatingMessageIds.value)
+    next.delete(msg.id)
+    translatingMessageIds.value = next
+  }
 }
 
 const audioPlayer = new Audio()
@@ -226,6 +269,21 @@ const dynamicPanelStyle = computed(() => {
 
   const panelWidth = Math.min(380, Math.max(280, viewportWidth.value - WIDGET_MARGIN * 2))
   const panelHeight = Math.min(600, Math.max(320, viewportHeight.value - WIDGET_MARGIN * 2))
+
+  if (isOpen.value) {
+    // When panel is open, position directly from anchor — the user can place
+    // it anywhere on screen without being coupled to the bubble position.
+    const maxLeft = Math.max(0, viewportWidth.value - panelWidth)
+    const maxTop = Math.max(0, viewportHeight.value - panelHeight)
+    return {
+      left: `${clamp(panelAnchorX.value, 0, maxLeft)}px`,
+      top: `${clamp(panelAnchorY.value, 0, maxTop)}px`,
+      width: `${panelWidth}px`,
+      height: `${panelHeight}px`,
+    }
+  }
+
+  // Panel closed: position relative to bubble (used only when panel is hidden)
   const preferredLeft = widgetPosition.value.x + bubbleDiameter.value - panelWidth
   const maxLeft = Math.max(WIDGET_MARGIN, viewportWidth.value - panelWidth - WIDGET_MARGIN)
   let top = widgetPosition.value.y - panelHeight - DESKTOP_PANEL_GAP
@@ -320,16 +378,21 @@ function initializeWidgetPosition(configPosition?: string | null) {
   const saved = parseWidgetPosition(localStorage.getItem(widgetPositionStorageKey.value))
   if (saved) {
     setWidgetPosition(saved)
-    return
+  } else {
+    const parsedConfigPosition = parseWidgetPosition(configPosition)
+    if (parsedConfigPosition) {
+      setWidgetPosition(parsedConfigPosition)
+    } else {
+      setWidgetPosition(getLegacyWidgetPosition(configPosition || props.position))
+    }
   }
 
-  const parsedConfigPosition = parseWidgetPosition(configPosition)
-  if (parsedConfigPosition) {
-    setWidgetPosition(parsedConfigPosition)
-    return
+  // Restore last panel anchor position so the panel opens where it was dragged
+  const savedPanel = parseWidgetPosition(localStorage.getItem(panelAnchorStorageKey.value))
+  if (savedPanel) {
+    panelAnchorX.value = savedPanel.x
+    panelAnchorY.value = savedPanel.y
   }
-
-  setWidgetPosition(getLegacyWidgetPosition(configPosition || props.position))
 }
 
 function refreshViewport() {
@@ -350,8 +413,16 @@ function startWidgetDrag(event: PointerEvent) {
   dragPointerId = event.pointerId
   dragStartX = event.clientX
   dragStartY = event.clientY
-  dragOriginX = widgetPosition.value.x
-  dragOriginY = widgetPosition.value.y
+
+  if (isOpen.value) {
+    // Dragging panel via header — track panel anchor directly
+    dragOriginX = panelAnchorX.value
+    dragOriginY = panelAnchorY.value
+  } else {
+    // Dragging bubble
+    dragOriginX = widgetPosition.value.x
+    dragOriginY = widgetPosition.value.y
+  }
   dragMoved = false
 
   window.addEventListener('pointermove', onWidgetDragMove)
@@ -371,10 +442,15 @@ function onWidgetDragMove(event: PointerEvent) {
     dragMoved = true
   }
 
-  setWidgetPosition({
-    x: dragOriginX + deltaX,
-    y: dragOriginY + deltaY,
-  })
+  if (isOpen.value) {
+    panelAnchorX.value = dragOriginX + deltaX
+    panelAnchorY.value = dragOriginY + deltaY
+  } else {
+    setWidgetPosition({
+      x: dragOriginX + deltaX,
+      y: dragOriginY + deltaY,
+    })
+  }
 }
 
 function stopWidgetDrag(event: PointerEvent) {
@@ -389,7 +465,15 @@ function stopWidgetDrag(event: PointerEvent) {
 
   if (dragMoved) {
     dragSuppressClickUntil = performance.now() + 250
-    setWidgetPosition(widgetPosition.value, true)
+    if (isOpen.value) {
+      // Persist panel anchor position so reopening restores it
+      localStorage.setItem(
+        panelAnchorStorageKey.value,
+        formatWidgetPosition(panelAnchorX.value, panelAnchorY.value),
+      )
+    } else {
+      setWidgetPosition(widgetPosition.value, true)
+    }
   }
 }
 
@@ -609,6 +693,22 @@ function toggleWidget() {
   if (isOpen.value) {
     unreadCount.value = 0
     markUnreadMessagesAsRead()
+    // Initialize panel anchor from saved position or compute from bubble
+    if (panelAnchorX.value <= 0 && panelAnchorY.value <= 0) {
+      const panelWidth = Math.min(380, Math.max(280, viewportWidth.value - WIDGET_MARGIN * 2))
+      const panelHeight = Math.min(600, Math.max(320, viewportHeight.value - WIDGET_MARGIN * 2))
+      panelAnchorX.value = Math.max(
+        0,
+        widgetPosition.value.x + bubbleDiameter.value - panelWidth,
+      )
+      panelAnchorY.value = Math.max(
+        0,
+        widgetPosition.value.y - panelHeight - DESKTOP_PANEL_GAP,
+      )
+      if (panelAnchorY.value < 0) {
+        panelAnchorY.value = widgetPosition.value.y + bubbleDiameter.value + DESKTOP_PANEL_GAP
+      }
+    }
   } else {
     showEndChatConfirm.value = false // reset on close
   }
@@ -863,7 +963,9 @@ function scrollToBottom(instant = false) {
 
 function formatTime(dateStr: string) {
   const date = new Date(dateStr)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const datePart = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return `${datePart} ${time}`
 }
 
 function startNewChat() {
@@ -909,6 +1011,7 @@ onMounted(() => {
       if (config.isOfflineMode !== undefined) siteIsOfflineMode.value = config.isOfflineMode
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
+      if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
 
       initializeWidgetPosition(siteWebsitePosition.value)
     })
@@ -949,6 +1052,13 @@ onUnmounted(() => {
 watch([bubbleDiameter, viewportWidth, viewportHeight], () => {
   setWidgetPosition(widgetPosition.value)
 })
+
+watch(showLangPopover, (val) => {
+  if (val) {
+    const close = () => { showLangPopover.value = false }
+    setTimeout(() => document.addEventListener('click', close, { once: true }))
+  }
+})
 </script>
 
 <template>
@@ -987,6 +1097,57 @@ watch([bubbleDiameter, viewportWidth, viewportHeight], () => {
         </span>
       </div>
       <div style="display: flex; align-items: center; gap: 12px;">
+        <div v-if="isTranslationEnabled" style="position: relative;">
+          <button
+            type="button"
+            class="close-btn"
+            @click="showLangPopover = !showLangPopover"
+            :title="'Translate messages to'"
+            style="font-size: 16px; margin: 0;"
+          >
+            🌐
+          </button>
+          <div
+            v-if="showLangPopover"
+            style="
+              position: absolute;
+              top: 100%;
+              right: 0;
+              margin-top: 6px;
+              background: white;
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+              z-index: 100;
+              min-width: 160px;
+              max-height: 260px;
+              overflow-y: auto;
+              padding: 4px 0;
+            "
+          >
+            <button
+              v-for="lang in TRANSLATE_LANGS"
+              :key="lang.value"
+              @click="setTranslateLang(lang.value); showLangPopover = false"
+              style="
+                display: block;
+                width: 100%;
+                text-align: left;
+                padding: 6px 14px;
+                border: none;
+                background: none;
+                cursor: pointer;
+                font-size: 13px;
+                color: #374151;
+              "
+              :style="translateLang === lang.value ? { background: '#eef2ff', color: '#4f46e5', fontWeight: 600 } : {}"
+              @mouseenter="($event.target as HTMLElement).style.background = '#f3f4f6'"
+              @mouseleave="($event.target as HTMLElement).style.background = translateLang === lang.value ? '#eef2ff' : 'none'"
+            >
+              {{ lang.label }}
+            </button>
+          </div>
+        </div>
         <button type="button" class="close-btn" @click="toggleMute" :title="isMuted ? 'Unmute Notifications' : 'Mute Notifications'" style="font-size: 16px; margin: 0;">
           {{ isMuted ? '🔕' : '🔔' }}
         </button>
@@ -1055,13 +1216,31 @@ watch([bubbleDiameter, viewportWidth, viewportHeight], () => {
               style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" 
               @click="openImage(msg.attachmentUrl || '')" 
             />
-            <div v-if="msg.content" class="md-content" style="padding: 8px;" v-html="renderMarkdown(msg.content)"></div>
+            <div v-if="msg.content" class="md-content" style="padding: 8px;" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
           </template>
           <template v-else>
-            <div class="md-content" v-html="renderMarkdown(msg.content || '')"></div>
+            <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
           </template>
-          <div class="msg-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
+          <div class="msg-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
             <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+            <button
+              v-if="msg.content && msg.messageType !== 'image' && isTranslationEnabled"
+              @click="toggleTranslation(msg)"
+              :disabled="translatingMessageIds.has(msg.id)"
+              style="
+                background: none;
+                border: 1px solid rgba(255,255,255,0.3);
+                color: inherit;
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                cursor: pointer;
+                opacity: 0.7;
+              "
+              :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
+            >
+              {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
+            </button>
             <!-- Read receipts are never shown to customers -->
           </div>
         </div>

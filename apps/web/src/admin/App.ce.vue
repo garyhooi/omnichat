@@ -806,7 +806,9 @@ function formatTicketId(id: string | null): string {
 
 function formatTime(dateStr: string) {
   const date = new Date(dateStr)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const datePart = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return `${datePart} ${time}`
 }
 
 function getVisitorLabel(conv: Conversation) {

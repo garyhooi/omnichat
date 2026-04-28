@@ -162,7 +162,7 @@ onUnmounted(() => {
 
 <template>
   <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
-  <div style="display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1e293b; font-size: 14px; overflow: hidden;">
+  <div style="display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1e293b; font-size: 14px; overflow: hidden; border-radius: 16px;">
     <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
     <!-- Sidebar Navigation -->
     <aside

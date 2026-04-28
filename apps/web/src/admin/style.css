@@ -6,12 +6,27 @@
    OmniChat Admin Portal — Shadow DOM scoped styles (Premium SaaS)
    ========================================================================= */
 
-:host {
+/* :host {
   display: block;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color: #1e293b;
   height: 100%;
   width: 100%;
+} */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  height: 80vh;
+  max-height: 80vh;
+  width: 100%;
+  min-height: 600px;
+  min-width: 640px;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
 }
 
 *, *::before, *::after {

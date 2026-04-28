@@ -124,6 +124,7 @@
     
     <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
     <script src="../apps/web/dist/omnichat-admin.js"></script>
+    <script src="../apps/web/dist/omnichat-admin-widget.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
@@ -154,8 +155,22 @@
         <!-- Content will be injected here via JavaScript -->
     </div>
 
+    <!-- Admin floating widget — persists across all pages/tabs -->
+    <omnichat-admin-widget
+        id="admin-widget"
+        server-url="http://localhost:3001"
+        token="">
+    </omnichat-admin-widget>
+
     <script>
         const SERVER_URL = 'http://localhost:3001';
+
+        function setAdminWidgetToken(token) {
+            const widget = document.getElementById('admin-widget');
+            if (widget) {
+                widget.setAttribute('token', token || '');
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('omnichat_demo_logged_in') === 'true';
@@ -207,6 +222,7 @@
                     <omnichat-admin server-url="http://localhost:3001" token="demo-token-123"></omnichat-admin>
                 </div>
             `;
+            setAdminWidgetToken('demo-token-123');
         }
 
         function renderLoginForm() {
@@ -287,6 +303,7 @@
             });
 
             container.appendChild(adminElement);
+            setAdminWidgetToken(token);
         }
     </script>
 </body>

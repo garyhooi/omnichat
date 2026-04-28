@@ -8,7 +8,8 @@
     "dev": "bun vite",
     "build:admin": "bun vite build --config vite.config.admin.ts",
     "build:client": "bun vite build --config vite.config.client.ts",
-    "build": "bun run build:admin && bun run build:client",
+    "build:admin-widget": "bun vite build --config vite.config.admin-widget.ts",
+    "build": "bun run build:admin && bun run build:client && bun run build:admin-widget",
     "preview": "bun vite preview"
   },
   "dependencies": {

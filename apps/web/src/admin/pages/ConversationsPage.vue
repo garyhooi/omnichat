@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
+import { useAiStore } from '../stores/ai.store'
 import { useToast } from '../stores/toast.store'
 import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../../utils/markdown'
+import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../../utils/translationCache'
 
 const authStore = useAuthStore()
 const toast = useToast()
+const aiStore = useAiStore()
 
 /** Build fetch options with auth headers (supports both cookie and token auth) */
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -224,6 +227,40 @@ const audioPlayer = new Audio()
 function toggleMute() {
   isMuted.value = !isMuted.value
   localStorage.setItem('omnichat_admin_muted', isMuted.value ? 'true' : 'false')
+}
+
+// Translation state
+const translateLang = ref(getDefaultLang('omnichat_admin_translate_lang'))
+const showLangPopover = ref(false)
+const translatingMessageIds = ref<Set<string>>(new Set())
+const translatedMessages = ref<Record<string, string>>({})
+
+function setTranslateLang(lang: string) {
+  translateLang.value = lang
+  localStorage.setItem('omnichat_admin_translate_lang', lang)
+}
+
+async function toggleTranslation(msg: Message) {
+  if (translatedMessages.value[msg.id]) {
+    delete translatedMessages.value[msg.id]
+    return
+  }
+  if (translatingMessageIds.value.has(msg.id)) return
+
+  const text = msg.content || ''
+  if (!text.trim()) return
+
+  translatingMessageIds.value = new Set([...translatingMessageIds.value, msg.id])
+  try {
+    const translated = await fetchTranslation(authStore.serverUrl, text, translateLang.value, authHeaders())
+    translatedMessages.value = { ...translatedMessages.value, [msg.id]: translated }
+  } catch (e: any) {
+    toast.error(`Translation failed: ${e.message}`)
+  } finally {
+    const next = new Set(translatingMessageIds.value)
+    next.delete(msg.id)
+    translatingMessageIds.value = next
+  }
 }
 
 function playSound() {
@@ -894,10 +931,18 @@ onMounted(() => {
   loadSettings()
   loadQuickReplies()
   loadAdminList()
+  aiStore.loadAgentConfig()
 })
 
 onUnmounted(() => {
   socket.value?.disconnect()
+})
+
+watch(showLangPopover, (val) => {
+  if (val) {
+    const close = () => { showLangPopover.value = false }
+    setTimeout(() => document.addEventListener('click', close, { once: true }))
+  }
 })
 </script>
 
@@ -1273,6 +1318,64 @@ onUnmounted(() => {
             </div>
           </div>
           <div style="display: flex; gap: 8px; align-items: center">
+            <div v-if="aiStore.agentConfig?.translationEnabled !== false" style="position: relative;">
+              <button
+                style="
+                  background: white;
+                  border: 1px solid #d1d5db;
+                  border-radius: 6px;
+                  padding: 6px 10px;
+                  cursor: pointer;
+                  font-size: 16px;
+                  line-height: 1;
+                "
+                title="Translate messages to"
+                @click="showLangPopover = !showLangPopover"
+              >
+                🌐
+              </button>
+              <div
+                v-if="showLangPopover"
+                class="lang-popover"
+                style="
+                  position: absolute;
+                  top: 100%;
+                  right: 0;
+                  margin-top: 6px;
+                  background: white;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 8px;
+                  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+                  z-index: 100;
+                  min-width: 160px;
+                  max-height: 260px;
+                  overflow-y: auto;
+                  padding: 4px 0;
+                "
+              >
+                <button
+                  v-for="lang in TRANSLATE_LANGS"
+                  :key="lang.value"
+                  @click="setTranslateLang(lang.value); showLangPopover = false"
+                  style="
+                    display: block;
+                    width: 100%;
+                    text-align: left;
+                    padding: 6px 14px;
+                    border: none;
+                    background: none;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: #374151;
+                  "
+                  :style="translateLang === lang.value ? { background: '#eef2ff', color: '#4f46e5', fontWeight: 600 } : {}"
+                  @mouseenter="($event.target as HTMLElement).style.background = '#f3f4f6'"
+                  @mouseleave="($event.target as HTMLElement).style.background = translateLang === lang.value ? '#eef2ff' : 'none'"
+                >
+                  {{ lang.label }}
+                </button>
+              </div>
+            </div>
             <button
               style="
                 background: white;
@@ -1537,20 +1640,40 @@ onUnmounted(() => {
                 "
                 @click="openImage(msg.attachmentUrl || '')"
               />
-              <div v-if="msg.content" class="md-content" style="padding: 8px" v-html="renderMarkdown(msg.content)"></div>
+              <div v-if="msg.content" class="md-content" style="padding: 8px" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
             </template>
             <template v-else>
-              <div class="md-content" v-html="renderMarkdown(msg.content || '')"></div>
+              <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
             </template>
-            <div class="message-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
+            <div class="message-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
               <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
-              <span
-                v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt"
-                style="color: #10b981; font-weight: bold; margin-left: 4px"
-                title="Read"
-              >
-                &#10003;&#10003;
-              </span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button
+                  v-if="msg.content && msg.messageType !== 'image' && aiStore.agentConfig?.translationEnabled !== false"
+                  @click="toggleTranslation(msg)"
+                  :disabled="translatingMessageIds.has(msg.id)"
+                  style="
+                    background: none;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    color: inherit;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    cursor: pointer;
+                    opacity: 0.7;
+                  "
+                  :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
+                >
+                  {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
+                </button>
+                <span
+                  v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt"
+                  style="color: #10b981; font-weight: bold;"
+                  title="Read"
+                >
+                  &#10003;&#10003;
+                </span>
+              </div>
             </div>
           </div>
         </div>

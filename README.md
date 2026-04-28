@@ -34,6 +34,7 @@
 * **⏱️ Auto-Resolution**: Automatically sends a 3-minute inactivity warning and resolves inactive chats after 5 minutes.
 * **🎨 Highly Customizable Widget**: Change bubble colors, patterns, sizes, icons, and welcome messages directly from the Admin UI. Dynamic CORS configuration stored in the database.
 * **⭐ Post-Chat Reviews**: Collect visitor feedback and star ratings after a conversation is resolved.
+* **🌎 AI Translation**: Translate messages inline into 20+ languages (English, 中文, 日本語, 한국어, Français, Español, العربية, etc.). Per-message toggle between original and translated text with IndexedDB caching. Available in both the Admin Portal and Admin Floating Widget.
 
 **🤖 AI Agent**
 
@@ -84,6 +85,28 @@ OmniChat is compiled into native Web Components, meaning you can drop them into 
 **Supported Attributes:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
 * `token` (Required): The JWT authentication token for the logged-in agent/admin.
+
+### Admin Floating Widget (`<omnichat-admin-widget>`)
+A compact, always-accessible chat panel for agents to embed in their own backoffice or admin dashboard. Agents can manage conversations from any page without switching views.
+```html
+<omnichat-admin-widget
+  server-url="https://api.yoursite.com"
+  token="eyJhbGciOiJIUzI1NiIsInR...">
+</omnichat-admin-widget>
+```
+**Key Features:**
+* **Draggable Bubble & Panel**: Drag the floating bubble anywhere on screen; reposition the panel by its header.
+* **Unread Badge**: Red notification count for new messages in Active or Specialist conversations.
+* **Resizable Panel**: Drag the bottom-right corner to adjust panel size to fit your screen.
+* **Full Chat Management**: View Active and Specialist conversations, reply to visitors, resolve chats, and transfer to specialists — all within the floating panel.
+* **Conversation Details**: Inspect visitor info (IP, browser, URL), update customer username, and add internal agent remarks.
+* **AI Translation**: Inline translate messages into 20+ languages with per-message toggle.
+* **Widget Settings Sync**: Automatically applies bubble color, size, pattern, icon, and notification sound from the admin Settings → Widget Setup page.
+* **JWT-Authenticated**: Identity is derived from the JWT token payload — no client-modifiable username attribute.
+
+**Supported Attributes:**
+* `server-url` (Required): The base URL of your OmniChat backend API.
+* `token` (Required): The JWT authentication token for the logged-in agent/admin. The agent's username is extracted from the JWT payload.
 
 ## 🚀 Quick Start
 
@@ -196,6 +219,7 @@ Both deployment methods provide **identical HEIC conversion functionality**. Cho
 You can easily embed OmniChat via CDN:
 
 * **Admin Portal Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js`
+* **Admin Floating Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin-widget.js`
 * **Client Visitor Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js`
 
 ### Prerequisites
@@ -255,11 +279,15 @@ omnichat/
 │   └── web/                        ← Vue 3 Web Components
 │       ├── src/
 │       │   ├── admin/
+│       │   │   ├── AdminDashboard.ce.vue
+│       │   │   └── main.ce.ts
+│       │   ├── admin-widget/
 │       │   │   ├── App.ce.vue
 │       │   │   └── main.ts
-│       │   └── client/
-│       │       ├── App.ce.vue
-│       │       └── main.ts
+│       │   ├── client/
+│       │   │   ├── App.ce.vue
+│       │   │   └── main.ts
+│       │   └── utils/
 │       └── vite.config.ts
 ├── docker-compose.yml
 └── scripts/

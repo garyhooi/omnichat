@@ -56,6 +56,8 @@ const configForm = ref({
   aiRateLimitPerMinute: 10,
   spamIpBlacklistMinutes: 15,
   embeddingProviderId: null as string | null,
+  translateProviderId: null as string | null,
+  translationEnabled: true,
 })
 
 const providerTypes = [
@@ -376,6 +378,38 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
           <p class="text-xs text-gray-400 mt-1">
             Some providers (DeepSeek, Anthropic, Grok) don't support embeddings.
             Select a provider that supports embeddings (OpenAI, Ollama, Gemini, Qwen) for Knowledge Base to work.
+          </p>
+        </div>
+
+        <!-- AI Translation Toggle -->
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-medium text-gray-700">AI Translation</h3>
+              <p class="text-xs text-gray-400 mt-0.5">
+                {{ configForm.translationEnabled ? 'Visitors and agents can translate messages on-demand' : 'Translation is disabled globally' }}
+              </p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="configForm.translationEnabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Translation Provider -->
+        <div v-if="configForm.translationEnabled" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Translation Provider (for message translation)</label>
+          <select v-model="configForm.translateProviderId"
+                  class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+            <option :value="null">Use active chat provider</option>
+            <option v-for="p in aiStore.providers" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.providerType }} — {{ p.chatModelId }})
+            </option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">
+            Select which provider handles message translation.
+            If none selected, the active chat provider will be used.
           </p>
         </div>
 
