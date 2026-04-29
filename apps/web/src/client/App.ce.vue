@@ -625,6 +625,9 @@ function connect() {
 
   s.on('error', (data: { message: string }) => {
     console.error('[OmniChat Widget] Error:', data.message)
+    if (data.message === 'Failed to resolve conversation') {
+      isResolved.value = true
+    }
   })
 
   s.on('disconnect', () => {
@@ -935,7 +938,11 @@ function endChat() {
 }
 
 function confirmEndChat() {
-  if (!conversationId.value) return
+  if (!conversationId.value) {
+    isResolved.value = true
+    showEndChatConfirm.value = false
+    return
+  }
   socket.value?.emit('resolve_conversation', {
     conversationId: conversationId.value,
   })
