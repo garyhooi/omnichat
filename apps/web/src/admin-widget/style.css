@@ -298,6 +298,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
 }
 
 .aw-msg {
@@ -751,4 +752,56 @@
 
 .aw-header:active {
   cursor: grabbing;
+}
+
+/* ------ Drag overlay ------ */
+.aw-drag-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(79, 70, 229, 0.08);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  border-radius: 12px;
+}
+
+.aw-drag-overlay-content {
+  background: white;
+  padding: 24px 32px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4f46e5;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border: 2px dashed #4f46e5;
+}
+
+/* ------ Attach button ------ */
+.aw-attach-btn {
+  background: #f1f5f9;
+  border: none;
+  color: #64748b;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.aw-attach-btn:hover {
+  background: #e2e8f0;
+  color: #4f46e5;
+}
+
+.aw-attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -129,6 +129,12 @@ const currentUserUsername = ref('')
 const showResolveConfirm = ref(false)
 const selectedImage = ref<string | null>(null)
 
+// Drag & drop and file upload state
+const isDragging = ref(false)
+const dragCounter = ref(0)
+const isUploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
 // Details state
 const showConversationDetails = ref(false)
 const draftAssignedUsername = ref('')
@@ -795,6 +801,155 @@ function closeImage() {
   selectedImage.value = null
 }
 
+// ---------------------------------------------------------------------------
+// File upload & drag-drop
+// ---------------------------------------------------------------------------
+function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = (event) => {
+      const img = new Image()
+      img.src = event.target?.result as string
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        const mimeType = 'image/webp'
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const newName = file.name.replace(/\.[^/.]+$/, '') + '.webp'
+              resolve(new File([blob], newName, { type: mimeType }))
+            } else {
+              reject(new Error('Canvas to Blob failed'))
+            }
+          },
+          mimeType,
+          quality,
+        )
+      }
+      img.onerror = (e) => reject(e)
+    }
+    reader.onerror = (e) => reject(e)
+  })
+}
+
+function triggerFileUpload() {
+  fileInput.value?.click()
+}
+
+async function handleFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+  await processFile(target.files[0])
+}
+
+function onPanelDragEnter(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value++
+  isDragging.value = true
+}
+
+function onPanelDragOver(event: DragEvent) {
+  event.preventDefault()
+}
+
+function onPanelDragLeave(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value--
+  if (dragCounter.value <= 0) {
+    dragCounter.value = 0
+    isDragging.value = false
+  }
+}
+
+function onPanelDrop(event: DragEvent) {
+  event.preventDefault()
+  dragCounter.value = 0
+  isDragging.value = false
+  if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+    processFile(event.dataTransfer.files[0])
+  }
+}
+
+async function processFile(file: File) {
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File size exceeds 5MB limit.')
+    return
+  }
+
+  isUploading.value = true
+
+  try {
+    const fileName = file.name.toLowerCase()
+    const isHeicFile =
+      fileName.endsWith('.heic') ||
+      fileName.endsWith('.heif') ||
+      file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      file.type === 'image/heic-sequence' ||
+      file.type === 'image/heif-sequence'
+
+    if (isHeicFile) {
+      console.log('HEIC file detected - will be converted on backend')
+    } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
+      file = await compressImage(file, 1200, 0.8)
+    } else {
+      throw new Error(`Unsupported format: ${file.type}`)
+    }
+  } catch (err: any) {
+    console.error('Image processing failed', err)
+    alert(`Failed to process image: ${err.message}. Make sure it is a valid format (JPG, PNG, HEIC, WEBP).`)
+    isUploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+  if (activeConversationId.value) {
+    formData.append('conversationId', activeConversationId.value)
+  }
+
+  try {
+    const res = await fetch(`${props.serverUrl}/upload`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    })
+
+    if (!res.ok) {
+      throw new Error('Upload failed')
+    }
+
+    const data = await res.json()
+
+    socket.value?.emit('send_message', {
+      conversationId: activeConversationId.value,
+      content: '',
+      messageType: 'image',
+      attachmentUrl: `${props.serverUrl}${data.url}`,
+      attachmentThumbnailUrl: `${props.serverUrl}${data.thumbnailUrl || data.url}`,
+    })
+  } catch (error) {
+    console.error('File upload error:', error)
+    alert('Failed to upload file.')
+  } finally {
+    isUploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+
 function backToList() {
   activeConversationId.value = null
   messages.value = []
@@ -1166,7 +1321,14 @@ watch(showLangPopover, (val) => {
         </div>
 
         <!-- Messages -->
-        <div ref="messagesContainer" class="aw-messages">
+        <div
+          ref="messagesContainer"
+          class="aw-messages"
+          @dragenter="onPanelDragEnter"
+          @dragover="onPanelDragOver"
+          @dragleave="onPanelDragLeave"
+          @drop="onPanelDrop"
+        >
           <div
             v-for="msg in messages"
             :key="msg.id"
@@ -1202,6 +1364,13 @@ watch(showLangPopover, (val) => {
           <div v-if="isTyping" class="aw-typing-hint">
             {{ typingUser }} is typing...
           </div>
+          <!-- Drag overlay -->
+          <div v-if="isDragging" class="aw-drag-overlay">
+            <div class="aw-drag-overlay-content">
+              <span style="font-size: 32px; margin-bottom: 8px; display: block;">📥</span>
+              <span>Drop file to upload</span>
+            </div>
+          </div>
         </div>
 
         <!-- Resolve confirm banner -->
@@ -1225,11 +1394,22 @@ watch(showLangPopover, (val) => {
 
         <!-- Input area (active/specialist) -->
         <div v-else class="aw-input-area">
+          <input type="file" ref="fileInput" style="display: none" accept="image/*" @change="handleFileUpload" />
+          <button
+            type="button"
+            class="aw-attach-btn"
+            :disabled="isUploading"
+            @click="triggerFileUpload"
+            title="Attach Image (Max size: 5MB. Supported: JPG, PNG, HEIC, WEBP)"
+          >
+            &#128206;
+          </button>
           <textarea
             v-model="newMessage"
             class="aw-input"
             rows="1"
-            placeholder="Type your message..."
+            :placeholder="isUploading ? 'Uploading image...' : 'Type your message...'"
+            :disabled="isUploading"
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.enter.shift.exact="() => {}"
             @input="handleInput"
