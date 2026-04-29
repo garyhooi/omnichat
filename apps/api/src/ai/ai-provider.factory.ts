@@ -24,6 +24,7 @@ interface ProviderMeta {
   defaultBaseUrl?: string;          // Required for non-OpenAI providers
   defaultEmbeddingModel?: string;   // null = provider doesn't support embeddings
   supportsEmbeddings: boolean;
+  supportsImages: boolean;
   sdk: 'openai-compat' | 'anthropic' | 'ollama';
 }
 
@@ -31,56 +32,66 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
   openai: {
     sdk: 'openai-compat',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'text-embedding-3-small',
   },
   openrouter: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'openai/text-embedding-3-small',
   },
   anthropic: {
     sdk: 'anthropic',
     supportsEmbeddings: false,
+    supportsImages: true,
   },
   ollama: {
     sdk: 'ollama',
     defaultBaseUrl: 'http://localhost:11434/api',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'nomic-embed-text',
   },
   deepseek: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
     supportsEmbeddings: false,
+    supportsImages: true,
   },
   qwen: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'text-embedding-v3',
   },
   glm: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'embedding-3',
   },
   gemini: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     supportsEmbeddings: true,
+    supportsImages: true,
     defaultEmbeddingModel: 'text-embedding-004',
   },
   grok: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://api.x.ai/v1',
     supportsEmbeddings: false,
+    supportsImages: true,
   },
   mimo: {
     sdk: 'openai-compat',
     defaultBaseUrl: 'https://api.mimo.ai/v1',
     supportsEmbeddings: false,
+    supportsImages: false,
   },
 };
 
@@ -200,6 +211,15 @@ export class AiProviderFactory {
         return openai.embedding(embeddingId);
       }
     }
+  }
+
+  /**
+   * Check if a provider supports image (multi-modal) inputs.
+   */
+  supportsImages(config: AiProviderConfig): boolean {
+    const meta = PROVIDER_META[config.providerType];
+    if (!meta) return false;
+    return meta.supportsImages;
   }
 
   /**

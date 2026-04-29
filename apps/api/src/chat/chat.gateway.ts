@@ -26,6 +26,8 @@ import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool'
 import { GetBusinessHoursTool } from '../ai/tools/builtin/get-business-hours.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { CoreMessage } from 'ai';
+import * as fs from 'fs/promises';
+import { join, extname } from 'path';
 
 // ---------------------------------------------------------------------------
 // Types for inbound/outbound events
@@ -1107,12 +1109,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       const lastVisitorMsg = conversation.messages
         ?.filter((m) => m.senderType === 'visitor')
         .pop();
-      if (!lastVisitorMsg?.content) return;
+      if (!lastVisitorMsg) return;
+      if (!lastVisitorMsg.content && lastVisitorMsg.messageType !== 'image') return;
 
       const visitorIp = conversation.visitorIp || 'unknown';
       const securityCheck = await this.securityService.checkMessage(
         conversationId,
-        lastVisitorMsg.content,
+        lastVisitorMsg.content || '',
         visitorIp,
         {
           rateLimitPerMinute: agentConfig.aiRateLimitPerMinute,
@@ -1126,7 +1129,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       }
 
       // Check for human request keywords
-      if (await this.handoffService.detectHumanRequest(lastVisitorMsg.content)) {
+      if (await this.handoffService.detectHumanRequest(lastVisitorMsg.content || '')) {
         const humanCheck = await this.handoffService.recordHumanRequest(
           conversationId,
           agentConfig.humanRequestThreshold,
@@ -1147,11 +1150,50 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         return;
       }
 
-      // Build message history for AI context
-      const messages: CoreMessage[] = (conversation.messages || []).map((m) => ({
-        role: m.senderType === 'visitor' ? 'user' as const : 'assistant' as const,
-        content: m.content || '',
-      }));
+      // Check if conversation has image messages
+      const hasImages = (conversation.messages || []).some(
+        (m) => m.senderType === 'visitor' && m.messageType === 'image' && m.attachmentUrl,
+      );
+
+      // Check if provider supports images (multi-modal)
+      const supportsImages = hasImages ? await this.aiService.supportsImages() : true;
+
+      // If provider doesn't support images, inform visitor and skip
+      if (hasImages && !supportsImages) {
+        const notificationMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'ai',
+          senderId: 'ai-agent',
+          content: "I'm sorry, I'm a text-based AI assistant and can't process images. Please describe what you're showing me with text.",
+          messageType: 'text',
+        });
+        this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+          message: {
+            ...notificationMsg,
+            senderDisplayName: 'AI Agent',
+          },
+        });
+        return;
+      }
+
+      // Build message history for AI context, including images when supported
+      const messages: CoreMessage[] = await Promise.all(
+        (conversation.messages || []).map(async (m) => {
+          if (m.senderType === 'visitor' && m.messageType === 'image' && m.attachmentUrl && supportsImages) {
+            const imageDataUrl = await this.readImageAsDataUrl(m.attachmentUrl);
+            if (imageDataUrl) {
+              const parts: any[] = [];
+              if (m.content) parts.push({ type: 'text', text: m.content });
+              parts.push({ type: 'image', image: imageDataUrl });
+              return { role: 'user', content: parts };
+            }
+          }
+          return {
+            role: m.senderType === 'visitor' ? 'user' as const : 'assistant' as const,
+            content: m.content || '',
+          };
+        }),
+      );
 
       // Get tools
       const tools = await this.toolRegistry.getTools({
@@ -1427,6 +1469,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           error.message?.includes('quota') || error.message?.includes('credit')) {
         await this.triggerHandoff(conversationId, 'AI provider credit/quota exhausted');
       }
+    }
+  }
+
+  /**
+   * Read an uploaded image from disk and return a base64 data URL
+   * for use as a multi-modal input to the AI model.
+   */
+  private async readImageAsDataUrl(attachmentUrl: string): Promise<string | null> {
+    try {
+      // HTTP/HTTPS URLs can be passed directly to the AI SDK
+      if (attachmentUrl.startsWith('http://') || attachmentUrl.startsWith('https://')) {
+        return attachmentUrl;
+      }
+      // Local file path — read from disk
+      const filePath = join(process.cwd(), attachmentUrl);
+      const buffer = await fs.readFile(filePath);
+      const ext = extname(attachmentUrl).toLowerCase();
+      const mime =
+        ext === '.png' ? 'image/png' :
+        ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+        ext === '.gif' ? 'image/gif' :
+        ext === '.webp' ? 'image/webp' :
+        'image/webp';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    } catch (err) {
+      this.logger.error(`Failed to read image for AI input: ${attachmentUrl} - ${err.message}`);
+      return null;
     }
   }
 

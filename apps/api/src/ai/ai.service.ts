@@ -76,8 +76,16 @@ export class AiService {
   }
 
   /**
+   * Check if the active AI provider supports image (multi-modal) inputs.
+   */
+  async supportsImages(): Promise<boolean> {
+    const providerConfig = await this.providerFactory.getActiveProvider();
+    if (!providerConfig) return false;
+    return this.providerFactory.supportsImages(providerConfig);
+  }
+
+  /**
    * Generate embeddings for a text input.
-   * Uses the dedicated embedding provider if configured, otherwise falls back to the active chat provider.
    */
   async generateEmbedding(text: string): Promise<number[]> {
     const providerConfig = await this.aiConfigService.getEmbeddingProvider();

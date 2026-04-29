@@ -105,6 +105,21 @@ export class AiChatController {
       }
     }
 
+    // Check if any message contains image content
+    const hasImageContent = messages.some((m) =>
+      Array.isArray(m.content) && m.content.some((p) => typeof p === 'object' && p !== null && 'image' in p && (p as any).type === 'image'),
+    );
+
+    if (hasImageContent) {
+      const supportsImages = await this.aiService.supportsImages();
+      if (!supportsImages) {
+        throw new HttpException(
+          'The AI model does not support image processing. Please describe your request with text only.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     try {
       // Get tools
       const tools = await this.toolRegistry.getTools({
