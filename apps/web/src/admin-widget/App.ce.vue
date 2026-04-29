@@ -143,7 +143,11 @@ const draftAgentRemarks = ref('')
 // Transfer state
 const showTransferConfirm = ref(false)
 const transferTargetUsername = ref('')
-const adminList = ref<{ username: string; displayName: string }[]>([])
+const adminList = ref<{ id: string; username: string; displayName: string; effectiveOnline: boolean }[]>([])
+
+const transferableAdmins = computed(() =>
+  adminList.value.filter(u => u.effectiveOnline || u.username === currentUserUsername.value)
+)
 
 // Translation state
 const translateLang = ref(getDefaultLang('omnichat_admin_widget_translate_lang'))
@@ -1268,7 +1272,7 @@ watch(showLangPopover, (val) => {
                 class="aw-transfer-select"
               >
                 <option value="">Select...</option>
-                <option v-for="admin in adminList" :key="admin.username" :value="admin.username">
+                <option v-for="admin in transferableAdmins" :key="admin.username" :value="admin.username">
                   @{{ admin.username }}
                 </option>
               </select>
