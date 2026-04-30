@@ -142,6 +142,9 @@ export async function fetchTranslation(
 
   const data = await res.json()
   const translated = data.translatedText
+  if (!translated) {
+    throw new Error('Translation returned empty result')
+  }
 
   await setCachedTranslation(text, targetLanguage, translated)
   return translated

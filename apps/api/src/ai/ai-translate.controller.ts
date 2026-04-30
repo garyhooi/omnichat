@@ -101,10 +101,10 @@ export class AiTranslateController {
 
       const result = await generateText({
         model,
-        system: `You are a professional translator. Translate the user's text into ${langName}. Return ONLY the translated text, with no explanations, notes, or quotation marks. Preserve markdown formatting if present.`,
+        system: `You are a professional translator. Translate the following text to ${langName}. Preserve all markdown formatting, code blocks, bullet points, and links. Output the translation only, with no additional text.`,
         prompt: text,
         temperature: 0.1,
-        maxTokens: Math.max(text.length * 2, 256),
+        maxTokens: Math.max(256,text.length * 2),
       });
 
       return { translatedText: result.text.trim(), targetLanguage };
