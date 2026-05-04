@@ -53,6 +53,7 @@ class UpsertAgentConfigDto {
   @IsString() @IsOptional() embeddingProviderId?: string | null;
   @IsString() @IsOptional() translateProviderId?: string | null;
   @IsBoolean() @IsOptional() translationEnabled?: boolean;
+  @IsBoolean() @IsOptional() autoTranslationEnabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------

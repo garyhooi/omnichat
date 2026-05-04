@@ -267,6 +267,13 @@ async function toggleTranslation(msg: Message) {
   }
 }
 
+function autoTranslateMessage(msg: Message) {
+  if (aiStore.agentConfig?.autoTranslationEnabled === false) return
+  if (!msg.content || msg.messageType === 'image') return
+  if (translatedMessages.value[msg.id] || translatingMessageIds.value.has(msg.id)) return
+  toggleTranslation(msg)
+}
+
 function playSound() {
   if (isMuted.value) return
 
@@ -414,6 +421,9 @@ function connect() {
             messageId: data.message.id,
             conversationId: activeConversationId.value,
           })
+        }
+        if (data.message.senderType === 'visitor') {
+          autoTranslateMessage(data.message)
         }
       })
     }

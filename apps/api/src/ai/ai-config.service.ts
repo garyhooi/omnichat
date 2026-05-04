@@ -182,6 +182,7 @@ export class AiConfigService {
     embeddingProviderId?: string | null;
     translateProviderId?: string | null;
     translationEnabled?: boolean;
+    autoTranslationEnabled?: boolean;
   }) {
     const existing = await this.prisma.aiAgentConfig.findFirst();
 

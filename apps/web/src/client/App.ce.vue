@@ -54,6 +54,7 @@ const aiStreamingText = ref('')
 const isAiStreaming = ref(false)
 const isAiEnabled = ref(false)
 const isTranslationEnabled = ref(true)
+const autoTranslationEnabled = ref(true)
 
 // Throttled scroll for AI streaming to prevent UI freeze
 let _scrollRafId: number | null = null
@@ -174,6 +175,13 @@ async function toggleTranslation(msg: Message) {
     next.delete(msg.id)
     translatingMessageIds.value = next
   }
+}
+
+function autoTranslateMessage(msg: Message) {
+  if (!autoTranslationEnabled.value) return
+  if (!msg.content || msg.messageType === 'image') return
+  if (translatedMessages.value[msg.id] || translatingMessageIds.value.has(msg.id)) return
+  toggleTranslation(msg)
 }
 
 const audioPlayer = new Audio()
@@ -587,6 +595,9 @@ function connect() {
             messageId: data.message.id,
             conversationId: conversationId.value
           })
+        }
+        if (data.message.senderType === 'agent' || data.message.senderType === 'ai') {
+          autoTranslateMessage(data.message)
         }
       })
     }
@@ -1019,6 +1030,7 @@ onMounted(() => {
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
+    if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
 
       initializeWidgetPosition(siteWebsitePosition.value)
     })

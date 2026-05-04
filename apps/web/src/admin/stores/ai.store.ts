@@ -30,6 +30,7 @@ interface AiAgentConfig {
   embeddingProviderId: string | null
   translateProviderId: string | null
   translationEnabled: boolean
+  autoTranslationEnabled: boolean
 }
 
 interface KnowledgeDocument {

@@ -155,6 +155,7 @@ const showLangPopover = ref(false)
 const translatingMessageIds = ref<Set<string>>(new Set())
 const translatedMessages = ref<Record<string, string>>({})
 const isTranslationEnabled = ref(true)
+const autoTranslationEnabled = ref(true)
 
 // ---------------------------------------------------------------------------
 // Computed
@@ -619,6 +620,9 @@ function connect() {
             conversationId: activeConversationId.value,
           })
         }
+        if (data.message.senderType === 'visitor') {
+          autoTranslateMessage(data.message)
+        }
       })
     }
     const conv = conversations.value.find((c) => c.id === data.message.conversationId)
@@ -1041,6 +1045,13 @@ async function toggleTranslation(msg: Message) {
   }
 }
 
+function autoTranslateMessage(msg: Message) {
+  if (!autoTranslationEnabled.value) return
+  if (!msg.content || msg.messageType === 'image') return
+  if (translatedMessages.value[msg.id] || translatingMessageIds.value.has(msg.id)) return
+  toggleTranslation(msg)
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
@@ -1058,6 +1069,7 @@ onMounted(() => {
       if (config.bubbleIcon) siteBubbleIcon.value = config.bubbleIcon
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
+      if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
     })
     .catch(() => {
       // Config endpoint is optional — widget still works with defaults

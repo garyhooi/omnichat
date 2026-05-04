@@ -58,6 +58,7 @@ const configForm = ref({
   embeddingProviderId: null as string | null,
   translateProviderId: null as string | null,
   translationEnabled: true,
+  autoTranslationEnabled: true,
 })
 
 const providerTypes = [
@@ -392,6 +393,22 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="configForm.translationEnabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Auto AI Translation Toggle -->
+        <div v-if="configForm.translationEnabled" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-medium text-gray-700">Auto AI Translation</h3>
+              <p class="text-xs text-gray-400 mt-0.5">
+                {{ configForm.autoTranslationEnabled ? 'Incoming messages are automatically translated' : 'Users must manually click the translate button' }}
+              </p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="configForm.autoTranslationEnabled" class="sr-only peer">
               <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
             </label>
           </div>
