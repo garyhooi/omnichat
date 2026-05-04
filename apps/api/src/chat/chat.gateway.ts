@@ -111,21 +111,8 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Shared PrismaClient for WebSocket CORS checks (static context).
-// Reuses a single instance to prevent connection pool leaks.
-// ---------------------------------------------------------------------------
 import { SiteConfigService } from '../config/site-config.service';
 import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
-
-let _sharedPrisma: any = null;
-function getSharedPrisma() {
-  if (!_sharedPrisma) {
-    const { PrismaClient } = require('@prisma/client');
-    _sharedPrisma = new PrismaClient();
-  }
-  return _sharedPrisma;
-}
 
 /**
  * Parse a URL origin and compare hostnames safely.
@@ -151,43 +138,7 @@ function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolea
 
 @WebSocketGateway({
   cors: {
-    origin: async (origin: string, callback: (err: Error | null, allow?: boolean | string) => void) => {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // Allow localhost for development
-      if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-        return callback(null, true);
-      }
-
-      try {
-        const prisma = getSharedPrisma();
-        const config = await prisma.siteConfig.findFirst({
-          where: { isActive: true },
-        });
-
-        if (!config || !config.allowedOrigins) {
-          return callback(new Error('CORS not configured in database'));
-        }
-
-        if (config.allowedOrigins === '*') {
-          return callback(null, true);
-        }
-
-        const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
-        const matched = allowed.some((allowedOrigin: string) => isOriginAllowed(origin, allowedOrigin));
-
-        if (matched) {
-          callback(null, origin);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      } catch (err) {
-        callback(new Error('CORS check failed'));
-      }
-    },
+    origin: true,
     credentials: true,
   },
   // Uncomment the following lines for Redis adapter (multi-instance scaling):
@@ -205,6 +156,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   // Rate limiter map: IP/VisitorID -> RateLimitInfo
   private rateLimits = new Map<string, RateLimitInfo>();
 
+  // Active AI stream abort controllers (conversationId -> AbortController)
+  private activeAiStreams = new Map<string, AbortController>();
+
+  // Track which conversation each socket is participating in (socketId -> conversationId)
+  private socketConversations = new Map<string, string>();
+
   // Inactivity Timers
   private inactivityWarnings = new Map<string, NodeJS.Timeout>();
   private inactivityResolves = new Map<string, NodeJS.Timeout>();
@@ -213,6 +170,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   private staleCheckInterval: NodeJS.Timeout | null = null;
   private static readonly STALE_CHECK_INTERVAL_MS = 60_000; // every 60s
   private static readonly STALE_THRESHOLD_MS = 2 * 60_000; // 2 minutes without heartbeat
+
+  // DB-based auto-resolve safety net interval
+  private autoResolveInterval: NodeJS.Timeout | null = null;
+  private static readonly AUTO_RESOLVE_INTERVAL_MS = 60_000; // every 60s
+  private static readonly AUTO_RESOLVE_TIMEOUT_MS = 5 * 60_000; // 5 minutes
 
   constructor(
     private readonly chatService: ChatService,
@@ -258,12 +220,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       ChatGateway.STALE_CHECK_INTERVAL_MS,
     );
     this.logger.log('Heartbeat stale-check started (every 60s, threshold 2min)');
+
+    // Start DB-based auto-resolve safety net
+    this.autoResolveInterval = setInterval(
+      () => this.checkStaleConversations(),
+      ChatGateway.AUTO_RESOLVE_INTERVAL_MS,
+    );
+    this.logger.log('Auto-resolve safety net started (every 60s, timeout 5min)');
   }
 
   onModuleDestroy() {
     if (this.staleCheckInterval) {
       clearInterval(this.staleCheckInterval);
       this.staleCheckInterval = null;
+    }
+    if (this.autoResolveInterval) {
+      clearInterval(this.autoResolveInterval);
+      this.autoResolveInterval = null;
     }
   }
 
@@ -301,6 +274,53 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
     } catch (err) {
       this.logger.error(`Stale-check error: ${err.message}`);
+    }
+  }
+
+  /**
+   * Periodically resolve conversations that have been inactive for too long.
+   * This is a DB-based safety net that works even under memory pressure or
+   * delayed setTimeout from the in-memory inactivity timers.
+   */
+  private async checkStaleConversations() {
+    try {
+      const threshold = new Date(Date.now() - ChatGateway.AUTO_RESOLVE_TIMEOUT_MS);
+      const staleConversations = await this.prisma.conversation.findMany({
+        where: {
+          status: { in: ['active', 'ai'] },
+          updatedAt: { lt: threshold },
+        },
+        select: { id: true },
+      });
+
+      for (const conv of staleConversations) {
+        // Clear any existing in-memory timers for this conversation
+        this.clearInactivityTimer(conv.id);
+        this.activeAiStreams.get(conv.id)?.abort();
+        this.activeAiStreams.delete(conv.id);
+
+        // Resolve via DB
+        const conversation = await this.chatService.resolveConversation(conv.id, 'System (Inactivity)');
+
+        // Notify all clients in the room
+        this.server.to(`conv:${conv.id}`).emit('conversation_resolved', {
+          conversationId: conv.id,
+          resolvedBy: 'System (Inactivity)',
+        });
+
+        // Push a final system message
+        this.server.to(`conv:${conv.id}`).emit('inactivity_warning', {
+          conversationId: conv.id,
+          message: 'Chat was closed due to inactivity.',
+        });
+
+        // Notify agents
+        this.server.to('agents').emit('conversation_updated', { conversation });
+
+        this.logger.log(`[SafetyNet] Conversation ${conv.id} auto-resolved due to inactivity`);
+      }
+    } catch (err) {
+      this.logger.error(`Auto-resolve safety net error: ${err.message}`);
     }
   }
 
@@ -541,6 +561,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
    * disconnect.
    */
   async handleDisconnect(client: AuthenticatedSocket) {
+    // Clean up rate limiter entries for this socket
+    for (const key of this.rateLimits.keys()) {
+      if (key.includes(client.id)) {
+        this.rateLimits.delete(key);
+      }
+    }
+
+    // Clean up socket-conversation mapping and abort any active AI stream
+    const convId = this.socketConversations.get(client.id);
+    if (convId) {
+      this.activeAiStreams.get(convId)?.abort();
+      this.activeAiStreams.delete(convId);
+    }
+    // Remove all entries for this socket (in case of multiple conversations)
+    for (const key of this.socketConversations.keys()) {
+      if (key === client.id) this.socketConversations.delete(key);
+    }
+
     if (client.data.user && !client.data.isVisitor) {
       // Check if this agent has other active sockets
       const agentSockets = await this.server
@@ -654,6 +692,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Join the visitor to the conversation room
     const roomName = `conv:${conversation.id}`;
     client.join(roomName);
+
+    // Track socket-conversation mapping for disconnect cleanup
+    if (client.data.isVisitor) {
+      this.socketConversations.set(client.id, conversation.id);
+    }
 
     // Notify all agents of the new conversation
     this.server.to('agents').emit('new_conversation', { conversation });
@@ -1234,6 +1277,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         this.securityService.resetGlobalFailure();
       };
 
+      // Create abort controller for this stream
+      const abortController = new AbortController();
+      this.activeAiStreams.set(conversationId, abortController);
+
       let result: any;
       try {
         // First attempt: with tools
@@ -1246,11 +1293,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           tools: hasTools ? tools : undefined,
           maxTokens: agentConfig.maxTokensPerResponse,
           temperature: agentConfig.temperature,
+          abortSignal: abortController.signal,
           onFinish,
         });
 
         // Consume stream: emit text deltas to visitor; on errors record to DB
         for await (const part of result.fullStream) {
+          if (abortController.signal.aborted) break;
           if (part.type === 'text-delta') {
             fullText += part.textDelta;
             this.server.to(`conv:${conversationId}`).emit('ai_stream', {
@@ -1270,6 +1319,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             this.logger.error(`AI stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
           }
         }
+        this.activeAiStreams.delete(conversationId);
       } catch (toolError: any) {
         // Retry without tools — some providers don't support tool calling
         // Record tool error and retry without tools
@@ -1286,6 +1336,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         result = await this.aiService.streamChat({
           conversationId,
           messages,
+          abortSignal: abortController.signal,
           systemPrompt: agentConfig.systemPrompt,
           maxTokens: agentConfig.maxTokensPerResponse,
           temperature: agentConfig.temperature,
@@ -1294,6 +1345,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
         // Consume retry stream and emit text deltas
         for await (const part of result.fullStream) {
+          if (abortController.signal.aborted) break;
           if (part.type === 'text-delta') {
             fullText += part.textDelta;
             this.server.to(`conv:${conversationId}`).emit('ai_stream', {
@@ -1312,6 +1364,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
           }
         }
+        this.activeAiStreams.delete(conversationId);
       }
 
       // Stop typing indicator
@@ -1403,6 +1456,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           isComplete: true,
           fullText,
         });
+
+        // Reset inactivity timer — AI response counts as activity
+        this.resetInactivityTimer(conversationId);
       } else {
         await this.aiLogService.createLog({
           conversationId,
@@ -1429,6 +1485,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         });
         this.server.to(`conv:${conversationId}`).emit('new_message', { message: emptyMsg });
       }
+
+      // Reset inactivity timer on empty response too (the system message counts as activity)
+      this.resetInactivityTimer(conversationId);
 
     } catch (error: any) {
       await this.aiLogService.createLog({
@@ -1457,6 +1516,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         messageType: 'text',
       });
       this.server.to(`conv:${conversationId}`).emit('new_message', { message: errorMsg });
+
+      // Reset inactivity timer — error response counts as activity
+      this.resetInactivityTimer(conversationId);
 
       // Record failure and check for handoff
       const failureResult = await this.handoffService.recordAiFailure(conversationId);

@@ -11,6 +11,7 @@ export interface AiChatOptions {
   tools?: Record<string, any>;
   maxTokens?: number;
   temperature?: number;
+  abortSignal?: AbortSignal;
   onFinish?: (result: { text: string; usage: { totalTokens: number } }) => void;
 }
 
@@ -63,6 +64,7 @@ export class AiService {
       tools: options.tools,
       maxTokens: options.maxTokens,
       temperature: options.temperature,
+      abortSignal: options.abortSignal,
       maxSteps: 3, // Allow up to 3 tool call rounds
       onFinish: options.onFinish ? (event) => {
         options.onFinish!({

@@ -131,10 +131,15 @@ export class AiChatController {
         },
       });
 
+      // Create abort controller for client disconnect
+      const abortController = new AbortController();
+      req.on('close', () => abortController.abort());
+
       // Stream AI response
       const result = await this.aiService.streamChat({
         conversationId,
         messages,
+        abortSignal: abortController.signal,
         systemPrompt: agentConfig.systemPrompt,
         tools,
         maxTokens: agentConfig.maxTokensPerResponse,
@@ -168,6 +173,7 @@ export class AiChatController {
       
       try {
         while (true) {
+          if (abortController.signal.aborted) break;
           const { done, value } = await reader.read();
           if (done) break;
           res.write(decoder.decode(value, { stream: true }));

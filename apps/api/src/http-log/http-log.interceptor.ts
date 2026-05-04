@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Logger,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -66,7 +67,15 @@ function truncateResponse(body: any): string | undefined {
 
 @Injectable()
 export class HttpLogInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(HttpLogInterceptor.name);
+
+  private sequentialLogPromise = Promise.resolve();
+
   constructor(private readonly httpLogService: HttpLogService) {}
+
+  private enqueueLog(logFn: () => Promise<void>): void {
+    this.sequentialLogPromise = this.sequentialLogPromise.then(() => logFn());
+  }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const ctx = context.switchToHttp();
@@ -83,7 +92,8 @@ export class HttpLogInterceptor implements NestInterceptor {
           const res = ctx.getResponse();
           const duration = Date.now() - start;
 
-          this.httpLogService.createLog({
+          // Capture data before async call to release responseBody reference
+          const logData = {
             method: req.method,
             url: req.originalUrl || req.url,
             statusCode: res.statusCode,
@@ -98,13 +108,19 @@ export class HttpLogInterceptor implements NestInterceptor {
               ? parseInt(res.getHeader('content-length'), 10)
               : undefined,
             duration,
-          });
+          };
+
+          this.enqueueLog(() =>
+            this.httpLogService.createLog(logData).catch((err) => {
+              this.logger.error(`Failed to write HTTP log: ${err.message}`);
+            }),
+          );
         },
         error: (err) => {
           const res = ctx.getResponse();
           const duration = Date.now() - start;
 
-          this.httpLogService.createLog({
+          const logData = {
             method: req.method,
             url: req.originalUrl || req.url,
             statusCode: err.status || err.statusCode || 500,
@@ -119,7 +135,13 @@ export class HttpLogInterceptor implements NestInterceptor {
               statusCode: err.status || err.statusCode || 500,
             }),
             duration,
-          });
+          };
+
+          this.enqueueLog(() =>
+            this.httpLogService.createLog(logData).catch((err) => {
+              this.logger.error(`Failed to write HTTP log: ${err.message}`);
+            }),
+          );
         },
       }),
     );

@@ -45,12 +45,15 @@ export class AuthService {
       parallelism: 4,
     });
 
+    const userCount = await this.prisma.adminUser.count();
+    const role = userCount === 0 ? 'admin' : 'agent';
+
     const user = await this.prisma.adminUser.create({
       data: {
         username,
         passwordHash,
         displayName,
-        role: 'agent',
+        role,
         registrationIp: ip,
         userAgent,
       },

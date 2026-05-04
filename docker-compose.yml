@@ -10,9 +10,11 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATABASE_URL=file:./dev.db
+      - NODE_OPTIONS=--max-old-space-size=1024
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
       - ./apps/api/prisma/dev.db:/app/apps/api/prisma/dev.db
+    mem_limit: 1536m
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001"]
