@@ -7,6 +7,7 @@ import { AiChatController } from './ai-chat.controller';
 import { HandoffService } from './handoff.service';
 import { AiSecurityService } from './ai-security.service';
 import { ToolRegistry } from './tools/tool-registry';
+import { AiTranslateController } from './ai-translate.controller';
 import { AiLogService } from './ai-log.service';
 import { SessionStateModule } from '../session-state/session-state.module';
 import { AppConfigModule } from '../config/config.module';
@@ -22,7 +23,7 @@ import { AppConfigModule } from '../config/config.module';
     ToolRegistry,
     AiLogService,
   ],
-  controllers: [AiConfigController, AiChatController],
+  controllers: [AiConfigController, AiChatController, AiTranslateController],
   exports: [
     AiService,
     AiConfigService,

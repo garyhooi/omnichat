@@ -45,7 +45,6 @@ export class AdminController {
    */
   @Get('users')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
   async getUsers(
     @Query('search') search?: string,
     @Query('role') role?: string,

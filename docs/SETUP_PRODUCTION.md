@@ -78,11 +78,15 @@ bun run build:client
 
 # Build the admin dashboard
 bun run build:admin
+
+# Build the admin floating widget (for backoffice embed)
+bun run build:admin-widget
 ```
 
-This will output two files in the `apps/web/dist` directory:
+This will output three files in the `apps/web/dist` directory:
 - `omnichat-widget.js`
 - `omnichat-admin.js`
+- `omnichat-admin-widget.js`
 
 ### 2. Host the Static Files
 You need to host these `.js` files so they are publicly accessible via a URL. You **do not** need to manually copy them into your host application's (like Blazor's) `wwwroot` anymore.
@@ -95,6 +99,7 @@ You can host them on:
 Once hosted, you will have URLs like:
 - `https://cdn.your-domain.com/js/omnichat-widget.js`
 - `https://cdn.your-domain.com/js/omnichat-admin.js`
+- `https://cdn.your-domain.com/js/omnichat-admin-widget.js`
 
 ---
 
@@ -131,6 +136,27 @@ Create an admin page in your application (like we did in Blazor) and add this sn
     token="YOUR_JWT_TOKEN_HERE"
 ></omnichat-admin>
 ```
+
+### Integrating the Admin Floating Widget (For Agent Backoffice)
+Add this snippet to the root layout of your backoffice/agent dashboard. The floating bubble stays accessible no matter which page the agent navigates to:
+
+```html
+<!-- 1. Load the admin widget script from your CDN/Host -->
+<script src="https://cdn.your-domain.com/js/omnichat-admin-widget.js" defer></script>
+
+<!-- 2. Add the custom element to the root layout -->
+<!-- Note: Set the token attribute dynamically after the agent logs in -->
+<omnichat-admin-widget
+    server-url="https://api.your-domain.com"
+    token="YOUR_AGENT_JWT_TOKEN"
+></omnichat-admin-widget>
+```
+
+The widget provides:
+- A draggable floating bubble with unread message count
+- A resizable conversation panel with Active/Specialist tabs
+- Conversation details, specialist transfers, and AI translation
+- Automatically inherits bubble styling from your Widget Setup settings
 
 ### Why this is better:
 - **Decoupled:** Your main website (Blazor, etc.) does not need to store, build, or care about the OmniChat codebase.

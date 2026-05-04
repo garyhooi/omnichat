@@ -16,9 +16,12 @@ export class MemoryStateStore implements SessionStateStore {
   private readonly store = new Map<string, MemoryEntry>();
   private cleanupInterval: NodeJS.Timeout;
 
+  private static readonly MAX_ENTRIES = 10_000;
+  private static readonly CLEANUP_INTERVAL_MS = 30_000;
+
   constructor() {
-    // Clean expired entries every 60 seconds
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+    // Clean expired entries every 30 seconds
+    this.cleanupInterval = setInterval(() => this.cleanup(), MemoryStateStore.CLEANUP_INTERVAL_MS);
     this.logger.log('Using in-memory session state store (Redis not configured)');
   }
 
@@ -29,6 +32,24 @@ export class MemoryStateStore implements SessionStateStore {
         this.store.delete(key);
       }
     }
+  }
+
+  private evictIfNeeded() {
+    if (this.store.size < MemoryStateStore.MAX_ENTRIES) return;
+    // Evict oldest expired entry first, then the oldest entry overall
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, entry] of this.store) {
+      if (entry.expiresAt && entry.expiresAt < Date.now()) {
+        this.store.delete(key);
+        return;
+      }
+      if (!entry.expiresAt || entry.expiresAt < oldestTime) {
+        oldestKey = key;
+        oldestTime = entry.expiresAt ?? Infinity;
+      }
+    }
+    if (oldestKey) this.store.delete(oldestKey);
   }
 
   private getEntry(key: string): MemoryEntry | null {
@@ -46,6 +67,10 @@ export class MemoryStateStore implements SessionStateStore {
   }
 
   async set(key: string, value: number, ttlSeconds?: number): Promise<void> {
+    if (!ttlSeconds) {
+      this.logger.warn(`Entry "${key}" set without TTL — will persist until eviction`);
+    }
+    this.evictIfNeeded();
     this.store.set(key, {
       value,
       expiresAt: ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined,
@@ -53,12 +78,16 @@ export class MemoryStateStore implements SessionStateStore {
   }
 
   async increment(key: string, ttlSeconds?: number): Promise<number> {
+    this.evictIfNeeded();
     const existing = this.getEntry(key);
     const newVal = (existing?.value ?? 0) + 1;
     this.store.set(key, {
       value: newVal,
       expiresAt: existing?.expiresAt ?? (ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined),
     });
+    if (existing?.expiresAt === undefined && ttlSeconds === undefined) {
+      this.logger.warn(`Entry "${key}" incremented without TTL — will persist until eviction`);
+    }
     return newVal;
   }
 

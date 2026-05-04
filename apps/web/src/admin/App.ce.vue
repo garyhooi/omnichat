@@ -80,7 +80,11 @@ const settingsError = ref('')
 const showResolveConfirm = ref(false)
 const showTransferConfirm = ref(false)
 const transferTargetUsername = ref('')
-const adminList = ref<{ username: string, displayName: string }[]>([])
+const adminList = ref<{ id: string, username: string, displayName: string, effectiveOnline: boolean }[]>([])
+
+const transferableAdmins = computed(() =>
+  adminList.value.filter(u => u.effectiveOnline || u.username === currentUserUsername.value)
+)
 
 async function loadAdminList() {
   try {
@@ -806,7 +810,9 @@ function formatTicketId(id: string | null): string {
 
 function formatTime(dateStr: string) {
   const date = new Date(dateStr)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const datePart = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return `${datePart} ${time}`
 }
 
 function getVisitorLabel(conv: Conversation) {
@@ -1320,7 +1326,7 @@ onUnmounted(() => {
               <template v-if="showTransferConfirm">
                 <select v-model="transferTargetUsername" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 6px; font-size: 13px;">
                   <option value="">Select Specialist</option>
-                  <option v-for="admin in adminList" :key="admin.username" :value="admin.username">
+                  <option v-for="admin in transferableAdmins" :key="admin.username" :value="admin.username">
                     {{ admin.displayName }} (@{{ admin.username }})
                   </option>
                 </select>

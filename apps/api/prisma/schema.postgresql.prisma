@@ -173,6 +173,9 @@ model AiAgentConfig {
   aiRateLimitPerMinute   Int      @default(10)
   spamIpBlacklistMinutes Int      @default(15)
   embeddingProviderId    String?  // ID of the provider to use for embeddings (null = use active chat provider)
+  translateProviderId    String?  // ID of the provider to use for translation (null = use active chat provider)
+  translationEnabled     Boolean  @default(true) // toggle translation feature on/off globally
+  autoTranslationEnabled Boolean  @default(true) // auto-translate incoming messages
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }

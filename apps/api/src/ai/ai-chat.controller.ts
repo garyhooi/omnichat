@@ -105,6 +105,21 @@ export class AiChatController {
       }
     }
 
+    // Check if any message contains image content
+    const hasImageContent = messages.some((m) =>
+      Array.isArray(m.content) && m.content.some((p) => typeof p === 'object' && p !== null && 'image' in p && (p as any).type === 'image'),
+    );
+
+    if (hasImageContent) {
+      const supportsImages = await this.aiService.supportsImages();
+      if (!supportsImages) {
+        throw new HttpException(
+          'The AI model does not support image processing. Please describe your request with text only.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
     try {
       // Get tools
       const tools = await this.toolRegistry.getTools({
@@ -116,10 +131,15 @@ export class AiChatController {
         },
       });
 
+      // Create abort controller for client disconnect
+      const abortController = new AbortController();
+      req.on('close', () => abortController.abort());
+
       // Stream AI response
       const result = await this.aiService.streamChat({
         conversationId,
         messages,
+        abortSignal: abortController.signal,
         systemPrompt: agentConfig.systemPrompt,
         tools,
         maxTokens: agentConfig.maxTokensPerResponse,
@@ -153,6 +173,7 @@ export class AiChatController {
       
       try {
         while (true) {
+          if (abortController.signal.aborted) break;
           const { done, value } = await reader.read();
           if (done) break;
           res.write(decoder.decode(value, { stream: true }));

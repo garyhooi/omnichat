@@ -28,6 +28,9 @@ interface AiAgentConfig {
   aiRateLimitPerMinute: number
   spamIpBlacklistMinutes: number
   embeddingProviderId: string | null
+  translateProviderId: string | null
+  translationEnabled: boolean
+  autoTranslationEnabled: boolean
 }
 
 interface KnowledgeDocument {

@@ -158,6 +158,8 @@ export class SiteConfigController {
 
     // Check if AI is enabled: an AiAgentConfig with an active provider must exist
     let aiEnabled = false;
+    let translationEnabled = false;
+    let autoTranslationEnabled = true;
     try {
       const agentConfig = await this.prisma.aiAgentConfig.findFirst();
       if (agentConfig?.enabled) {
@@ -166,12 +168,14 @@ export class SiteConfigController {
         });
         aiEnabled = !!provider;
       }
+      translationEnabled = agentConfig?.translationEnabled !== false;
+      autoTranslationEnabled = agentConfig?.autoTranslationEnabled !== false;
     } catch {
       // AI tables may not exist yet — that's fine, aiEnabled stays false
     }
 
     const { allowedOrigins, adminAllowedIps, ...publicConfig } = config as any;
-    return { ...publicConfig, aiEnabled };
+    return { ...publicConfig, aiEnabled, translationEnabled, autoTranslationEnabled };
   }
 
   @Get('admin-active')
