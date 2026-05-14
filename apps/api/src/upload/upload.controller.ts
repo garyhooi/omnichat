@@ -138,6 +138,12 @@ export class UploadController {
       
       // Convert HEIC/HEIF to JPEG first if needed
       if (file.mimetype.includes('heic') || file.mimetype.includes('heif')) {
+        const tempFiles: string[] = [];
+        const cleanup = async () => {
+          for (const f of tempFiles) {
+            try { await fs.unlink(f); } catch { /* best-effort */ }
+          }
+        };
         try {
           // Try multiple conversion methods - prioritize ImageMagick for Docker environment
           let jpegBuffer: Buffer | null = null;
@@ -146,6 +152,7 @@ export class UploadController {
           try {
             const tempPath = `/tmp/${randomUUID()}.heic`;
             const outputPath = `/tmp/${randomUUID()}.jpg`;
+            tempFiles.push(tempPath, outputPath);
             
             await fs.writeFile(tempPath, file.buffer);
             
@@ -153,22 +160,19 @@ export class UploadController {
               // Use ImageMagick to convert HEIC to JPEG
               await execPromise(`convert "${tempPath}" "${outputPath}"`);
               jpegBuffer = await fs.readFile(outputPath);
-              await fs.unlink(tempPath);
-              await fs.unlink(outputPath);
               console.log('HEIC conversion successful using ImageMagick');
             } catch (magickError) {
               console.error('ImageMagick conversion failed, trying macOS sips');
-              // Clean up temp files
-              try {
-                await fs.unlink(tempPath);
-              } catch (e) {}
               throw magickError;
             }
+            await cleanup();
           } catch (magickError) {
+            await cleanup();
             // Method 2: Try macOS sips command (fallback for local development)
             try {
               const tempPath = `/tmp/${randomUUID()}.heic`;
               const outputPath = `/tmp/${randomUUID()}.jpg`;
+              tempFiles.push(tempPath, outputPath);
               
               await fs.writeFile(tempPath, file.buffer);
               
@@ -176,30 +180,27 @@ export class UploadController {
                 // Use macOS sips to convert
                 await execPromise(`sips -s format jpeg "${tempPath}" --out "${outputPath}"`);
                 jpegBuffer = await fs.readFile(outputPath);
-                await fs.unlink(tempPath);
-                await fs.unlink(outputPath);
                 console.log('HEIC conversion successful using macOS sips');
               } catch (sipsError) {
                 console.error('macOS sips conversion failed');
-                // Clean up temp files
-                try {
-                  await fs.unlink(tempPath);
-                } catch (e) {}
                 throw sipsError;
               }
+              await cleanup();
             } catch (sipsError) {
+              await cleanup();
               // Method 3: Try Sharp directly (last resort)
               try {
                 const tempPath = `/tmp/${randomUUID()}.jpg`;
+                tempFiles.push(tempPath);
                 const tempImage = sharp(file.buffer);
                 await tempImage.toFile(tempPath);
                 jpegBuffer = await fs.readFile(tempPath);
-                await fs.unlink(tempPath);
                 console.log('HEIC conversion successful using Sharp');
               } catch (sharpError) {
                 console.error('Sharp conversion failed');
                 throw new Error('All HEIC conversion methods failed. Please ensure ImageMagick is installed.');
               }
+              await cleanup();
             }
           }
           
@@ -209,6 +210,7 @@ export class UploadController {
           
           imageBuffer = jpegBuffer;
         } catch (heicError) {
+          await cleanup();
           console.error('HEIC conversion failed:', heicError);
           throw new BadRequestException('HEIC file conversion failed. Please try a different format.');
         }

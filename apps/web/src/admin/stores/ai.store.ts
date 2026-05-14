@@ -33,6 +33,21 @@ interface AiAgentConfig {
   autoTranslationEnabled: boolean
 }
 
+interface ToolRegistration {
+  id: string
+  name: string
+  description: string
+  parametersSchema: string
+  handlerType: string
+  endpoint: string | null
+  authType: string | null
+  authConfig: string | null
+  isActive: boolean
+  requiredPermission: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 interface KnowledgeDocument {
   id: string
   title: string
@@ -50,6 +65,7 @@ export const useAiStore = defineStore('ai', () => {
   const providers = ref<AiProvider[]>([])
   const agentConfig = ref<AiAgentConfig | null>(null)
   const documents = ref<KnowledgeDocument[]>([])
+  const tools = ref<ToolRegistration[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -181,10 +197,54 @@ export const useAiStore = defineStore('ai', () => {
     })
   }
 
+  // --- Tool Registration ---
+  async function loadTools() {
+    try {
+      tools.value = await fetchApi('/ai/config/tools')
+    } catch (e: any) {
+      error.value = e.message
+    }
+  }
+
+  async function createTool(data: {
+    name: string
+    description: string
+    parametersSchema: Record<string, any>
+    handlerType?: string
+    endpoint?: string
+    authType?: string
+    authConfig?: Record<string, any>
+  }) {
+    const result = await fetchApi('/ai/config/tools', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    await loadTools()
+    return result
+  }
+
+  async function updateTool(id: string, data: Partial<ToolRegistration>) {
+    const payload: any = { ...data }
+    delete payload.id
+    delete payload.createdAt
+    delete payload.updatedAt
+    await fetchApi(`/ai/config/tools/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+    await loadTools()
+  }
+
+  async function deleteTool(id: string) {
+    await fetchApi(`/ai/config/tools/${id}`, { method: 'DELETE' })
+    await loadTools()
+  }
+
   return {
-    providers, agentConfig, documents, loading, error,
+    providers, agentConfig, documents, tools, loading, error,
     loadProviders, createProvider, updateProvider, deleteProvider, testProvider,
     loadAgentConfig, saveAgentConfig,
     loadDocuments, uploadDocument, deleteDocument, searchKnowledge,
+    loadTools, createTool, updateTool, deleteTool,
   }
 })

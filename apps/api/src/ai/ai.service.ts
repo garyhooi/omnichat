@@ -52,8 +52,8 @@ export class AiService {
       throw new Error('No active AI provider configured');
     }
 
-    // Minimal log for stream start
-    this.logger.debug(`streamChat using provider ${providerConfig.providerType}`);
+    const toolCount = options.tools ? Object.keys(options.tools).length : 0;
+    this.logger.log(`streamChat using provider ${providerConfig.providerType} | tools=${toolCount} | toolNames=${options.tools ? Object.keys(options.tools).join(',') : 'none'}`);
 
     const model = this.providerFactory.createLanguageModel(providerConfig);
 

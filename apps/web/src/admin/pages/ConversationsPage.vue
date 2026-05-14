@@ -364,6 +364,7 @@ function connect() {
     if (data.conversation.status !== 'ai') playSound()
     const newConv = { ...data.conversation, unreadCount: data.conversation._count?.messages || 0 }
     conversations.value.unshift(newConv)
+    capConversations()
   })
 
   s.on('conversation_history', (data: { conversation: Conversation }) => {
@@ -388,6 +389,7 @@ function connect() {
         content: data.message,
         createdAt: new Date().toISOString(),
       })
+      capMessages()
       nextTick(() => scrollToBottom())
     }
     const conv = conversations.value.find((c) => c.id === data.conversationId)
@@ -414,6 +416,7 @@ function connect() {
     if (data.message.senderType === 'visitor' && msgConv?.status !== 'ai') playSound()
     if (data.message.conversationId === activeConversationId.value) {
       messages.value.push(data.message)
+      capMessages()
       nextTick(() => {
         scrollToBottom()
         if (data.message.senderType === 'visitor') {
@@ -516,6 +519,24 @@ function connect() {
   })
 
   socket.value = s
+}
+
+// ---------------------------------------------------------------------------
+// Memory management
+// ---------------------------------------------------------------------------
+const MAX_MESSAGES = 200
+const MAX_CONVERSATIONS = 100
+
+function capMessages(): void {
+  if (messages.value.length > MAX_MESSAGES) {
+    messages.value.splice(0, messages.value.length - MAX_MESSAGES)
+  }
+}
+
+function capConversations(): void {
+  if (conversations.value.length > MAX_CONVERSATIONS) {
+    conversations.value.splice(MAX_CONVERSATIONS)
+  }
 }
 
 // ---------------------------------------------------------------------------

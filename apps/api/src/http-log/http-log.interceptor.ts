@@ -69,12 +69,34 @@ function truncateResponse(body: any): string | undefined {
 export class HttpLogInterceptor implements NestInterceptor {
   private readonly logger = new Logger(HttpLogInterceptor.name);
 
-  private sequentialLogPromise = Promise.resolve();
+  private static readonly MAX_QUEUE_SIZE = 100;
+  private logQueue: Array<() => Promise<void>> = [];
+  private processing = false;
 
   constructor(private readonly httpLogService: HttpLogService) {}
 
   private enqueueLog(logFn: () => Promise<void>): void {
-    this.sequentialLogPromise = this.sequentialLogPromise.then(() => logFn());
+    if (this.logQueue.length >= HttpLogInterceptor.MAX_QUEUE_SIZE) {
+      this.logger.warn('Log queue full, dropping oldest entry');
+      this.logQueue.shift();
+    }
+    this.logQueue.push(logFn);
+    this.processQueue();
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processing) return;
+    this.processing = true;
+    while (this.logQueue.length > 0) {
+      const fn = this.logQueue[0];
+      try {
+        await fn();
+      } catch (err) {
+        this.logger.error(`Failed to write HTTP log: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      this.logQueue.shift();
+    }
+    this.processing = false;
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {

@@ -18,7 +18,7 @@ const props = defineProps({
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
   position: { type: String, default: 'bottom-right' },
-  assignUsername: { type: String, default: '' },
+  externalAuthToken: { type: String, default: '' },
 })
 
 // ---------------------------------------------------------------------------
@@ -522,6 +522,12 @@ function connect() {
 
   s.on('connect', () => {
     console.log('[OmniChat Widget] Connected')
+    // Rejoin existing conversation from local storage on reconnect
+    const existingConvId = localStorage.getItem('omnichat_conversation_id')
+    if (existingConvId) {
+      conversationId.value = existingConvId
+      s.emit('join_conversation', { conversationId: existingConvId })
+    }
   })
 
   s.on('upload_token', (data: { token: string }) => {
@@ -563,6 +569,7 @@ function connect() {
         content: data.message,
         createdAt: new Date().toISOString()
       })
+      capMessages()
       nextTick(() => scrollToBottom())
     }
   })
@@ -582,6 +589,7 @@ function connect() {
         // The persisted message replaces the streaming bubble
       }
       messages.value.push(data.message)
+      capMessages()
       if (data.message.senderType === 'agent' || data.message.senderType === 'ai') playSound()
       
       if (!isOpen.value && (data.message.senderType === 'agent' || data.message.senderType === 'ai')) {
@@ -646,20 +654,19 @@ function connect() {
   })
 
   socket.value = s
-
-  // Attempt to rejoin existing conversation from local storage
-  const existingConvId = localStorage.getItem('omnichat_conversation_id')
-  if (existingConvId) {
-    conversationId.value = existingConvId
-    s.on('connect', () => {
-      s.emit('join_conversation', { conversationId: existingConvId })
-    })
-  }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+const MAX_MESSAGES = 200
+
+function capMessages(): void {
+  if (messages.value.length > MAX_MESSAGES) {
+    messages.value.splice(0, messages.value.length - MAX_MESSAGES)
+  }
+}
+
 function formatTicketId(id: string | null): string {
   if (!id) return ''
   return id.slice(-8).toUpperCase()
@@ -754,9 +761,9 @@ function startConversation() {
     visitorLanguage: navigator.language,
     visitorScreenRes: `${window.screen.width}x${window.screen.height}`,
     visitorReferrer: document.referrer || null,
-    assignUsername: props.assignUsername,
     metadata: JSON.stringify({
       userAgent: navigator.userAgent,
+      externalAuthToken: props.externalAuthToken || undefined,
     }),
   })
 }

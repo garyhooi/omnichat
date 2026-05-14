@@ -6,14 +6,28 @@ import Redis from 'ioredis';
 export class RedisStateStore implements SessionStateStore, OnModuleDestroy {
   private readonly logger = new Logger(RedisStateStore.name);
   private readonly client: Redis;
+  private reconnectAttempts = 0;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 30;
+  private static readonly RECONNECT_BASE_MS = 200;
+  private static readonly RECONNECT_MAX_MS = 5000;
 
   constructor(redisUrl: string) {
     this.client = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
-      retryStrategy: (times) => Math.min(times * 200, 2000),
+      retryStrategy: (times) => {
+        this.reconnectAttempts = times;
+        if (times > RedisStateStore.MAX_RECONNECT_ATTEMPTS) {
+          this.logger.error(`Redis reconnect failed after ${times} attempts — giving up`);
+          return null; // stop retrying
+        }
+        return Math.min(times * RedisStateStore.RECONNECT_BASE_MS, RedisStateStore.RECONNECT_MAX_MS);
+      },
     });
     this.client.on('error', (err) => this.logger.error(`Redis error: ${err.message}`));
-    this.client.on('connect', () => this.logger.log('Connected to Redis'));
+    this.client.on('connect', () => {
+      this.reconnectAttempts = 0;
+      this.logger.log('Connected to Redis');
+    });
   }
 
   async get(key: string): Promise<number> {

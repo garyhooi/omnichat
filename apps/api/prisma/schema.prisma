@@ -235,6 +235,8 @@ model ToolRegistration {
   parametersSchema   String   // JSON Schema for tool parameters
   handlerType        String   @default("builtin") // builtin, external
   endpoint           String?  // HTTP endpoint for external tools
+  authType           String?  // "none" | "static" | "token-exchange"
+  authConfig         String?  // JSON — { tokenUrl } for token-exchange; { token } for static
   isActive           Boolean  @default(true)
   requiredPermission String?
   createdAt          DateTime @default(now())

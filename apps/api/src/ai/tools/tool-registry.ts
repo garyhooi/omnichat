@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ToolHandler, ToolContext } from './tool.interface';
-import { tool } from 'ai';
+import { ExternalToolAuthService } from './external-tool-auth.service';
+import { tool, jsonSchema } from 'ai';
 import { z } from 'zod';
 
 @Injectable()
@@ -9,7 +10,10 @@ export class ToolRegistry {
   private readonly logger = new Logger(ToolRegistry.name);
   private readonly builtinTools = new Map<string, ToolHandler>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: ExternalToolAuthService,
+  ) {}
 
   /**
    * Register a built-in tool handler.
@@ -17,6 +21,46 @@ export class ToolRegistry {
   registerBuiltin(handler: ToolHandler): void {
     this.builtinTools.set(handler.name, handler);
     this.logger.log(`Registered builtin tool: ${handler.name}`);
+  }
+
+  /**
+   * Convert a ZodObject to a clean JSON Schema (no $schema, no additionalProperties).
+   * Azure/OpenRouter require ALL properties to be listed in required, so optional
+   * properties are included with defaults in `required` when present.
+   */
+  private zodToCleanJsonSchema(zodObj: z.ZodObject<any>): Record<string, any> {
+    const shape = zodObj.shape;
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    for (const [key, field] of Object.entries(shape)) {
+      const zodField = field as z.ZodTypeAny;
+
+      let type = 'string';
+      if (zodField instanceof z.ZodNumber) type = 'number';
+      else if (zodField instanceof z.ZodBoolean) type = 'boolean';
+
+      const prop: Record<string, any> = { type };
+
+      // Unwrap optional/nullable/default wrappers to reach inner type
+      let inner = zodField;
+      while (inner instanceof z.ZodOptional || inner instanceof z.ZodNullable || inner instanceof z.ZodDefault) {
+        if (inner instanceof z.ZodDefault && inner._def.defaultValue !== undefined) {
+          prop.default = typeof inner._def.defaultValue === 'function'
+            ? inner._def.defaultValue()
+            : inner._def.defaultValue;
+        }
+        inner = inner._def.innerType;
+      }
+      if (inner._def.description) {
+        prop.description = inner._def.description;
+      }
+
+      properties[key] = prop;
+      required.push(key);
+    }
+
+    return { type: 'object', properties, required };
   }
 
   /**
@@ -28,9 +72,12 @@ export class ToolRegistry {
 
     // Add built-in tools
     for (const [name, handler] of this.builtinTools) {
+      const cleanSchema = handler.parameters instanceof z.ZodObject
+        ? this.zodToCleanJsonSchema(handler.parameters)
+        : { type: 'object', properties: {} };
       tools[name] = tool({
         description: handler.description,
-        parameters: handler.parameters,
+        parameters: jsonSchema(cleanSchema),
         execute: async (args) => {
           try {
             this.logger.log(`Executing builtin tool: ${name}`);
@@ -44,45 +91,87 @@ export class ToolRegistry {
     }
 
     // Add external tools from database
+    let externalTools: any[] = [];
     try {
-      const externalTools = await this.prisma.toolRegistration.findMany({
+      externalTools = await this.prisma.toolRegistration.findMany({
         where: { isActive: true, handlerType: 'external' },
       });
+    } catch (error: any) {
+      this.logger.error(`Failed to query external tools: ${error.message}`);
+    }
 
-      for (const ext of externalTools) {
+    for (const ext of externalTools) {
+      try {
         const schema = JSON.parse(ext.parametersSchema);
+        const authConfig: Record<string, any> | null = ext.authConfig
+          ? JSON.parse(ext.authConfig)
+          : null;
+        const properties: Record<string, any> = {};
+        for (const [key, def] of Object.entries(schema)) {
+          const prop = def as any;
+          const paramSchema: Record<string, any> = { type: prop.type || 'string' };
+          if (prop.description) paramSchema.description = prop.description;
+          properties[key] = paramSchema;
+        }
+
+        const required = Object.keys(schema);
+
         tools[ext.name] = tool({
           description: ext.description,
-          parameters: z.object(this.jsonSchemaToZod(schema)),
+          parameters: jsonSchema({
+            type: 'object',
+            properties,
+            ...(required.length > 0 ? { required } : {}),
+          }),
           execute: async (args) => {
             try {
               this.logger.log(`Executing external tool: ${ext.name} -> ${ext.endpoint}`);
-              return await this.callExternalTool(ext.endpoint!, args);
+
+              let token: string | null = null;
+              if (authConfig && ext.authType && ext.authType !== 'none') {
+                try {
+                  token = await this.authService.getToken(authConfig, ext.authType, context);
+                } catch (authError: any) {
+                  this.logger.error(`Auth failed for tool ${ext.name}: ${authError.message}`);
+                  return { error: `Authentication failed: ${authError.message}` };
+                }
+              }
+
+              return await this.callExternalTool(ext.endpoint!, token, args);
             } catch (error: any) {
               this.logger.error(`External tool ${ext.name} failed: ${error.message}`);
               return { error: `External tool execution failed: ${error.message}` };
             }
           },
         });
+        this.logger.log(`Loaded external tool: ${ext.name}`);
+      } catch (error: any) {
+        this.logger.error(`Failed to load external tool ${ext.name}: ${error.message}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Failed to load external tools: ${error.message}`);
     }
 
+    this.logger.log(`getTools returning: ${Object.keys(tools).join(', ') || '(none)'}`);
     return tools;
   }
 
   /**
    * Call an external tool via HTTP POST.
    */
-  private async callExternalTool(endpoint: string, args: any): Promise<any> {
+  private async callExternalTool(endpoint: string, token: string | null, args: any): Promise<any> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(args),
         signal: controller.signal,
       });

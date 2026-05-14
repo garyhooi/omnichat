@@ -23,7 +23,6 @@ import { RagService } from '../rag/rag.service';
 import { AiLogService } from '../ai/ai-log.service';
 import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-base.tool';
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
-import { GetBusinessHoursTool } from '../ai/tools/builtin/get-business-hours.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
@@ -67,7 +66,6 @@ interface StartConversationPayload {
   visitorLanguage?: string;
   visitorScreenRes?: string;
   visitorReferrer?: string;
-  assignUsername?: string;
 }
 
 interface ReadMessagePayload {
@@ -171,6 +169,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   private static readonly STALE_CHECK_INTERVAL_MS = 60_000; // every 60s
   private static readonly STALE_THRESHOLD_MS = 2 * 60_000; // 2 minutes without heartbeat
 
+  // Rate limit eviction sweep interval
+  private rateLimitCleanupInterval: NodeJS.Timeout | null = null;
+  private static readonly RATE_LIMIT_CLEANUP_MS = 60_000;
+
   // DB-based auto-resolve safety net interval
   private autoResolveInterval: NodeJS.Timeout | null = null;
   private static readonly AUTO_RESOLVE_INTERVAL_MS = 60_000; // every 60s
@@ -194,7 +196,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Register built-in tools
     this.toolRegistry.registerBuiltin(new SearchKnowledgeBaseTool(this.ragService));
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
-    this.toolRegistry.registerBuiltin(new GetBusinessHoursTool());
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
   }
 
@@ -227,6 +228,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       ChatGateway.AUTO_RESOLVE_INTERVAL_MS,
     );
     this.logger.log('Auto-resolve safety net started (every 60s, timeout 5min)');
+
+    // Start rate limit Map eviction sweep
+    this.rateLimitCleanupInterval = setInterval(
+      () => this.evictStaleRateLimits(),
+      ChatGateway.RATE_LIMIT_CLEANUP_MS,
+    );
+    this.logger.log('Rate limit eviction sweep started (every 60s)');
   }
 
   onModuleDestroy() {
@@ -237,6 +245,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (this.autoResolveInterval) {
       clearInterval(this.autoResolveInterval);
       this.autoResolveInterval = null;
+    }
+    if (this.rateLimitCleanupInterval) {
+      clearInterval(this.rateLimitCleanupInterval);
+      this.rateLimitCleanupInterval = null;
     }
   }
 
@@ -332,12 +344,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const now = Date.now();
     const info = this.rateLimits.get(key);
 
-    if (!info) {
-      this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
-      return false;
-    }
-
-    if (now > info.resetTime) {
+    if (!info || now > info.resetTime) {
       this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
       return false;
     }
@@ -348,6 +355,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     info.count++;
     return false;
+  }
+
+  /**
+   * Periodically evict expired entries from the rateLimits Map
+   * to prevent unbounded memory growth under load.
+   */
+  private evictStaleRateLimits(): void {
+    const now = Date.now();
+    let evicted = 0;
+    for (const [key, info] of this.rateLimits) {
+      if (now > info.resetTime) {
+        this.rateLimits.delete(key);
+        evicted++;
+      }
+    }
+    if (evicted > 0) {
+      this.logger.log(`Evicted ${evicted} stale rate-limit entries (${this.rateLimits.size} remain)`);
+    }
   }
 
   // =========================================================================
@@ -664,6 +689,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
+    // Extract username from externalAuthToken JWT if present
+    let assignedUsername = payload.visitorName || '';
+    if (parsedMetadata.externalAuthToken && !assignedUsername) {
+      try {
+        const token = parsedMetadata.externalAuthToken as string;
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+        assignedUsername = payload.preferred_username || payload.sub || payload.username || '';
+        this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
+      } catch {
+        this.logger.warn('Failed to decode externalAuthToken JWT payload');
+      }
+    }
+
     // Extract IP and User-Agent
     const visitorIp = client.handshake.headers['x-forwarded-for']?.toString().split(',')[0] || client.handshake.address;
     const userAgentString = client.handshake.headers['user-agent'] || '';
@@ -686,7 +724,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       visitorLanguage: payload.visitorLanguage,
       visitorScreenRes: payload.visitorScreenRes,
       visitorReferrer: payload.visitorReferrer,
-      assignedUsername: payload.assignUsername,
+      assignedUsername: assignedUsername || undefined,
     });
 
     // Join the visitor to the conversation room
@@ -1238,15 +1276,55 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         }),
       );
 
+      // Parse metadata for tool context (includes externalAuthToken)
+      let parsedMetadata: Record<string, any> = {};
+      if (conversation.metadata) {
+        try {
+          parsedMetadata = JSON.parse(conversation.metadata);
+        } catch {}
+      }
+
       // Get tools
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId: conversation.visitorId,
+        metadata: parsedMetadata,
         services: {
           prisma: this.prisma,
           siteConfigService: this.siteConfigService,
         },
       });
+
+      // Append tool descriptions to system prompt so the model knows what tools are available
+      const toolNames = Object.keys(tools);
+      let systemPrompt = agentConfig.systemPrompt;
+      if (toolNames.length > 0) {
+        const toolList = toolNames
+          .map((name) => {
+            const t = tools[name];
+            const desc = t.description ? `: ${t.description}` : '';
+            return `- ${name}${desc}`;
+          })
+          .join('\n');
+        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.`;
+      }
+
+      // Auto-inject knowledge base context — the AI sees it even if it doesn't call the tool
+      const lastQuery = lastVisitorMsg?.content;
+      if (lastQuery) {
+        try {
+          const ragResults = await this.ragService.searchKnowledgeBase(lastQuery, 3);
+          if (ragResults.length > 0) {
+            const kbContext = ragResults
+              .map((r) => r.content)
+              .join('\n\n---\n\n');
+            systemPrompt += `\n\nRelevant knowledge base context:\n${kbContext}`;
+            this.logger.log(`Injected ${ragResults.length} KB chunks into system prompt for ${conversationId}`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`KB search failed for context injection: ${err.message}`);
+        }
+      }
 
       // Emit typing indicator
       this.server.to(`conv:${conversationId}`).emit('agent_typing', {
@@ -1289,7 +1367,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         result = await this.aiService.streamChat({
           conversationId,
           messages,
-          systemPrompt: agentConfig.systemPrompt,
+          systemPrompt,
           tools: hasTools ? tools : undefined,
           maxTokens: agentConfig.maxTokensPerResponse,
           temperature: agentConfig.temperature,
@@ -1319,7 +1397,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             this.logger.error(`AI stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
           }
         }
-        this.activeAiStreams.delete(conversationId);
       } catch (toolError: any) {
         // Retry without tools — some providers don't support tool calling
         // Record tool error and retry without tools
@@ -1333,36 +1410,46 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         this.logger.warn(`Streaming with tools failed for ${conversationId}, retrying without tools`);
         fullText = '';
 
-        result = await this.aiService.streamChat({
-          conversationId,
-          messages,
-          abortSignal: abortController.signal,
-          systemPrompt: agentConfig.systemPrompt,
-          maxTokens: agentConfig.maxTokensPerResponse,
-          temperature: agentConfig.temperature,
-          onFinish,
-        });
+        try {
+          result = await this.aiService.streamChat({
+            conversationId,
+            messages,
+            abortSignal: abortController.signal,
+            systemPrompt,
+            maxTokens: agentConfig.maxTokensPerResponse,
+            temperature: agentConfig.temperature,
+            onFinish,
+          });
 
-        // Consume retry stream and emit text deltas
-        for await (const part of result.fullStream) {
-          if (abortController.signal.aborted) break;
-          if (part.type === 'text-delta') {
-            fullText += part.textDelta;
-            this.server.to(`conv:${conversationId}`).emit('ai_stream', {
-              conversationId,
-              token: part.textDelta,
-              isComplete: false,
-            });
-          } else if (part.type === 'error') {
-            await this.aiLogService.createLog({
-              conversationId,
-              providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
-              eventType: 'stream_error_retry',
-              message: part.error?.message || 'stream_error',
-              details: part.error || part,
-            });
-            this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+          // Consume retry stream and emit text deltas
+          for await (const part of result.fullStream) {
+            if (abortController.signal.aborted) break;
+            if (part.type === 'text-delta') {
+              fullText += part.textDelta;
+              this.server.to(`conv:${conversationId}`).emit('ai_stream', {
+                conversationId,
+                token: part.textDelta,
+                isComplete: false,
+              });
+            } else if (part.type === 'error') {
+              await this.aiLogService.createLog({
+                conversationId,
+                providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+                eventType: 'stream_error_retry',
+                message: part.error?.message || 'stream_error',
+                details: part.error || part,
+              });
+              this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+            }
           }
+        } catch (retryError: any) {
+          this.logger.error(`AI retry also failed for ${conversationId}: ${retryError.message}`);
+          // Mark cleanup as already handled since we'll fall through to the finally block
+        }
+      } finally {
+        if (abortController.signal.aborted) {
+          // If aborted externally (disconnect), clean up to release resources
+          this.logger.log(`AI stream aborted for conversation ${conversationId}`);
         }
         this.activeAiStreams.delete(conversationId);
       }

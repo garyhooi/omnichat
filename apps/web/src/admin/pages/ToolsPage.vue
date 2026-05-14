@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useAiStore } from '../stores/ai.store'
+
+const aiStore = useAiStore()
+const deleting = ref<string | null>(null)
 
 const builtinTools = [
   {
@@ -15,18 +19,26 @@ const builtinTools = [
     active: true,
   },
   {
-    name: 'get_business_hours',
-    description: 'Returns configured business hours',
-    type: 'builtin',
-    active: true,
-  },
-  {
     name: 'ip_spam_blacklist',
     description: 'Built-in backend protection that temporarily blacklists IPs when the same IP repeatedly spams the AI across conversations.',
     type: 'builtin',
     active: true,
   },
 ]
+
+onMounted(() => {
+  aiStore.loadTools()
+})
+
+async function deleteTool(id: string) {
+  if (!confirm('Delete this external tool? This cannot be undone.')) return
+  deleting.value = id
+  try {
+    await aiStore.deleteTool(id)
+  } finally {
+    deleting.value = null
+  }
+}
 </script>
 
 <template>
@@ -61,12 +73,31 @@ const builtinTools = [
         Register custom tools that the AI can call. External tools are invoked via HTTP POST to your endpoint.
       </p>
 
-      <div class="bg-gray-50 border-2 border-dashed rounded-lg p-8 text-center">
+      <div v-if="aiStore.tools.length === 0" class="bg-gray-50 border-2 border-dashed rounded-lg p-8 text-center">
         <p class="text-gray-400 mb-2">No external tools registered</p>
         <p class="text-xs text-gray-400">
           External tools can be registered via the API:<br>
           <code class="bg-gray-200 px-1 rounded">POST /ai/config/tools</code>
         </p>
+      </div>
+      <div v-else class="space-y-3">
+        <div v-for="tool in aiStore.tools" :key="tool.id"
+             class="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <div class="flex items-center gap-2">
+              <code class="text-sm font-mono bg-gray-100 px-2 py-0.5 rounded">{{ tool.name }}</code>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">external</span>
+              <span v-if="tool.isActive" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
+              <span v-else class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Inactive</span>
+            </div>
+            <p class="text-sm text-gray-500 mt-1">{{ tool.description }}</p>
+            <p v-if="tool.endpoint" class="text-xs text-gray-400 mt-0.5 font-mono">{{ tool.endpoint }}</p>
+          </div>
+          <button @click="deleteTool(tool.id)" :disabled="deleting === tool.id"
+                  class="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50">
+            {{ deleting === tool.id ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
       </div>
 
       <!-- Developer Guide -->
@@ -82,9 +113,14 @@ const builtinTools = [
     "orderId": { "type": "string", "description": "The order ID" }
   },
   "handlerType": "external",
-  "endpoint": "https://your-api.com/tools/check-order"
+  "endpoint": "https://your-api.com/tools/check-order",
+  "authType": "token-exchange",
+  "authConfig": {
+    "tokenUrl": "https://your-api.com/auth/token"
+  }
 }</pre>
-          <p>Your endpoint will receive a POST with the tool arguments as JSON body and must return a JSON response.</p>
+          <p>Your endpoint will receive a POST with the tool arguments as JSON body and must return a JSON response.
+          Auth types: <code>none</code>, <code>static</code> (static token), <code>token-exchange</code> (exchange external_auth_token for tool-scoped JWT).</p>
         </div>
       </div>
     </div>

@@ -236,6 +236,8 @@ model ToolRegistration {
   parametersSchema   String   @db.Text
   handlerType        String   @default("builtin")
   endpoint           String?
+  authType           String?  // "none" | "static" | "token-exchange"
+  authConfig         String?  // JSON — { tokenUrl } for token-exchange; { token } for static
   isActive           Boolean  @default(true)
   requiredPermission String?
   createdAt          DateTime @default(now())

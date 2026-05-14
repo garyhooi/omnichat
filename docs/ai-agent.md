@@ -5,7 +5,7 @@ OmniChat supports an AI Agent that can automatically handle visitor conversation
 - Greets visitors and answers questions using your knowledge base (RAG)
 - Streams responses token-by-token for a ChatGPT-like experience
 - Automatically triggers handoff to human agents when needed (safety, turn limits, RAG failures)
-- Includes tool support (search_knowledge_base, transfer_to_human, get_business_hours) and a secure tool execution context
+- Includes tool support (search_knowledge_base, transfer_to_human) and a secure tool execution context
 - Protects against prompt injection and abusive inputs via AiSecurityService
 
 Important recent behaviors and configuration additions
@@ -95,13 +95,52 @@ AI responses stream token-by-token to the visitor widget via WebSocket `ai_strea
 
 ## Built-in Tools
 
-The AI agent has access to these tools:
+The AI agent has access to these built-in tools:
 
 | Tool | Purpose |
 |------|---------|
 | `search_knowledge_base` | Searches uploaded documents via RAG |
 | `transfer_to_human` | Explicitly hands off to a human agent |
-| `get_business_hours` | Returns configured support hours |
+
+## External Tools
+
+You can register custom external tool endpoints that the AI can call. External tools are invoked via HTTP POST and can optionally use token-exchange authentication.
+
+### Registration
+
+```
+POST /ai/config/tools
+{
+  "name": "check_order_status",
+  "description": "Check customer order status",
+  "parametersSchema": {
+    "orderId": { "type": "string", "description": "The order ID" }
+  },
+  "handlerType": "external",
+  "endpoint": "https://ext-api.com/tools/check-order",
+  "authType": "token-exchange",
+  "authConfig": {
+    "tokenUrl": "https://ext-api.com/auth/token"
+  }
+}
+```
+
+### Auth types
+
+| Type | Description |
+|------|-------------|
+| `none` | No auth — endpoint is called directly |
+| `static` | Static token stored in `authConfig.token`, sent as `Authorization: Bearer <token>` |
+| `token-exchange` | OmniChat sends the visitor's `external_auth_token` (JWT from the embedding site) to `tokenUrl` to obtain a short-lived tool-scoped JWT |
+
+### Token exchange flow
+
+1. Visitor widget passes `external-auth-token` attribute (JWT from embedding site, ~3h lifespan)
+2. Stored in conversation metadata
+3. Before calling the tool, OmniChat POSTs `{ external_auth_token }` to the configured `tokenUrl`
+4. External auth API verifies the JWT signature and returns `{ access_token, expires_in }`
+5. The tool-scoped JWT (5m TTL) is sent as `Authorization: Bearer <token>` to the tool endpoint
+6. Token is cached in-memory per visitor and auto-refreshed on expiry
 
 ## Security
 

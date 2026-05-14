@@ -13,7 +13,7 @@ import { AiConfigService } from './ai-config.service';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsObject, Max, Min } from 'class-validator';
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -54,6 +54,28 @@ class UpsertAgentConfigDto {
   @IsString() @IsOptional() translateProviderId?: string | null;
   @IsBoolean() @IsOptional() translationEnabled?: boolean;
   @IsBoolean() @IsOptional() autoTranslationEnabled?: boolean;
+}
+
+class CreateToolDto {
+  @IsString() @IsNotEmpty() name: string;
+  @IsString() @IsNotEmpty() description: string;
+  @IsObject() @IsNotEmpty() parametersSchema: Record<string, any>;
+  @IsString() @IsOptional() handlerType?: string;
+  @IsString() @IsOptional() endpoint?: string;
+  @IsString() @IsOptional() authType?: string;
+  @IsObject() @IsOptional() authConfig?: Record<string, any>;
+  @IsBoolean() @IsOptional() isActive?: boolean;
+}
+
+class UpdateToolDto {
+  @IsString() @IsOptional() name?: string;
+  @IsString() @IsOptional() description?: string;
+  @IsObject() @IsOptional() parametersSchema?: Record<string, any>;
+  @IsString() @IsOptional() handlerType?: string;
+  @IsString() @IsOptional() endpoint?: string;
+  @IsString() @IsOptional() authType?: string;
+  @IsObject() @IsOptional() authConfig?: Record<string, any>;
+  @IsBoolean() @IsOptional() isActive?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,5 +124,27 @@ export class AiConfigController {
   @Post('agent')
   async upsertAgentConfig(@Body() dto: UpsertAgentConfigDto) {
     return this.aiConfigService.upsertAgentConfig(dto);
+  }
+
+  // --- Tool Registration ---
+
+  @Get('tools')
+  async getTools() {
+    return this.aiConfigService.getTools();
+  }
+
+  @Post('tools')
+  async createTool(@Body() dto: CreateToolDto) {
+    return this.aiConfigService.createTool(dto);
+  }
+
+  @Patch('tools/:id')
+  async updateTool(@Param('id') id: string, @Body() dto: UpdateToolDto) {
+    return this.aiConfigService.updateTool(id, dto);
+  }
+
+  @Delete('tools/:id')
+  async deleteTool(@Param('id') id: string) {
+    return this.aiConfigService.deleteTool(id);
   }
 }

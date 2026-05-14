@@ -212,6 +212,67 @@ export class AiConfigService {
   }
 
   // =========================================================================
+  // Tool Registration CRUD
+  // =========================================================================
+
+  async getTools() {
+    return this.prisma.toolRegistration.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createTool(data: {
+    name: string;
+    description: string;
+    parametersSchema: Record<string, any>;
+    handlerType?: string;
+    endpoint?: string;
+    authType?: string;
+    authConfig?: Record<string, any>;
+    isActive?: boolean;
+  }) {
+    return this.prisma.toolRegistration.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        parametersSchema: JSON.stringify(data.parametersSchema),
+        handlerType: data.handlerType ?? 'external',
+        endpoint: data.endpoint || null,
+        authType: data.authType || null,
+        authConfig: data.authConfig ? JSON.stringify(data.authConfig) : null,
+        isActive: data.isActive ?? true,
+      },
+    });
+  }
+
+  async updateTool(id: string, data: {
+    name?: string;
+    description?: string;
+    parametersSchema?: Record<string, any>;
+    handlerType?: string;
+    endpoint?: string;
+    authType?: string;
+    authConfig?: Record<string, any>;
+    isActive?: boolean;
+  }) {
+    const updateData: any = { ...data };
+    if (data.parametersSchema) {
+      updateData.parametersSchema = JSON.stringify(data.parametersSchema);
+    }
+    if (data.authConfig) {
+      updateData.authConfig = JSON.stringify(data.authConfig);
+    }
+    return this.prisma.toolRegistration.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async deleteTool(id: string) {
+    return this.prisma.toolRegistration.delete({ where: { id } });
+  }
+
+  // =========================================================================
   // Embedding Provider
   // =========================================================================
 
