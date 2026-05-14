@@ -25,16 +25,12 @@ export class AiService {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Get the AI agent configuration from the database.
-   */
+  /** Get the AI agent configuration. */
   async getConfig() {
     return this.prisma.aiAgentConfig.findFirst();
   }
 
-  /**
-   * Check if the AI agent is enabled and properly configured.
-   */
+  /** Check if AI agent is enabled and configured. */
   async isEnabled(): Promise<boolean> {
     const config = await this.getConfig();
     if (!config?.enabled) return false;
@@ -43,9 +39,7 @@ export class AiService {
     return !!provider;
   }
 
-  /**
-   * Stream a chat response from the AI model.
-   */
+  /** Stream a chat response from the AI model. */
   async streamChat(options: AiChatOptions): Promise<StreamTextResult<any, any>> {
     const providerConfig = await this.providerFactory.getActiveProvider();
     if (!providerConfig) {
@@ -77,18 +71,14 @@ export class AiService {
     return result;
   }
 
-  /**
-   * Check if the active AI provider supports image (multi-modal) inputs.
-   */
+  /** Check if active provider supports image inputs. */
   async supportsImages(): Promise<boolean> {
     const providerConfig = await this.providerFactory.getActiveProvider();
     if (!providerConfig) return false;
     return this.providerFactory.supportsImages(providerConfig);
   }
 
-  /**
-   * Generate embeddings for a text input.
-   */
+  /** Generate embeddings for a text input. */
   async generateEmbedding(text: string): Promise<number[]> {
     const providerConfig = await this.aiConfigService.getEmbeddingProvider();
     if (!providerConfig) {
@@ -104,10 +94,7 @@ export class AiService {
     return embedding;
   }
 
-  /**
-   * Generate embeddings for multiple text inputs in batch.
-   * Uses the dedicated embedding provider if configured, otherwise falls back to the active chat provider.
-   */
+  /** Generate embeddings for multiple text inputs in batch. */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     const { embedMany } = await import('ai');
     const providerConfig = await this.aiConfigService.getEmbeddingProvider();

@@ -97,10 +97,7 @@ export class ExternalToolAuthService {
     }
   }
 
-  /**
-   * Prune expired entries and enforce max cache size to prevent unbounded growth.
-   * Called periodically during cache writes.
-   */
+  /** Prune expired entries and enforce max cache size. */
   private pruneExpiredEntries(): void {
     const now = Date.now();
     let expired = 0;

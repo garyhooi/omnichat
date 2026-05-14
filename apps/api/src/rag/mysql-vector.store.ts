@@ -7,14 +7,7 @@ type PrismaRaw = PrismaService & {
   $executeRawUnsafe: (query: string, ...values: any[]) => Promise<number>;
 };
 
-/**
- * MySQL Vector Store implementation.
- * Auto-detects MySQL version on startup:
- * - MySQL 9.0+: uses native VECTOR type and vector distance functions.
- * - MySQL 8.x: falls back to JSON storage with application-level cosine similarity.
- *
- * Auto-creates the embedding column if missing.
- */
+/** MySQL Vector Store — native VECTOR (9.0+) or JSON+in-memory fallback (8.x). */
 @Injectable()
 export class MySQLVectorStore implements VectorStoreProvider, OnModuleInit {
   private readonly logger = new Logger(MySQLVectorStore.name);
@@ -31,14 +24,9 @@ export class MySQLVectorStore implements VectorStoreProvider, OnModuleInit {
     await this.ensureSetup();
   }
 
-  /**
-   * Detect MySQL version, check/create embedding column.
-   */
+  /** Detect MySQL version and ensure embedding column exists. */
   private async ensureSetup(): Promise<void> {
-    // 1. Check MySQL version
     await this.checkNativeVectorSupport();
-
-    // 2. Check/create embedding column
     try {
       const cols = await this.raw.$queryRawUnsafe<any[]>(
         `SELECT DATA_TYPE, COLUMN_TYPE FROM information_schema.COLUMNS
@@ -47,7 +35,6 @@ export class MySQLVectorStore implements VectorStoreProvider, OnModuleInit {
       );
 
       if (cols.length === 0) {
-        // Column doesn't exist — add it
         if (this.supportsNativeVector) {
           this.logger.log('Adding embedding VECTOR(1536) column to DocumentChunk...');
           await this.raw.$executeRawUnsafe(
@@ -70,9 +57,7 @@ export class MySQLVectorStore implements VectorStoreProvider, OnModuleInit {
     }
   }
 
-  /**
-   * Detect if MySQL supports native VECTOR type (9.0+).
-   */
+  /** Detect if MySQL supports native VECTOR type (9.0+). */
   private async checkNativeVectorSupport(): Promise<boolean> {
     if (this.supportsNativeVector !== null) return this.supportsNativeVector;
 
@@ -165,10 +150,7 @@ export class MySQLVectorStore implements VectorStoreProvider, OnModuleInit {
     return this.fallbackCosineSimilaritySearch(queryEmbedding, topK);
   }
 
-  /**
-   * Fallback: fetch all chunks and compute cosine similarity in memory.
-   * Used for MySQL 8.x or when native vector search fails.
-   */
+  /** Fallback: cosine similarity in memory when native vector search unavailable. */
   private async fallbackCosineSimilaritySearch(queryEmbedding: number[], topK: number): Promise<VectorSearchResult[]> {
     try {
       this.logger.debug('Using application-level cosine similarity fallback');

@@ -7,10 +7,6 @@ marked.setOptions({
   gfm: true, // GitHub Flavored Markdown
 })
 
-/**
- * Render markdown content to sanitized HTML for chat messages.
- * Returns safe HTML string suitable for v-html.
- */
 export function renderMarkdown(content: string): string {
   if (!content) return ''
 

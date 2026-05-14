@@ -16,10 +16,8 @@ export class AiLogService {
   }) {
     try {
       const detailsStr = data.details ? JSON.stringify(data.details) : null;
-      // Use index access to avoid TypeScript errors when Prisma client types are not regenerated
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      return (this.prisma as any)['aiLog'].create({
+      const prisma = this.prisma as any;
+      return prisma.aiLog.create({
         data: {
           conversationId: data.conversationId || null,
           providerId: data.providerId || null,

@@ -28,9 +28,7 @@ import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
 import { join, extname } from 'path';
 
-// ---------------------------------------------------------------------------
 // Types for inbound/outbound events
-// ---------------------------------------------------------------------------
 interface JoinConversationPayload {
   conversationId: string;
 }
@@ -85,17 +83,13 @@ interface UpdateConversationDetailsPayload {
   agentRemarks?: string;
 }
 
-// ---------------------------------------------------------------------------
 // Rate Limiting Types
-// ---------------------------------------------------------------------------
 interface RateLimitInfo {
   count: number;
   resetTime: number;
 }
 
-// ---------------------------------------------------------------------------
 // Extended socket with user data attached during handshake
-// ---------------------------------------------------------------------------
 interface AuthenticatedSocket extends Socket {
   data: {
     user?: {
@@ -112,12 +106,7 @@ interface AuthenticatedSocket extends Socket {
 import { SiteConfigService } from '../config/site-config.service';
 import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
 
-/**
- * Parse a URL origin and compare hostnames safely.
- * Returns true if candidateHost exactly matches allowedHost,
- * or is a genuine subdomain (e.g. "sub.example.com" matches "example.com"
- * but "evil-example.com" does not).
- */
+/** Parse a URL origin and compare hostnames safely. */
 function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolean {
   try {
     const candidateHost = new URL(candidateOrigin).hostname;
@@ -130,20 +119,13 @@ function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolea
   }
 }
 
-// ---------------------------------------------------------------------------
 // Chat Gateway — Socket.io WebSocket handler
-// ---------------------------------------------------------------------------
 
 @WebSocketGateway({
   cors: {
     origin: true,
     credentials: true,
   },
-  // Uncomment the following lines for Redis adapter (multi-instance scaling):
-  // adapter: require('@socket.io/redis-adapter').createAdapter(
-  //   require('redis').createClient({ url: process.env.REDIS_URL }),
-  //   require('redis').createClient({ url: process.env.REDIS_URL }),
-  // ),
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer()
@@ -199,15 +181,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
   }
 
-  // =========================================================================
-  // LIFECYCLE — startup reset & periodic stale-check
-  // =========================================================================
-
-  /**
-   * On server boot, reset all users to offline. Any previously-online users
-   * whose WebSocket connections were lost (e.g. server crash/restart) are
-   * cleaned up here.
-   */
+  /** On server boot, reset all users to offline. */
   async onModuleInit() {
     const result = await this.prisma.adminUser.updateMany({
       where: { isOnline: true },
@@ -252,10 +226,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Periodically mark users offline if their lastSeenAt is older than
-   * STALE_THRESHOLD_MS and they have no active WebSocket connections.
-   */
+  /** Mark users offline if their lastSeenAt exceeds threshold and they have no active sockets. */
   private async markStaleUsersOffline() {
     try {
       const threshold = new Date(Date.now() - ChatGateway.STALE_THRESHOLD_MS);
@@ -289,11 +260,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Periodically resolve conversations that have been inactive for too long.
-   * This is a DB-based safety net that works even under memory pressure or
-   * delayed setTimeout from the in-memory inactivity timers.
-   */
+  /** Resolve conversations inactive beyond the timeout threshold. DB-based safety net. */
   private async checkStaleConversations() {
     try {
       const threshold = new Date(Date.now() - ChatGateway.AUTO_RESOLVE_TIMEOUT_MS);
@@ -336,10 +303,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Internal Simple Rate Limiter
-   * Allows 'limit' requests per 'ttl' milliseconds.
-   */
+  /** Simple rate limiter — allows limit requests per ttl ms. */
   private isRateLimited(key: string, limit: number, ttl: number): boolean {
     const now = Date.now();
     const info = this.rateLimits.get(key);
@@ -357,10 +321,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     return false;
   }
 
-  /**
-   * Periodically evict expired entries from the rateLimits Map
-   * to prevent unbounded memory growth under load.
-   */
+  /** Evict expired entries from rateLimits Map to prevent unbounded growth. */
   private evictStaleRateLimits(): void {
     const now = Date.now();
     let evicted = 0;
@@ -375,9 +336,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
   // INACTIVITY TIMERS
-  // =========================================================================
 
   private resetInactivityTimer(conversationId: string) {
     this.clearInactivityTimer(conversationId);
@@ -425,15 +384,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.inactivityResolves.delete(conversationId);
   }
 
-  // =========================================================================
   // CONNECTION LIFECYCLE
-  // =========================================================================
 
-  /**
-   * Handles new socket connections. Authenticates agents via JWT Bearer token
-   * in the handshake. Visitors connect without a token and are marked as
-   * visitor sockets.
-   */
+  /** Handle new socket connections — authenticate agents, mark visitors. */
   async handleConnection(client: AuthenticatedSocket) {
     let token = undefined;
 
@@ -452,7 +405,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       // Fallback to auth payload or header
       if (!token) {
         const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-        if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
+        if (fallbackToken && fallbackToken !== 'cookie-auth') {
           token = fallbackToken;
         }
       }
@@ -522,10 +475,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Validate visitor connection origin against allowed origins in database.
-   * Visitors MUST provide an origin or referer header.
-   */
+  /** Validate visitor origin against allowed origins in database. */
   private async validateVisitorOrigin(origin: string | undefined, referer: string | undefined): Promise<void> {
     // Visitors must provide an origin or referer — reject bare requests
     if (!origin && !referer) {
@@ -581,10 +531,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Handles socket disconnections. Updates agent online status when agents
-   * disconnect.
-   */
+  /** Handle socket disconnections and update agent online status. */
   async handleDisconnect(client: AuthenticatedSocket) {
     // Clean up rate limiter entries for this socket
     for (const key of this.rateLimits.keys()) {
@@ -628,14 +575,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
   // CONVERSATION EVENTS
-  // =========================================================================
 
-  /**
-   * Agent heartbeat — keeps lastSeenAt fresh to prevent stale-check timeout.
-   * The admin dashboard should emit this every ~30 seconds.
-   */
+  /** Agent heartbeat — keeps lastSeenAt fresh to prevent stale-check timeout. */
   @SubscribeMessage('heartbeat')
   async handleHeartbeat(@ConnectedSocket() client: AuthenticatedSocket) {
     if (client.data.user && !client.data.isVisitor) {
@@ -646,10 +588,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Start a new conversation (visitor-initiated).
-   * Creates a Conversation record and auto-joins the visitor to the room.
-   */
+  /** Start a new conversation (visitor-initiated). */
   @SubscribeMessage('start_conversation')
   async handleStartConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -758,10 +697,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     return { conversationId: conversation.id };
   }
 
-  /**
-   * Initialize AI agent for a new conversation.
-   * Sends greeting message if configured.
-   */
+  /** Initialize AI agent for a new conversation. */
   private async initAiForConversation(conversationId: string, client: AuthenticatedSocket) {
     try {
       const aiEnabled = await this.aiService.isEnabled();
@@ -799,10 +735,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Join an existing conversation room.
-   * Both visitors and agents call this to subscribe to conversation updates.
-   */
+  /** Join an existing conversation room. */
   @SubscribeMessage('join_conversation')
   async handleJoinConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -852,11 +785,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     );
   }
 
-  /**
-   * Send a message within a conversation.
-   * CRITICAL: Message is persisted BEFORE emitting to the room.
-   * Failed writes do NOT emit — this is the persistence contract.
-   */
+  /** Send a message within a conversation — persisted BEFORE emission. */
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -894,8 +823,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       : client.data.user?.id;
 
     try {
-      // PERSIST FIRST — this is the persistence contract.
-      // The message is only emitted to the room after a successful DB write.
+      // Persist first — emit only after successful DB write
       const message = await this.chatService.createMessage({
         conversationId,
         senderType,
@@ -924,7 +852,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         });
       }
     } catch (error) {
-      // Failed write — do NOT emit. Notify only the sender of the failure.
+      // Failed write — notify only the sender
       this.logger.error(
         `Failed to persist message in ${conversationId}: ${error.message}`,
       );
@@ -935,9 +863,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
-  // MESSAGE & CONVERSATION ENHANCEMENTS (Read Receipts, Reviews)
-  // =========================================================================
+  // MESSAGE ENHANCEMENTS (Read Receipts, Reviews)
 
   @SubscribeMessage('read_message')
   async handleReadMessage(
@@ -1007,9 +933,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
-  // TYPING INDICATORS (no DB write — ephemeral events)
-  // =========================================================================
+  // TYPING INDICATORS
 
   @SubscribeMessage('typing_start')
   handleTypingStart(
@@ -1046,14 +970,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     });
   }
 
-  // =========================================================================
   // CONVERSATION MANAGEMENT
-  // =========================================================================
 
-  /**
-   * Transfer conversation to a specialist.
-   * Only agents should call this.
-   */
+  /** Transfer conversation to a specialist (agents only). */
   @SubscribeMessage('transfer_to_specialist')
   async handleTransferToSpecialist(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1093,10 +1012,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Resolve (close) a conversation.
-   * Only agents should call this.
-   */
+  /** Resolve (close) a conversation. */
   @SubscribeMessage('resolve_conversation')
   async handleResolveConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1134,9 +1050,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * List conversations — agent only.
-   */
+  /** List conversations (agents only). */
   @SubscribeMessage('list_conversations')
   async handleListConversations(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1161,14 +1075,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     });
   }
 
-  // =========================================================================
   // AI AGENT RESPONSE HANDLING
-  // =========================================================================
 
-  /**
-   * Handle AI response for a visitor message.
-   * Checks if AI is enabled, not handed off, and streams a response.
-   */
+  /** Handle AI response for a visitor message. */
   private async handleAiResponse(conversationId: string, client: AuthenticatedSocket) {
     try {
       // Check if AI is enabled
@@ -1621,10 +1530,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Read an uploaded image from disk and return a base64 data URL
-   * for use as a multi-modal input to the AI model.
-   */
+  /** Read an uploaded image from disk and return a base64 data URL. */
   private async readImageAsDataUrl(attachmentUrl: string): Promise<string | null> {
     try {
       // HTTP/HTTPS URLs can be passed directly to the AI SDK
@@ -1648,10 +1554,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Trigger a handoff to human agents.
-   * Persists state, sends system message, notifies agents.
-   */
+  /** Trigger a handoff to human agents. */
   private async triggerHandoff(conversationId: string, reason: string) {
     await this.handoffService.executeHandoff(conversationId, reason);
 

@@ -357,7 +357,6 @@ async function deleteQuickReply(id: string) {
     <div class="max-w-2xl mx-auto">
       <h1 class="text-2xl font-bold text-gray-800 mb-6">Settings</h1>
 
-      <!-- Tabs -->
       <div class="flex gap-2 mb-6">
         <button
           @click="settingsTab = 'widget'"
@@ -389,10 +388,8 @@ async function deleteQuickReply(id: string) {
         </button>
       </div>
 
-      <!-- Widget Setup Tab -->
       <div v-if="settingsTab === 'widget'" class="bg-white rounded-lg shadow p-6 space-y-6">
 
-        <!-- Bubble Color -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Bubble Color</label>
           <div class="flex items-center gap-3">
@@ -401,19 +398,16 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <!-- Welcome Message -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Welcome Message</label>
           <textarea v-model="welcomeMessage" rows="3" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Hello! How can we help you today?" />
         </div>
 
-        <!-- Offline Message -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Offline Message</label>
           <textarea v-model="offlineMessage" rows="3" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="We're currently offline. Leave a message!" />
         </div>
 
-        <!-- Bubble Size -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Bubble Size</label>
           <select v-model="bubbleSize" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -423,7 +417,6 @@ async function deleteQuickReply(id: string) {
           </select>
         </div>
 
-        <!-- Bubble Pattern -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Bubble Pattern</label>
           <select v-model="bubblePattern" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -434,7 +427,6 @@ async function deleteQuickReply(id: string) {
           </select>
         </div>
 
-        <!-- Widget Position -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Widget Position</label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -450,7 +442,6 @@ async function deleteQuickReply(id: string) {
           <p class="text-xs text-gray-400 mt-1">These are the widget's top-left screen coordinates. Visitors can still drag the widget, and their browser will keep the last position locally.</p>
         </div>
 
-        <!-- Bubble Icon -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">Bubble Icon</label>
           <div class="flex items-center gap-4 mb-2">
@@ -477,7 +468,6 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <!-- Checkboxes -->
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Read Receipts</label>
@@ -533,7 +523,6 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <!-- Notification Sound -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Notification Sound</label>
           <div class="flex items-center gap-3">
@@ -549,7 +538,6 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <!-- Save -->
         <div class="pt-2">
           <button @click="saveSettings" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
             Save Settings
@@ -557,7 +545,6 @@ async function deleteQuickReply(id: string) {
         </div>
       </div>
 
-      <!-- Security Tab -->
       <div v-if="settingsTab === 'security' && canManageSecurity" class="bg-white rounded-lg shadow p-6 space-y-6">
         <div>
           <h2 class="text-lg font-semibold text-gray-800">Site security</h2>
@@ -593,7 +580,6 @@ async function deleteQuickReply(id: string) {
         </div>
       </div>
 
-      <!-- Quick Replies Tab -->
       <div v-if="settingsTab === 'quick-replies'" class="bg-white rounded-lg shadow p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-800">Quick Replies</h2>
@@ -602,7 +588,6 @@ async function deleteQuickReply(id: string) {
           </button>
         </div>
 
-        <!-- Edit / Create form -->
         <div v-if="editingQuickReplyId" class="mb-6 border border-indigo-200 rounded-md p-4 bg-indigo-50/30 space-y-3">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
@@ -624,7 +609,6 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <!-- List -->
         <div v-if="quickReplies.length === 0 && !editingQuickReplyId" class="text-sm text-gray-400 py-8 text-center">
           No quick replies yet.
         </div>

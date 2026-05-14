@@ -12,10 +12,7 @@ export class RagService {
     private readonly aiService: AiService,
   ) {}
 
-  /**
-   * Search the knowledge base for content relevant to the query.
-   * Returns top-K matching chunks with similarity scores.
-   */
+  /** Search knowledge base for content relevant to the query. */
   async searchKnowledgeBase(query: string, topK: number = 5): Promise<VectorSearchResult[]> {
     try {
       const queryEmbedding = await this.aiService.generateEmbedding(query);

@@ -15,9 +15,7 @@ export class ToolRegistry {
     private readonly authService: ExternalToolAuthService,
   ) {}
 
-  /**
-   * Register a built-in tool handler.
-   */
+  /** Register a built-in tool handler. */
   registerBuiltin(handler: ToolHandler): void {
     this.builtinTools.set(handler.name, handler);
     this.logger.log(`Registered builtin tool: ${handler.name}`);
@@ -63,14 +61,10 @@ export class ToolRegistry {
     return { type: 'object', properties, required };
   }
 
-  /**
-   * Get all active tools formatted for Vercel AI SDK.
-   * Combines built-in tools with external tools from the database.
-   */
+  /** Get active tools formatted for Vercel AI SDK, combining built-in and external tools. */
   async getTools(context: ToolContext): Promise<Record<string, any>> {
     const tools: Record<string, any> = {};
 
-    // Add built-in tools
     for (const [name, handler] of this.builtinTools) {
       const cleanSchema = handler.parameters instanceof z.ZodObject
         ? this.zodToCleanJsonSchema(handler.parameters)
@@ -90,7 +84,6 @@ export class ToolRegistry {
       });
     }
 
-    // Add external tools from database
     let externalTools: any[] = [];
     try {
       externalTools = await this.prisma.toolRegistration.findMany({
@@ -154,9 +147,7 @@ export class ToolRegistry {
     return tools;
   }
 
-  /**
-   * Call an external tool via HTTP POST.
-   */
+  /** Call an external tool via HTTP POST. */
   private async callExternalTool(endpoint: string, token: string | null, args: any): Promise<any> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
@@ -186,10 +177,7 @@ export class ToolRegistry {
     }
   }
 
-  /**
-   * Convert a simple JSON Schema to Zod schema properties.
-   * Supports basic types: string, number, boolean.
-   */
+  /** Convert JSON Schema to Zod schema properties (string, number, boolean). */
   private jsonSchemaToZod(schema: Record<string, any>): Record<string, z.ZodTypeAny> {
     const zodProps: Record<string, z.ZodTypeAny> = {};
 

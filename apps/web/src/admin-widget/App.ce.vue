@@ -14,18 +14,18 @@ const DEFAULT_PANEL_WIDTH = 480
 const DEFAULT_PANEL_HEIGHT = 560
 const DESKTOP_PANEL_GAP = 16
 
-// ---------------------------------------------------------------------------
+
 // Props
 // Usage: <omnichat-admin-widget server-url="https://api.yoursite.com" token="jwt-token"></omnichat-admin-widget>
-// ---------------------------------------------------------------------------
+
 const props = defineProps({
   serverUrl: { type: String, required: true },
   token: { type: String, required: true },
 })
 
-// ---------------------------------------------------------------------------
+
 // Interfaces
-// ---------------------------------------------------------------------------
+
 interface Message {
   id: string
   conversationId: string
@@ -59,9 +59,9 @@ interface Conversation {
   unreadCount?: number
 }
 
-// ---------------------------------------------------------------------------
+
 // Auth headers helper
-// ---------------------------------------------------------------------------
+
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { ...extra }
   if (props.token && props.token !== 'cookie-auth') {
@@ -70,9 +70,9 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
   return h
 }
 
-// ---------------------------------------------------------------------------
+
 // Viewport & position state
-// ---------------------------------------------------------------------------
+
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
 const viewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 720)
 const widgetPosition = ref({ x: 20, y: 20 })
@@ -85,9 +85,9 @@ let dragOriginY = 0
 let dragMoved = false
 let dragSuppressClickUntil = 0
 
-// ---------------------------------------------------------------------------
+
 // Panel size / resize state
-// ---------------------------------------------------------------------------
+
 const panelWidth = ref(DEFAULT_PANEL_WIDTH)
 const panelHeight = ref(DEFAULT_PANEL_HEIGHT)
 const isResizing = ref(false)
@@ -101,9 +101,9 @@ let resizeStartHeight = 0
 const panelAnchorX = ref(0)
 const panelAnchorY = ref(0)
 
-// ---------------------------------------------------------------------------
+
 // Widget config state (from server /config/active)
-// ---------------------------------------------------------------------------
+
 const siteBubbleColor = ref('')
 const siteBubbleSize = ref('medium')
 const siteBubblePattern = ref('solid')
@@ -111,9 +111,9 @@ const siteBubbleIcon = ref('💬')
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_admin_widget_muted') === 'true')
 
-// ---------------------------------------------------------------------------
+
 // Socket & data state
-// ---------------------------------------------------------------------------
+
 const socket = ref<Socket | null>(null)
 const isOpen = ref(false)
 const conversations = ref<Conversation[]>([])
@@ -157,9 +157,9 @@ const translatedMessages = ref<Record<string, string>>({})
 const isTranslationEnabled = ref(true)
 const autoTranslationEnabled = ref(true)
 
-// ---------------------------------------------------------------------------
+
 // Computed
-// ---------------------------------------------------------------------------
+
 const bubbleDiameter = computed(() => {
   if (siteBubbleSize.value === 'small') return 48
   if (siteBubbleSize.value === 'large') return 64
@@ -275,9 +275,9 @@ const dynamicPanelStyle = computed(() => {
   }
 })
 
-// ---------------------------------------------------------------------------
+
 // Utils
-// ---------------------------------------------------------------------------
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
@@ -370,9 +370,9 @@ function refreshViewport() {
   viewportHeight.value = window.innerHeight
 }
 
-// ---------------------------------------------------------------------------
+
 // Audio
-// ---------------------------------------------------------------------------
+
 const audioPlayer = new Audio()
 function toggleMute() {
   isMuted.value = !isMuted.value
@@ -411,9 +411,9 @@ function playSound() {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Drag handlers
-// ---------------------------------------------------------------------------
+
 function startWidgetDrag(event: PointerEvent) {
   if (event.button !== 0 && event.pointerType !== 'touch') return
 
@@ -483,9 +483,9 @@ function stopWidgetDrag(event: PointerEvent) {
 
 const widgetDragState = reactive({ isDragging: false })
 
-// ---------------------------------------------------------------------------
+
 // Resize handlers
-// ---------------------------------------------------------------------------
+
 function startResize(event: PointerEvent) {
   isResizing.value = true
   resizePointerId = event.pointerId
@@ -520,9 +520,9 @@ function stopResize(event: PointerEvent) {
   resizePointerId = null
 }
 
-// ---------------------------------------------------------------------------
+
 // Bubble toggle
-// ---------------------------------------------------------------------------
+
 function toggleWidget() {
   if (performance.now() < dragSuppressClickUntil) return
   isOpen.value = !isOpen.value
@@ -552,9 +552,9 @@ function toggleWidget() {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Socket events
-// ---------------------------------------------------------------------------
+
 function connect() {
   const s = io(props.serverUrl, {
     auth: props.token && props.token !== 'cookie-auth' ? { token: props.token } : undefined,
@@ -563,7 +563,6 @@ function connect() {
   })
 
   s.on('connect', () => {
-    console.log('[OmniChat Admin Widget] Connected')
   })
 
   s.on(
@@ -708,15 +707,14 @@ function connect() {
   })
 
   s.on('disconnect', () => {
-    console.log('[OmniChat Admin Widget] Disconnected')
   })
 
   socket.value = s
 }
 
-// ---------------------------------------------------------------------------
+
 // Memory management
-// ---------------------------------------------------------------------------
+
 const MAX_MESSAGES = 200
 const MAX_CONVERSATIONS = 100
 
@@ -732,9 +730,9 @@ function capConversations(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Actions
-// ---------------------------------------------------------------------------
+
 function selectConversation(conversationId: string) {
   activeConversationId.value = conversationId
   messages.value = []
@@ -828,9 +826,9 @@ function closeImage() {
   selectedImage.value = null
 }
 
-// ---------------------------------------------------------------------------
+
 // File upload & drag-drop
-// ---------------------------------------------------------------------------
+
 function compressImage(file: File, maxWidth = 1200, quality = 0.8): Promise<File> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -927,7 +925,6 @@ async function processFile(file: File) {
       file.type === 'image/heif-sequence'
 
     if (isHeicFile) {
-      console.log('HEIC file detected - will be converted on backend')
     } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
     } else {
@@ -984,9 +981,9 @@ function backToList() {
   showResolveConfirm.value = false
 }
 
-// ---------------------------------------------------------------------------
+
 // Details
-// ---------------------------------------------------------------------------
+
 function saveConversationDetails() {
   if (!activeConversationId.value) return
   socket.value?.emit('update_conversation_details', {
@@ -997,9 +994,9 @@ function saveConversationDetails() {
   showConversationDetails.value = false
 }
 
-// ---------------------------------------------------------------------------
+
 // Transfer
-// ---------------------------------------------------------------------------
+
 function confirmTransferConversation() {
   showTransferConfirm.value = true
 }
@@ -1033,9 +1030,9 @@ async function loadAdminList() {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Translation
-// ---------------------------------------------------------------------------
+
 function setTranslateLang(lang: string) {
   translateLang.value = lang
   localStorage.setItem('omnichat_admin_widget_translate_lang', lang)
@@ -1071,9 +1068,9 @@ function autoTranslateMessage(msg: Message) {
   toggleTranslation(msg)
 }
 
-// ---------------------------------------------------------------------------
+
 // Lifecycle
-// ---------------------------------------------------------------------------
+
 onMounted(() => {
   refreshViewport()
   initializeWidgetPosition()
@@ -1140,7 +1137,6 @@ watch(showLangPopover, (val) => {
 <template>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
 
-  <!-- Floating bubble -->
   <div class="aw-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
@@ -1162,9 +1158,7 @@ watch(showLangPopover, (val) => {
     </div>
   </div>
 
-  <!-- Panel -->
   <div v-if="isOpen" class="aw-panel" :style="dynamicPanelStyle">
-    <!-- Header -->
     <div class="aw-header" :style="{ backgroundColor: currentBubbleColor }" @pointerdown="startWidgetDrag">
       <div style="display: flex; flex-direction: column;">
         <span style="font-size: 14px; font-weight: 600;">Conversations</span>
@@ -1182,11 +1176,8 @@ watch(showLangPopover, (val) => {
       </div>
     </div>
 
-    <!-- Main content area -->
     <div class="aw-body">
-      <!-- Conversation List View -->
       <template v-if="!activeConversationId">
-        <!-- Tabs -->
         <div class="aw-tabs">
           <button
             type="button"
@@ -1204,7 +1195,6 @@ watch(showLangPopover, (val) => {
           </button>
         </div>
 
-        <!-- Conversation list -->
         <div class="aw-conv-list">
           <div v-if="filteredConversations.length === 0" class="aw-empty">
             No {{ activeTab === 'specialist' ? 'specialist' : 'active' }} conversations
@@ -1231,9 +1221,7 @@ watch(showLangPopover, (val) => {
         </div>
       </template>
 
-      <!-- Chat View -->
       <template v-else>
-        <!-- Back + actions bar -->
         <div class="aw-chat-topbar">
           <button type="button" class="aw-back-btn" @click="backToList">
             &#8592;
@@ -1254,7 +1242,6 @@ watch(showLangPopover, (val) => {
           >
             {{ activeConversationData?.status || '' }}
           </span>
-          <!-- Translation language selector -->
           <div v-if="isTranslationEnabled" style="position: relative;">
             <button
               type="button"
@@ -1280,7 +1267,6 @@ watch(showLangPopover, (val) => {
               </button>
             </div>
           </div>
-          <!-- Details button -->
           <button
             type="button"
             class="aw-action-btn"
@@ -1288,7 +1274,6 @@ watch(showLangPopover, (val) => {
             @click="showConversationDetails = !showConversationDetails; showTransferConfirm = false"
             title="Details"
           >&#8505;</button>
-          <!-- Transfer button (only for active/specialist) -->
           <template v-if="isActive">
             <button
               v-if="!showTransferConfirm"
@@ -1323,7 +1308,6 @@ watch(showLangPopover, (val) => {
           </template>
         </div>
 
-        <!-- Details panel -->
         <div v-if="showConversationDetails" class="aw-details-panel">
           <div style="margin-bottom: 8px;">
             <label style="font-size: 11px; font-weight: 600; color: #6b7280;">Customer Username</label>
@@ -1355,7 +1339,6 @@ watch(showLangPopover, (val) => {
           <button type="button" class="aw-save-details-btn" @click="saveConversationDetails">Save Changes</button>
         </div>
 
-        <!-- Messages -->
         <div
           ref="messagesContainer"
           class="aw-messages"
@@ -1399,7 +1382,6 @@ watch(showLangPopover, (val) => {
           <div v-if="isTyping" class="aw-typing-hint">
             {{ typingUser }} is typing...
           </div>
-          <!-- Drag overlay -->
           <div v-if="isDragging" class="aw-drag-overlay">
             <div class="aw-drag-overlay-content">
               <span style="font-size: 32px; margin-bottom: 8px; display: block;">📥</span>
@@ -1408,7 +1390,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Resolve confirm banner -->
         <div v-if="showResolveConfirm" class="aw-resolve-confirm">
           <span style="font-size: 13px; color: #b91c1c; font-weight: 600;">Resolve this conversation?</span>
           <div style="display: flex; gap: 8px;">
@@ -1417,7 +1398,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Resolved banner -->
         <div v-else-if="activeConversationData?.status === 'resolved'" class="aw-resolved-banner">
           This conversation has been resolved.
           <br/>
@@ -1427,7 +1407,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Input area (active/specialist) -->
         <div v-else class="aw-input-area">
           <input type="file" ref="fileInput" style="display: none" accept="image/*" @change="handleFileUpload" />
           <button
@@ -1470,7 +1449,6 @@ watch(showLangPopover, (val) => {
       </template>
     </div>
 
-    <!-- Resize handle -->
     <div
       class="aw-resize-handle"
       @pointerdown="startResize"
@@ -1478,7 +1456,6 @@ watch(showLangPopover, (val) => {
     ></div>
   </div>
 
-  <!-- Lightbox overlay -->
   <div v-if="selectedImage" class="aw-lightbox" @click="closeImage">
     <button class="aw-lightbox-close">&times;</button>
     <img :src="selectedImage" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;" @click.stop />

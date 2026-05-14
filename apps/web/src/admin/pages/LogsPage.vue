@@ -163,7 +163,6 @@ watch(activeTab, () => {
     <div class="max-w-6xl mx-auto">
       <h1 class="text-2xl font-bold text-gray-800 mb-6">System Logs</h1>
 
-      <!-- Tabs -->
       <div class="flex gap-2 mb-6">
         <button
           @click="activeTab = 'http'"
@@ -177,9 +176,7 @@ watch(activeTab, () => {
         >AI Logs</button>
       </div>
 
-      <!-- HTTP Logs Tab -->
       <div v-if="activeTab === 'http'">
-        <!-- Filters -->
         <div class="bg-white rounded-lg shadow p-4 mb-4">
           <div class="flex flex-wrap gap-3 items-end">
             <div>
@@ -211,7 +208,6 @@ watch(activeTab, () => {
           </div>
         </div>
 
-        <!-- Table -->
         <div class="bg-white rounded-lg shadow overflow-hidden">
           <div v-if="httpLoading" class="p-8 text-center text-gray-400">Loading...</div>
           <div v-else-if="httpLogs.length === 0" class="p-8 text-center text-gray-400">No logs found.</div>
@@ -266,7 +262,6 @@ watch(activeTab, () => {
             </tbody>
           </table>
 
-          <!-- Pagination -->
           <div v-if="httpTotalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
             <span class="text-gray-500">Page {{ httpPage }} of {{ httpTotalPages }}</span>
             <div class="flex gap-2">
@@ -277,9 +272,7 @@ watch(activeTab, () => {
         </div>
       </div>
 
-      <!-- AI Logs Tab -->
       <div v-if="activeTab === 'ai'">
-        <!-- Filters -->
         <div class="bg-white rounded-lg shadow p-4 mb-4">
           <div class="flex flex-wrap gap-3 items-end">
             <div>
@@ -304,7 +297,6 @@ watch(activeTab, () => {
           </div>
         </div>
 
-        <!-- Table -->
         <div class="bg-white rounded-lg shadow overflow-hidden">
           <div v-if="aiLoading" class="p-8 text-center text-gray-400">Loading...</div>
           <div v-else-if="aiLogs.length === 0" class="p-8 text-center text-gray-400">No AI logs found.</div>
@@ -343,7 +335,6 @@ watch(activeTab, () => {
             </tbody>
           </table>
 
-          <!-- Pagination -->
           <div v-if="aiTotalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
             <span class="text-gray-500">Page {{ aiPage }} of {{ aiTotalPages }}</span>
             <div class="flex gap-2">

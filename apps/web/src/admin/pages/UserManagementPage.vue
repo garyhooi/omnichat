@@ -172,7 +172,6 @@ onMounted(loadUsers)
       </div>
 
 
-      <!-- Search & Filter -->
       <div class="bg-white rounded-lg shadow p-4 mb-4">
         <div class="flex flex-wrap gap-3 items-end">
           <div>
@@ -207,7 +206,6 @@ onMounted(loadUsers)
         </div>
       </div>
 
-      <!-- Users Table -->
       <div class="bg-white rounded-lg shadow overflow-hidden">
         <div v-if="loading" class="p-8 text-center text-gray-400">Loading...</div>
         <div v-else-if="users.length === 0" class="p-8 text-center text-gray-400">No users found.</div>
@@ -258,13 +256,11 @@ onMounted(loadUsers)
               <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(user.createdAt) }}</td>
               <td class="px-4 py-3">
                 <div class="flex gap-1.5 flex-wrap">
-                  <!-- Change Role -->
                   <button
                     @click="openRoleModal(user)"
                     class="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-xs font-medium rounded hover:bg-indigo-100"
                   >Role</button>
 
-                  <!-- Lock / Unlock -->
                   <button
                     @click="toggleLock(user)"
                     :disabled="isActioning(user.id, 'lock')"
@@ -276,7 +272,6 @@ onMounted(loadUsers)
                     {{ isActioning(user.id, 'lock') ? '...' : (user.isLocked ? 'Unlock' : 'Lock') }}
                   </button>
 
-                  <!-- Force Logout -->
                   <button
                     @click="forceLogout(user.id)"
                     :disabled="isActioning(user.id, 'logout') || user.activeSessions === 0"
@@ -292,7 +287,6 @@ onMounted(loadUsers)
       </div>
     </div>
 
-    <!-- Role Change Modal -->
     <div v-if="showRoleModal" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.3);">
       <div class="bg-white rounded-lg shadow-xl p-6 w-80">
         <h3 class="text-lg font-semibold text-gray-800 mb-4">Change User Role</h3>

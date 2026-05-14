@@ -48,9 +48,7 @@ export class HandoffService {
     return keywords.length > 0 ? keywords : DEFAULT_HUMAN_REQUEST_KEYWORDS;
   }
 
-  /**
-   * Check if a visitor message contains a request for a human agent.
-   */
+  /** Check if message requests human agent. */
   async detectHumanRequest(message: string): Promise<boolean> {
     const lower = message.toLowerCase();
     const config = await this.prisma.aiAgentConfig.findFirst({
@@ -59,9 +57,7 @@ export class HandoffService {
     return this.getHumanRequestKeywords(config?.humanRequestKeywords).some((kw) => lower.includes(kw));
   }
 
-  /**
-   * Record a human request and check if threshold is met.
-   */
+  /** Record human request and check threshold. */
   async recordHumanRequest(conversationId: string, threshold: number): Promise<HandoffResult> {
     const key = `human_request:${conversationId}`;
     const count = await this.stateStore.increment(key, 3600);
@@ -72,9 +68,7 @@ export class HandoffService {
     return { shouldHandoff: false };
   }
 
-  /**
-   * Record a RAG failure (zero results) and check if threshold is met.
-   */
+  /** Record RAG failure and check threshold. */
   async recordRagFailure(conversationId: string, threshold: number): Promise<HandoffResult> {
     const key = `rag_failure:${conversationId}`;
     const count = await this.stateStore.increment(key, 3600);
@@ -85,16 +79,12 @@ export class HandoffService {
     return { shouldHandoff: false };
   }
 
-  /**
-   * Reset the RAG failure counter (called when RAG returns results).
-   */
+  /** Reset RAG failure counter. */
   async resetRagFailure(conversationId: string): Promise<void> {
     await this.stateStore.reset(`rag_failure:${conversationId}`);
   }
 
-  /**
-   * Record an AI failure (error, timeout, etc.) and check threshold.
-   */
+  /** Record an AI failure and check threshold. */
   async recordAiFailure(conversationId: string): Promise<HandoffResult> {
     const key = `ai_failure:${conversationId}`;
     const count = await this.stateStore.increment(key, 3600);
@@ -105,9 +95,7 @@ export class HandoffService {
     return { shouldHandoff: false };
   }
 
-  /**
-   * Record AI token usage and check session budget.
-   */
+  /** Record AI token usage and check session budget. */
   async recordTokenUsage(conversationId: string, tokens: number, budget: number): Promise<HandoffResult> {
     const key = `tokens_used:${conversationId}`;
     const current = await this.stateStore.get(key);
@@ -120,9 +108,7 @@ export class HandoffService {
     return { shouldHandoff: false };
   }
 
-  /**
-   * Record AI turn count and check limit.
-   */
+  /** Record AI turn count and check limit. */
   async recordTurn(conversationId: string, maxTurns: number): Promise<HandoffResult> {
     const key = `turn_count:${conversationId}`;
     const count = await this.stateStore.increment(key, 86400);
@@ -133,9 +119,7 @@ export class HandoffService {
     return { shouldHandoff: false };
   }
 
-  /**
-   * Execute the handoff: update conversation state and persist.
-   */
+  /** Execute handoff: update state and persist. */
   async executeHandoff(conversationId: string, reason: string): Promise<void> {
     this.logger.log(`Handoff triggered for ${conversationId}: ${reason}`);
 
@@ -165,9 +149,7 @@ export class HandoffService {
     }
   }
 
-  /**
-   * Check if a conversation has already been handed off.
-   */
+  /** Check if conversation has been handed off. */
   async isHandedOff(conversationId: string): Promise<boolean> {
     const state = await this.prisma.aiConversationState.findUnique({
       where: { conversationId },
@@ -175,9 +157,7 @@ export class HandoffService {
     return state?.handoffTriggered ?? false;
   }
 
-  /**
-   * Check if AI is handling a conversation.
-   */
+  /** Check if AI is handling the conversation. */
   async isAiHandling(conversationId: string): Promise<boolean> {
     const state = await this.prisma.aiConversationState.findUnique({
       where: { conversationId },
@@ -186,9 +166,7 @@ export class HandoffService {
     return state?.isAiHandling ?? true;
   }
 
-  /**
-   * Initialize AI conversation state for a new conversation.
-   */
+  /** Initialize AI conversation state. */
   async initConversation(conversationId: string): Promise<void> {
     try {
       await this.prisma.aiConversationState.create({

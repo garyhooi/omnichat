@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { SessionStateStore } from './session-state.interface';
 
 interface MemoryEntry {
@@ -11,7 +11,7 @@ interface MemoryEntry {
  * Uses a Map with TTL support via periodic cleanup.
  */
 @Injectable()
-export class MemoryStateStore implements SessionStateStore {
+export class MemoryStateStore implements SessionStateStore, OnModuleDestroy {
   private readonly logger = new Logger(MemoryStateStore.name);
   private readonly store = new Map<string, MemoryEntry>();
   private cleanupInterval: NodeJS.Timeout;

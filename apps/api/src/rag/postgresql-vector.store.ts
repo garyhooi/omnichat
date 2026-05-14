@@ -7,11 +7,7 @@ type PrismaRaw = PrismaService & {
   $executeRawUnsafe: (query: string, ...values: any[]) => Promise<number>;
 };
 
-/**
- * PostgreSQL pgvector implementation.
- * Auto-creates the pgvector extension and embedding column on startup.
- * Falls back to in-memory cosine similarity if pgvector is not available.
- */
+/** PostgreSQL pgvector implementation — auto-creates extension, falls back to in-memory. */
 @Injectable()
 export class PostgreSQLVectorStore implements VectorStoreProvider, OnModuleInit {
   private readonly logger = new Logger(PostgreSQLVectorStore.name);
@@ -27,36 +23,24 @@ export class PostgreSQLVectorStore implements VectorStoreProvider, OnModuleInit 
     await this.ensurePgvector();
   }
 
-  /**
-   * Attempt to enable pgvector extension and ensure the embedding column
-   * has the correct vector type. Non-fatal if it fails (e.g. extension not installed).
-   */
+  /** Enable pgvector extension and ensure embedding column has vector type. */
   private async ensurePgvector(): Promise<void> {
     try {
       await this.raw.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
       this.logger.log('pgvector extension is available');
 
-      // Check if embedding column exists and has vector type
       const cols = await this.raw.$queryRawUnsafe<any[]>(
         `SELECT data_type FROM information_schema.columns
          WHERE table_name = 'DocumentChunk' AND column_name = 'embedding'`,
       );
 
       if (cols.length === 0) {
-        // Column doesn't exist yet — add it
         this.logger.log('Adding embedding vector column to DocumentChunk...');
         await this.raw.$executeRawUnsafe(
           `ALTER TABLE "DocumentChunk" ADD COLUMN IF NOT EXISTS embedding vector(1536)`,
         );
       } else if (cols[0]?.data_type === 'USER-DEFINED') {
-        // Already a vector column — good
         this.logger.log('Embedding column already has vector type');
-      } else {
-        // Column exists but is not vector type — might be text/json from migration
-        this.logger.warn(
-          `Embedding column type is "${cols[0]?.data_type}", not vector. ` +
-          `Consider running: ALTER TABLE "DocumentChunk" ALTER COLUMN embedding TYPE vector(1536) USING embedding::vector;`,
-        );
       }
 
       this.pgvectorReady = true;
@@ -88,7 +72,6 @@ export class PostgreSQLVectorStore implements VectorStoreProvider, OnModuleInit 
             chunk.metadata || null,
           );
         } else {
-          // Fallback: store embedding as JSON text
           await this.raw.$executeRawUnsafe(
             `INSERT INTO "DocumentChunk" (id, "documentId", content, embedding, "chunkIndex", metadata, "createdAt")
              VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW())`,
@@ -145,10 +128,7 @@ export class PostgreSQLVectorStore implements VectorStoreProvider, OnModuleInit 
     return this.fallbackCosineSimilaritySearch(queryEmbedding, topK);
   }
 
-  /**
-   * Fallback: fetch all chunks and compute cosine similarity in memory.
-   * Used when pgvector extension is unavailable.
-   */
+  /** Fallback: cosine similarity in memory when pgvector unavailable. */
   private async fallbackCosineSimilaritySearch(queryEmbedding: number[], topK: number): Promise<VectorSearchResult[]> {
     try {
       const allChunks = await this.raw.$queryRawUnsafe<any[]>(

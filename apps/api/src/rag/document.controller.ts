@@ -45,7 +45,7 @@ export class DocumentController {
 
   @Post('documents')
   @UseInterceptors(FileInterceptor('file', {
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, cb) => {
       const allowedTypes = [
         'text/plain', 'text/markdown', 'text/csv',

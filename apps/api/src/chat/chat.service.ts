@@ -2,9 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as sanitizeHtml from 'sanitize-html';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 export interface CreateMessageInput {
   conversationId: string;
   senderType: 'visitor' | 'agent' | 'ai' | 'system';
@@ -30,18 +27,13 @@ export interface CreateConversationInput {
   assignedUsername?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Service — Prisma persistence layer for chat operations
-// ---------------------------------------------------------------------------
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new conversation for a visitor.
-   */
+  /** Create a new conversation for a visitor. */
   async createConversation(input: CreateConversationInput) {
     const conversation = await this.prisma.conversation.create({
       data: {
@@ -65,9 +57,7 @@ export class ChatService {
     return conversation;
   }
 
-  /**
-   * Retrieve a conversation by ID with its messages.
-   */
+  /** Retrieve a conversation by ID with its messages. */
   async getConversation(conversationId: string) {
     return this.prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -87,16 +77,14 @@ export class ChatService {
     });
   }
 
-  /**
-   * List conversations with optional status filter.
-   */
+  /** List conversations with optional status filter. */
   async listConversations(status?: string) {
     return this.prisma.conversation.findMany({
       where: status ? { status } : undefined,
       include: {
         messages: {
           orderBy: { createdAt: 'desc' },
-          take: 1, // Only the latest message for preview
+          take: 1,
         },
         agent: {
           select: { id: true, displayName: true, isOnline: true },
@@ -116,10 +104,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Persist a new message. This is the ONLY method that writes messages to
-   * the database. The gateway MUST call this before emitting to the room.
-   */
+  /** Persist a new message. Gateway MUST call this before emitting to the room. */
   async createMessage(input: CreateMessageInput) {
     const cleanContent = input.content ? sanitizeHtml(input.content, {
       allowedTags: [], // Strip all HTML tags
@@ -138,7 +123,6 @@ export class ChatService {
       },
     });
 
-    // Touch the conversation's updatedAt
     await this.prisma.conversation.update({
       where: { id: input.conversationId },
       data: { updatedAt: new Date() },
@@ -150,9 +134,7 @@ export class ChatService {
     return message;
   }
 
-  /**
-   * Transfer conversation to a specialist.
-   */
+  /** Transfer conversation to a specialist. */
   async transferToSpecialist(conversationId: string, specialistUsername: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -163,9 +145,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Resolve a conversation — marks it as closed.
-   */
+  /** Resolve a conversation. */
   async resolveConversation(conversationId: string, resolvedByUsername?: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -176,9 +156,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Update the status of a conversation (e.g. 'ai' -> 'active' on handoff).
-   */
+  /** Update the status of a conversation. */
   async updateConversationStatus(conversationId: string, status: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -186,9 +164,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Assign an agent to a conversation.
-   */
+  /** Assign an agent to a conversation. */
   async assignAgent(conversationId: string, agentId: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -196,9 +172,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Update an agent's online presence state.
-   */
+  /** Update an agent's online presence state. */
   async setAgentOnline(agentId: string, isOnline: boolean) {
     return this.prisma.adminUser.update({
       where: { id: agentId },
@@ -209,9 +183,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Get all online agents.
-   */
+  /** Get all online agents. */
   async getOnlineAgents() {
     return this.prisma.adminUser.findMany({
       where: { isOnline: true },
@@ -225,9 +197,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Mark a message as read by setting the readAt timestamp.
-   */
+  /** Mark a message as read. */
   async markMessageAsRead(messageId: string) {
     return this.prisma.message.update({
       where: { id: messageId },
@@ -235,9 +205,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Submit a review for a resolved conversation.
-   */
+  /** Submit a review for a resolved conversation. */
   async submitReview(conversationId: string, rating: number, review?: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -249,9 +217,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Update internal agent remarks and assigned username for a conversation.
-   */
+  /** Update conversation details (remarks, assigned username). */
   async updateConversationDetails(conversationId: string, assignedUsername?: string, agentRemarks?: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },
@@ -262,9 +228,7 @@ export class ChatService {
     });
   }
 
-  /**
-   * Update visitor details (e.g. from pre-chat form).
-   */
+  /** Update visitor metadata (e.g. from pre-chat form). */
   async updateConversationMetadata(conversationId: string, metadata: string) {
     return this.prisma.conversation.update({
       where: { id: conversationId },

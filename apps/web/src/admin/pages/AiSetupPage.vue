@@ -169,13 +169,11 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
   <div class="h-full overflow-y-auto p-6">
     <h1 class="text-2xl font-bold text-gray-800 mb-6">AI Agent Setup</h1>
 
-    <!-- Error Banner -->
     <div v-if="aiStore.error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
       {{ aiStore.error }}
       <button @click="aiStore.error = null" class="float-right font-bold">&times;</button>
     </div>
 
-    <!-- AI Enable/Disable Toggle -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <div class="flex items-center justify-between">
         <div>
@@ -194,7 +192,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
       </div>
     </div>
 
-    <!-- AI Providers Section -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">AI Providers</h2>
@@ -203,7 +200,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
         </button>
       </div>
 
-      <!-- Provider List -->
       <div v-if="aiStore.providers.length === 0" class="text-gray-400 text-center py-8">
         No providers configured. Add one to get started.
       </div>
@@ -240,14 +236,12 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
         </div>
       </div>
 
-      <!-- Test Result -->
       <div v-if="testResult" class="mt-3 p-3 rounded text-sm"
            :class="testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
         {{ testResult.success ? 'Connection successful!' : `Connection failed: ${testResult.error}` }}
       </div>
     </div>
 
-    <!-- Provider Form Modal -->
     <div v-if="showProviderForm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
         <h3 class="text-lg font-semibold mb-4">{{ editingProvider ? 'Edit' : 'Add' }} Provider</h3>
@@ -295,7 +289,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
       </div>
     </div>
 
-    <!-- Agent Configuration -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">Agent Configuration</h2>
       <div class="space-y-4">
@@ -366,7 +359,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
           </div>
         </div>
 
-        <!-- Embedding Provider -->
         <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <label class="block text-sm font-medium text-gray-700 mb-1">Embedding Provider (for Knowledge Base / RAG)</label>
           <select v-model="configForm.embeddingProviderId"
@@ -382,7 +374,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
           </p>
         </div>
 
-        <!-- AI Translation Toggle -->
         <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div class="flex items-center justify-between">
             <div>
@@ -398,7 +389,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
           </div>
         </div>
 
-        <!-- Auto AI Translation Toggle -->
         <div v-if="configForm.translationEnabled" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div class="flex items-center justify-between">
             <div>
@@ -414,7 +404,6 @@ const systemPromptLength = computed(() => configForm.value.systemPrompt?.length 
           </div>
         </div>
 
-        <!-- Translation Provider -->
         <div v-if="configForm.translationEnabled" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <label class="block text-sm font-medium text-gray-700 mb-1">Translation Provider (for message translation)</label>
           <select v-model="configForm.translateProviderId"

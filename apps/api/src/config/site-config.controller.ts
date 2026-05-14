@@ -21,9 +21,7 @@ type AuthenticatedRequest = {
   };
 };
 
-// ---------------------------------------------------------------------------
-// DTOs
-// ---------------------------------------------------------------------------
+
 class CreateSiteConfigDto {
   @IsString()
   @IsNotEmpty()
@@ -136,9 +134,7 @@ class UpdateSiteConfigDto {
   isOfflineMode?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Controller — REST endpoints for site configuration
-// ---------------------------------------------------------------------------
+
 @Controller('config')
 export class SiteConfigController {
   constructor(
@@ -146,17 +142,12 @@ export class SiteConfigController {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Public endpoint — returns the active site config for the visitor widget.
-   * No auth required so the widget can fetch its configuration.
-   * Augments the response with `aiEnabled` based on whether an AI agent is configured.
-   */
+  /** Public endpoint — returns active site config for the visitor widget. */
   @Get('active')
   async getActiveConfig() {
     const config = await this.siteConfigService.getActiveConfig();
     if (!config) return null;
 
-    // Check if AI is enabled: an AiAgentConfig with an active provider must exist
     let aiEnabled = false;
     let translationEnabled = false;
     let autoTranslationEnabled = true;
@@ -170,9 +161,7 @@ export class SiteConfigController {
       }
       translationEnabled = agentConfig?.translationEnabled !== false;
       autoTranslationEnabled = agentConfig?.autoTranslationEnabled !== false;
-    } catch {
-      // AI tables may not exist yet — that's fine, aiEnabled stays false
-    }
+    } catch {} // AI tables may not exist yet
 
     const { allowedOrigins, adminAllowedIps, ...publicConfig } = config as any;
     return { ...publicConfig, aiEnabled, translationEnabled, autoTranslationEnabled };
@@ -184,9 +173,7 @@ export class SiteConfigController {
     return this.siteConfigService.getActiveConfig();
   }
 
-  /**
-   * Protected endpoints — admin only.
-   */
+  /** Protected endpoints — admin only. */
   @Get()
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async listConfigs() {

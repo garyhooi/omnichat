@@ -2,19 +2,17 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
 
-// ---------------------------------------------------------------------------
-// Props — mapped from HTML attributes by Vue's defineCustomElement
-// Blazor, Nuxt, or plain HTML pass these as hyphenated attributes:
-//   <omnichat-admin server-url="..." token="..."></omnichat-admin>
-// ---------------------------------------------------------------------------
+
+// Props mapped from HTML attributes (server-url, token)
+
 const props = defineProps({
   serverUrl: { type: String, required: true },
   token: { type: String, required: true },
 })
 
-// ---------------------------------------------------------------------------
+
 // State
-// ---------------------------------------------------------------------------
+
 interface Message {
   id: string
   conversationId: string
@@ -303,9 +301,9 @@ const filteredConversations = computed(() => {
 
 const isActive = computed(() => activeConversationData.value?.status === 'active' || activeConversationData.value?.status === 'specialist')
 
-// ---------------------------------------------------------------------------
-// Socket.io connection & event handlers
-// ---------------------------------------------------------------------------
+
+/** Set up socket event handlers. */
+
 function connect() {
   const s = io(props.serverUrl, {
     auth: { token: props.token },
@@ -314,7 +312,6 @@ function connect() {
   })
 
   s.on('connect', () => {
-    console.log('[OmniChat Admin] Connected to server')
   })
 
   s.on('conversations_list', (data: { conversations: Conversation[]; currentUser?: { id: string, username: string, displayName: string, role: string } }) => {
@@ -493,7 +490,6 @@ function connect() {
   })
 
   s.on('agent_presence', (data: { agents: any[] }) => {
-    console.log('[OmniChat Admin] Agent presence update:', data.agents)
   })
 
   s.on('error', (data: { message: string }) => {
@@ -501,15 +497,14 @@ function connect() {
   })
 
   s.on('disconnect', () => {
-    console.log('[OmniChat Admin] Disconnected from server')
   })
 
   socket.value = s
 }
 
-// ---------------------------------------------------------------------------
+
 // Memory management
-// ---------------------------------------------------------------------------
+
 const MAX_MESSAGES = 200
 const MAX_CONVERSATIONS = 100
 
@@ -525,9 +520,9 @@ function capConversations(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Actions
-// ---------------------------------------------------------------------------
+
 function selectConversation(conversationId: string) {
   activeConversationId.value = conversationId
   messages.value = []
@@ -656,18 +651,10 @@ async function processFile(file: File) {
     const isHeicFile = fileName.endsWith('.heic') || fileName.endsWith('.heif') || 
                        file.type === 'image/heic' || file.type === 'image/heif' ||
                        file.type === 'image/heic-sequence' || file.type === 'image/heif-sequence'
-    
-    console.log('File details:', {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      isHeicFile
-    })
-    
+
     // Only compress non-HEIC images in the browser
     // HEIC files will be converted on the backend
     if (isHeicFile) {
-      console.log('HEIC file detected - will be converted on backend')
     } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
     } else {
@@ -1153,9 +1140,9 @@ async function handleLogout() {
   }
 }
 
-// ---------------------------------------------------------------------------
+
 // Lifecycle
-// ---------------------------------------------------------------------------
+
 onMounted(() => {
   connect()
   loadSettings()
@@ -1170,7 +1157,7 @@ onUnmounted(() => {
 
 <template>
   <div class="omnichat-admin-root" style="position: relative; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; height: 100% !important; width: 100% !important; overflow: hidden !important;">
-    <!-- Sidebar Panel -->
+
     <div class="sidebar" style="width: 300px !important; min-width: 300px !important; max-width: 300px !important; flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; height: 100% !important; overflow: hidden !important; border-right: 1px solid #e5e7eb;">
       <div class="sidebar-header" style="flex-shrink: 0 !important; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; flex-direction: column;">
@@ -1208,7 +1195,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Active / Resolved / Specialist tabs -->
+
       <div class="sidebar-tabs">
         <button
           class="sidebar-tab"
@@ -1242,7 +1229,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Search Bar & Filters -->
+
       <div style="padding: 10px; border-bottom: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 8px;">
         <input 
           v-model="searchQuery" 
@@ -1267,7 +1254,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Conversation list -->
+
       <div class="conversation-list" style="flex: 1; min-height: 0; overflow-y: auto;">
         <div
           v-for="conv in filteredConversations"
@@ -1308,10 +1295,10 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Chat Window -->
+
     <div class="chat-window" style="flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; min-width: 0 !important; height: 100% !important; overflow: hidden !important; position: relative;" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
       <template v-if="activeConversationData">
-        <!-- Chat header -->
+
         <div class="chat-header" style="flex: 0 0 auto !important;">
           <div>
             <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
@@ -1400,7 +1387,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Drag Overlay -->
+
         <div
           v-if="isDragging"
           class="drag-overlay"
@@ -1411,7 +1398,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Conversation Details Panel -->
+
         <transition name="slide-down">
           <div v-if="showConversationDetails" class="conversation-details-panel">
             <div class="details-grid">
@@ -1465,7 +1452,7 @@ onUnmounted(() => {
           </div>
         </transition>
 
-        <!-- Messages -->
+
         <div ref="messagesContainer" class="messages-container" style="flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; overflow-x: hidden !important;">
           <div
             v-for="msg in messages"
@@ -1494,7 +1481,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Post-chat Review -->
+
         <div v-if="activeConversationData.rating" style="padding: 15px; background: #f3f4f6; text-align: center; border-top: 1px solid #e5e7eb;">
           <div style="font-weight: 600; color: #374151;">Visitor Review</div>
           <div style="font-size: 20px;" :style="{ color: bubbleColor }">
@@ -1505,7 +1492,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Typing indicator -->
+
       <div v-if="isTyping" class="typing-indicator" style="padding-bottom: 12px;">
         <span>{{ typingUser }} is typing</span>
       </div>
@@ -1560,7 +1547,7 @@ onUnmounted(() => {
         </div>
       </template>
 
-      <!-- No conversation selected -->
+
         <div v-else class="empty-state">
         <div style="text-align: center; color: #94a3b8; display: flex; flex-direction: column; align-items: center; gap: 16px;">
           <div style="font-size: 48px; opacity: 0.5;">💬</div>
@@ -1569,13 +1556,12 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Settings Drawer -->
-    <!-- Settings Overlay (moved outside drawer) -->
+
     <transition name="fade">
       <div v-if="showSettings" class="settings-overlay" @click="showSettings = false" />
     </transition>
     
-    <!-- Settings Drawer -->
+
     <transition name="slide-right">
       <div v-if="showSettings" class="settings-drawer fancy-drawer">
         <div class="drawer-header">
@@ -1755,7 +1741,7 @@ onUnmounted(() => {
         </div>
 
         <div v-if="settingsTab === 'quick-replies'" style="display: flex; flex-direction: column; gap: 16px;">
-          <!-- Quick Replies List -->
+
           <div v-if="!editingQuickReplyId">
             <button
               class="send-btn"
@@ -1781,7 +1767,7 @@ onUnmounted(() => {
             </div>
           </div>
           
-          <!-- Edit/Create Form -->
+
           <div v-if="editingQuickReplyId" style="background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">
             <h4 style="margin: 0 0 16px 0; font-size: 14px; font-weight: 600;">{{ editingQuickReplyId === 'new' ? 'New Quick Reply' : 'Edit Quick Reply' }}</h4>
             
@@ -1805,7 +1791,7 @@ onUnmounted(() => {
     </transition>
   </div>
 
-  <!-- Lightbox overlay -->
+
   <div v-if="selectedImage" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2147483647; display: flex; align-items: center; justify-content: center;" @click="closeImage">
     <button style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 32px; cursor: pointer;">&times;</button>
     <img :src="selectedImage" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;" @click.stop />

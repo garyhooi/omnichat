@@ -88,13 +88,11 @@ function downloadTemplate(filename: string) {
   <div class="h-full overflow-y-auto p-6">
     <h1 class="text-2xl font-bold text-gray-800 mb-6">Knowledge Base</h1>
 
-    <!-- Error Banner -->
     <div v-if="aiStore.error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
       {{ aiStore.error }}
       <button @click="aiStore.error = null" class="float-right font-bold">&times;</button>
     </div>
 
-    <!-- Upload Section -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">Upload Documents</h2>
       <p class="text-sm text-gray-500 mb-4">
@@ -134,7 +132,6 @@ function downloadTemplate(filename: string) {
       </div>
     </div>
 
-    <!-- Templates Section -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">FAQ Templates</h2>
       <p class="text-sm text-gray-500 mb-4">
@@ -153,7 +150,6 @@ function downloadTemplate(filename: string) {
       </div>
     </div>
 
-    <!-- Document List -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">Documents ({{ aiStore.documents.length }})</h2>
       <div v-if="aiStore.documents.length === 0" class="text-gray-400 text-center py-8">
@@ -179,7 +175,6 @@ function downloadTemplate(filename: string) {
       </div>
     </div>
 
-    <!-- Search Test -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">Test Search</h2>
       <div class="flex gap-2 mb-4">

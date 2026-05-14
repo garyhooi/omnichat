@@ -14,17 +14,14 @@ export class RefererValidatorMiddleware implements NestMiddleware {
     const referer = req.headers.referer;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
-    // Skip validation for admin endpoints (they use JWT auth)
     if (req.path.startsWith('/auth/') || (req.path.startsWith('/config/') && req.method !== 'GET')) {
       return next();
     }
 
-    // Allow requests with no referer (mobile apps, curl, etc.)
     if (!referer) {
       return next();
     }
 
-    // Allow localhost for development
     if (referer.startsWith('http://localhost') || referer.startsWith('http://127.0.0.1')) {
       return next();
     }
@@ -38,14 +35,12 @@ export class RefererValidatorMiddleware implements NestMiddleware {
         throw new ForbiddenException('Referer validation not configured');
       }
 
-      // Wildcard allows all referers
       if (config.allowedOrigins === '*') {
         return next();
       }
 
       const allowedOrigins = config.allowedOrigins.split(',').map((s: string) => s.trim());
       
-      // Extract origin from referer
       let refererOrigin: string;
       try {
         refererOrigin = new URL(referer).origin;
@@ -54,7 +49,6 @@ export class RefererValidatorMiddleware implements NestMiddleware {
         throw new ForbiddenException('Invalid referer header');
       }
 
-      // Validate referer origin
       const isRefererAllowed = allowedOrigins.some((allowedOrigin: string) => {
         return refererOrigin === allowedOrigin || 
                refererOrigin.endsWith('.' + allowedOrigin.replace(/^https?:\/\//, ''));
@@ -65,7 +59,6 @@ export class RefererValidatorMiddleware implements NestMiddleware {
         throw new ForbiddenException(`Referer not allowed: ${refererOrigin}`);
       }
 
-      // Additional security: Check for suspicious referer patterns
       this.checkForSuspiciousReferer(referer, ip);
 
       next();
@@ -78,7 +71,6 @@ export class RefererValidatorMiddleware implements NestMiddleware {
   }
 
   private checkForSuspiciousReferer(referer: string, ip: string): void {
-    // Check for common malicious patterns
     const suspiciousPatterns = [
       /data:/i,           // data URLs
       /javascript:/i,      // javascript URLs  
@@ -95,7 +87,6 @@ export class RefererValidatorMiddleware implements NestMiddleware {
       }
     }
 
-    // Check for excessively long referers (potential attack vector)
     if (referer.length > 2048) {
       this.securityLogger.logSuspiciousActivity(ip, 'Oversized referer header', referer.substring(0, 100) + '...');
       throw new ForbiddenException('Referer header too long');

@@ -2,11 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VectorStoreProvider, VectorChunk, VectorSearchResult } from './vector-store.interface';
 
-/**
- * MongoDB Atlas Vector Search implementation.
- * Automatically creates the required vector search index on startup
- * if it doesn't already exist.
- */
+/** MongoDB Atlas Vector Search implementation — auto-creates index on startup. */
 @Injectable()
 export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
   private readonly logger = new Logger(MongoDBVectorStore.name);
@@ -18,13 +14,9 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
     await this.ensureVectorIndex();
   }
 
-  /**
-   * Check if the Atlas Vector Search index exists; create it if missing.
-   * Uses the Atlas `createSearchIndexes` command (Atlas M10+ clusters, MongoDB 6.0+).
-   */
+  /** Check if Atlas Vector Search index exists; create if missing. */
   private async ensureVectorIndex(): Promise<void> {
     try {
-      // List existing search indexes on the DocumentChunk collection
       const listResult: any = await (this.prisma as any).$runCommandRaw({
         listSearchIndexes: 'DocumentChunk',
       });
@@ -63,7 +55,6 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
       this.logger.log('Atlas Vector Search index "vector_index" created successfully. It may take a few minutes to become active.');
       this.indexReady = true;
     } catch (error: any) {
-      // Non-fatal: might be on a free-tier or local MongoDB that doesn't support search indexes
       this.logger.warn(
         `Could not auto-create Atlas Vector Search index: ${error.message}. ` +
         `If you are using MongoDB Atlas (M10+), please create the index manually via the Atlas UI. ` +
@@ -88,7 +79,6 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
   }
 
   async similaritySearch(queryEmbedding: number[], topK: number): Promise<VectorSearchResult[]> {
-    // Skip Atlas $vectorSearch if we already know the index isn't available
     if (this.indexReady) {
       try {
         const results: any = await (this.prisma as any).$runCommandRaw({
@@ -128,7 +118,6 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
             metadata: doc.metadata,
           }));
         }
-        // If Atlas returned 0 results, also try fallback (index might still be building)
         this.logger.debug('Atlas Vector Search returned 0 results, trying fallback...');
       } catch (error: any) {
         this.logger.warn(`Atlas Vector Search failed: ${error.message}. Falling back to in-memory cosine similarity.`);
@@ -139,11 +128,7 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
     return this.fallbackCosineSimilaritySearch(queryEmbedding, topK);
   }
 
-  /**
-   * Fallback: fetch all chunks and compute cosine similarity in memory.
-   * Used when Atlas Vector Search index is unavailable (free-tier, local MongoDB,
-   * or index still building).
-   */
+  /** Fallback: cosine similarity in memory when Atlas index unavailable. */
   private async fallbackCosineSimilaritySearch(queryEmbedding: number[], topK: number): Promise<VectorSearchResult[]> {
     try {
       const allChunks = await this.prisma.documentChunk.findMany({
@@ -161,7 +146,6 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
 
       if (allChunks.length === 0) return [];
 
-      // Verify embeddings are present
       const chunksWithEmbeddings = allChunks.filter((c) => c.embedding && c.embedding.length > 0);
       if (chunksWithEmbeddings.length === 0) {
         this.logger.warn('All chunks have empty embeddings — documents may need to be re-uploaded');

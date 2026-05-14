@@ -40,10 +40,6 @@ export class AiConfigService {
     this.encryptionKey = scryptSync(secret, 'omnichat-ai-salt', 32);
   }
 
-  // =========================================================================
-  // API Key Encryption
-  // =========================================================================
-
   private encrypt(text: string): string {
     const iv = randomBytes(16);
     const cipher = createCipheriv('aes-256-cbc', this.encryptionKey, iv);
@@ -61,15 +57,10 @@ export class AiConfigService {
     return decrypted;
   }
 
-  // =========================================================================
-  // AI Provider CRUD
-  // =========================================================================
-
   async getProviders() {
     const providers = await this.prisma.aiProvider.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    // Mask API keys in response
     return providers.map((p) => ({
       ...p,
       apiKey: p.apiKey ? '••••••••' : null,
@@ -127,7 +118,6 @@ export class AiConfigService {
       updateData.apiKey = this.encrypt(data.apiKey);
     }
 
-    // If activating this provider, deactivate all others
     if (data.isActive) {
       await this.prisma.aiProvider.updateMany({
         where: { isActive: true },
@@ -149,7 +139,6 @@ export class AiConfigService {
     const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
     if (!provider) throw new Error('Provider not found');
 
-    // Decrypt API key for testing
     const config = {
       ...provider,
       apiKey: provider.apiKey ? this.decrypt(provider.apiKey) : null,
@@ -157,10 +146,6 @@ export class AiConfigService {
 
     return this.providerFactory.testConnection(config);
   }
-
-  // =========================================================================
-  // AI Agent Config CRUD
-  // =========================================================================
 
   async getAgentConfig() {
     return this.prisma.aiAgentConfig.findFirst();
@@ -210,10 +195,6 @@ export class AiConfigService {
       },
     });
   }
-
-  // =========================================================================
-  // Tool Registration CRUD
-  // =========================================================================
 
   async getTools() {
     return this.prisma.toolRegistration.findMany({
@@ -272,15 +253,7 @@ export class AiConfigService {
     return this.prisma.toolRegistration.delete({ where: { id } });
   }
 
-  // =========================================================================
-  // Embedding Provider
-  // =========================================================================
-
-  /**
-   * Get the provider to use for embeddings.
-   * If an embeddingProviderId is configured in AiAgentConfig, use that provider.
-   * Otherwise, fall back to the active chat provider.
-   */
+  /** Get embedding provider — falls back to active chat provider if not configured. */
   async getEmbeddingProvider() {
     const agentConfig = await this.prisma.aiAgentConfig.findFirst();
     if (agentConfig?.embeddingProviderId) {
@@ -300,11 +273,7 @@ export class AiConfigService {
     return this.getActiveProvider();
   }
 
-  /**
-   * Get the provider to use for translation.
-   * If a translateProviderId is configured in AiAgentConfig, use that provider.
-   * Otherwise, fall back to the active chat provider.
-   */
+  /** Get translation provider — falls back to active chat provider if not configured. */
   async getTranslationProvider() {
     const agentConfig = await this.prisma.aiAgentConfig.findFirst();
     if (agentConfig?.translateProviderId) {

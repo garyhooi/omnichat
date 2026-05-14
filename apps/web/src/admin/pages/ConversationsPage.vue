@@ -20,9 +20,7 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
   return h
 }
 
-// ---------------------------------------------------------------------------
 // Interfaces
-// ---------------------------------------------------------------------------
 interface Message {
   id: string
   conversationId: string
@@ -72,9 +70,7 @@ interface Conversation {
   unreadCount?: number
 }
 
-// ---------------------------------------------------------------------------
 // State
-// ---------------------------------------------------------------------------
 const socket = ref<Socket | null>(null)
 const conversations = ref<Conversation[]>([])
 const activeConversationId = ref<string | null>(null)
@@ -123,9 +119,7 @@ const quickReplies = ref<QuickReply[]>([])
 const showQuickReplyPopover = ref(false)
 const activeQuickReplyIndex = ref(0)
 
-// ---------------------------------------------------------------------------
 // Computed
-// ---------------------------------------------------------------------------
 const activeUnreadCount = computed(() => {
   return conversations.value
     .filter((c) => c.status === 'active')
@@ -223,9 +217,7 @@ const filteredQuickReplies = computed(() => {
   )
 })
 
-// ---------------------------------------------------------------------------
 // Audio
-// ---------------------------------------------------------------------------
 const audioPlayer = new Audio()
 
 function toggleMute() {
@@ -310,9 +302,7 @@ function playSound() {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Lightbox
-// ---------------------------------------------------------------------------
 function openImage(url: string) {
   selectedImage.value = url
 }
@@ -321,9 +311,7 @@ function closeImage() {
   selectedImage.value = null
 }
 
-// ---------------------------------------------------------------------------
 // Socket.io connection & event handlers
-// ---------------------------------------------------------------------------
 function connect() {
   const s = io(authStore.serverUrl, {
     auth: authStore.token && authStore.token !== 'cookie-auth' ? { token: authStore.token } : undefined,
@@ -332,7 +320,6 @@ function connect() {
   })
 
   s.on('connect', () => {
-    console.log('[OmniChat Admin] Connected to server')
   })
 
   s.on(
@@ -507,7 +494,6 @@ function connect() {
   })
 
   s.on('agent_presence', (data: { agents: any[] }) => {
-    console.log('[OmniChat Admin] Agent presence update:', data.agents)
   })
 
   s.on('error', (data: { message: string }) => {
@@ -515,15 +501,12 @@ function connect() {
   })
 
   s.on('disconnect', () => {
-    console.log('[OmniChat Admin] Disconnected from server')
   })
 
   socket.value = s
 }
 
-// ---------------------------------------------------------------------------
 // Memory management
-// ---------------------------------------------------------------------------
 const MAX_MESSAGES = 200
 const MAX_CONVERSATIONS = 100
 
@@ -539,9 +522,7 @@ function capConversations(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Actions
-// ---------------------------------------------------------------------------
 function selectConversation(conversationId: string) {
   activeConversationId.value = conversationId
   messages.value = []
@@ -680,7 +661,6 @@ async function processFile(file: File) {
       file.type === 'image/heif-sequence'
 
     if (isHeicFile) {
-      console.log('HEIC file detected - will be converted on backend')
     } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
     } else {
@@ -901,9 +881,7 @@ function insertQuickReply(content: string) {
   handleInputChange()
 }
 
-// ---------------------------------------------------------------------------
 // Data loading
-// ---------------------------------------------------------------------------
 async function loadAdminList() {
   try {
     const res = await fetch(`${authStore.serverUrl}/admin/users`, {
@@ -958,9 +936,7 @@ async function loadQuickReplies() {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Lifecycle
-// ---------------------------------------------------------------------------
 onMounted(() => {
   connect()
   loadSettings()
@@ -994,7 +970,6 @@ watch(showLangPopover, (val) => {
       overflow: hidden !important;
     "
   >
-    <!-- Sidebar Panel -->
     <div
       class="sidebar"
       style="
@@ -1058,7 +1033,6 @@ watch(showLangPopover, (val) => {
         </div>
       </div>
 
-      <!-- Active / Resolved / Specialist tabs -->
       <div class="sidebar-tabs">
         <button
           class="sidebar-tab"
@@ -1139,7 +1113,6 @@ watch(showLangPopover, (val) => {
         </button>
       </div>
 
-      <!-- Search Bar & Filters -->
       <div style="padding: 10px; border-bottom: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 8px">
         <input
           v-model="searchQuery"
@@ -1178,7 +1151,6 @@ watch(showLangPopover, (val) => {
         </div>
       </div>
 
-      <!-- Conversation list -->
       <div class="conversation-list" style="flex: 1; min-height: 0; overflow-y: auto">
         <div
           v-for="conv in filteredConversations"
@@ -1284,7 +1256,6 @@ watch(showLangPopover, (val) => {
       </div>
     </div>
 
-    <!-- Chat Window -->
     <div
       class="chat-window"
       style="
@@ -1302,7 +1273,6 @@ watch(showLangPopover, (val) => {
       @drop="onPanelDrop"
     >
       <template v-if="activeConversationData">
-        <!-- Chat header -->
         <div class="chat-header" style="flex: 0 0 auto !important">
           <div>
             <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px">
@@ -1522,7 +1492,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Drag Overlay -->
         <div v-if="isDragging" class="drag-overlay">
           <div class="drag-overlay-content">
             <span style="font-size: 40px; margin-bottom: 12px; display: block; text-align: center">📥</span>
@@ -1530,7 +1499,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Conversation Details Panel -->
         <transition name="slide-down">
           <div v-if="showConversationDetails" class="conversation-details-panel">
             <div class="details-grid">
@@ -1634,7 +1602,6 @@ watch(showLangPopover, (val) => {
           </div>
         </transition>
 
-        <!-- Messages -->
         <div
           ref="messagesContainer"
           class="messages-container"
@@ -1713,7 +1680,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Post-chat Review -->
         <div
           v-if="activeConversationData.rating"
           style="padding: 15px; background: #f3f4f6; text-align: center; border-top: 1px solid #e5e7eb"
@@ -1731,7 +1697,6 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <!-- Typing indicator -->
         <div v-if="isTyping" class="typing-indicator" style="padding-bottom: 12px">
           <span>{{ typingUser }} is typing</span>
         </div>
@@ -1845,7 +1810,6 @@ watch(showLangPopover, (val) => {
         </div>
       </template>
 
-      <!-- No conversation selected -->
       <div v-else class="empty-state">
         <div
           style="
@@ -1866,7 +1830,6 @@ watch(showLangPopover, (val) => {
     </div>
   </div>
 
-  <!-- Lightbox overlay -->
   <div
     v-if="selectedImage"
     style="

@@ -12,7 +12,6 @@ export class QuickReplyService {
   }
 
   async create(title: string, content: string) {
-    // Validation: title and content length limits
     if ((title || '').trim().length === 0) throw new BadRequestException('Title is required');
     if (title.length > 200) throw new BadRequestException('Title is too long (max 200 characters)');
     if (content.length > 1000) throw new BadRequestException('Content is too long (max 1000 characters)');

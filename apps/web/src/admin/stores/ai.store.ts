@@ -93,7 +93,6 @@ export const useAiStore = defineStore('ai', () => {
     return text ? JSON.parse(text) : null
   }
 
-  // --- Providers ---
   async function loadProviders() {
     try {
       providers.value = await fetchApi('/ai/config/providers')
@@ -136,7 +135,6 @@ export const useAiStore = defineStore('ai', () => {
     return fetchApi(`/ai/config/providers/${id}/test`, { method: 'POST' })
   }
 
-  // --- Agent Config ---
   async function loadAgentConfig() {
     try {
       agentConfig.value = await fetchApi('/ai/config/agent')
@@ -153,7 +151,6 @@ export const useAiStore = defineStore('ai', () => {
     })
   }
 
-  // --- Knowledge Documents ---
   async function loadDocuments() {
     try {
       documents.value = await fetchApi('/ai/knowledge/documents')
@@ -197,7 +194,6 @@ export const useAiStore = defineStore('ai', () => {
     })
   }
 
-  // --- Tool Registration ---
   async function loadTools() {
     try {
       tools.value = await fetchApi('/ai/config/tools')

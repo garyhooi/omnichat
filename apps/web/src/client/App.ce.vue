@@ -9,10 +9,7 @@ const WIDGET_MARGIN = 12
 const DESKTOP_PANEL_GAP = 16
 const MOBILE_PANEL_MARGIN = 12
 
-// ---------------------------------------------------------------------------
-// Props — mapped from HTML attributes by Vue's defineCustomElement
-// Usage: <omnichat-widget server-url="https://api.yoursite.com"></omnichat-widget>
-// ---------------------------------------------------------------------------
+
 const props = defineProps({
   serverUrl: { type: String, required: true },
   bubbleColor: { type: String, default: '#4F46E5' },
@@ -21,9 +18,7 @@ const props = defineProps({
   externalAuthToken: { type: String, default: '' },
 })
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
+
 interface Message {
   id: string
   conversationId: string
@@ -56,7 +51,7 @@ const isAiEnabled = ref(false)
 const isTranslationEnabled = ref(true)
 const autoTranslationEnabled = ref(true)
 
-// Throttled scroll for AI streaming to prevent UI freeze
+// Throttled scroll for AI streaming
 let _scrollRafId: number | null = null
 let _userScrolledUp = false
 
@@ -77,7 +72,7 @@ function throttledScrollToBottom() {
   })
 }
 
-// Track user scroll during AI streaming — allow user to scroll up freely
+// Track user scroll during AI streaming
 function onMessagesScroll() {
   if (isAiStreaming.value) {
     _userScrolledUp = !isNearBottom()
@@ -395,8 +390,7 @@ function initializeWidgetPosition(configPosition?: string | null) {
     }
   }
 
-  // Restore last panel anchor position so the panel opens where it was dragged
-  const savedPanel = parseWidgetPosition(localStorage.getItem(panelAnchorStorageKey.value))
+    const savedPanel = parseWidgetPosition(localStorage.getItem(panelAnchorStorageKey.value))
   if (savedPanel) {
     panelAnchorX.value = savedPanel.x
     panelAnchorY.value = savedPanel.y
@@ -493,7 +487,7 @@ function closeImage() {
   selectedImage.value = null
 }
 
-// Generate or retrieve a persistent visitor ID
+// Generate or retrieve persistent visitor ID
 function getVisitorId(): string {
   const storageKey = 'omnichat_visitor_id'
   let id = localStorage.getItem(storageKey)
@@ -501,7 +495,6 @@ function getVisitorId(): string {
     if (window.crypto && crypto.randomUUID) {
       id = 'v_' + crypto.randomUUID()
     } else {
-      // Fallback for older browsers
       id = 'v_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
     }
     localStorage.setItem(storageKey, id)
@@ -509,9 +502,7 @@ function getVisitorId(): string {
   return id
 }
 
-// ---------------------------------------------------------------------------
-// Socket.io connection
-// ---------------------------------------------------------------------------
+
 function connect() {
   visitorId.value = getVisitorId()
 
@@ -521,7 +512,6 @@ function connect() {
   })
 
   s.on('connect', () => {
-    console.log('[OmniChat Widget] Connected')
     // Rejoin existing conversation from local storage on reconnect
     const existingConvId = localStorage.getItem('omnichat_conversation_id')
     if (existingConvId) {
@@ -532,12 +522,10 @@ function connect() {
 
   s.on('upload_token', (data: { token: string }) => {
     uploadToken.value = data.token
-    console.log('[OmniChat Widget] Upload token received')
   })
 
   s.on('conversation_started', (data: { conversation: { id: string } }) => {
     conversationId.value = data.conversation.id
-    // Store conversation ID so the visitor can resume on page refresh or across tabs
     localStorage.setItem('omnichat_conversation_id', data.conversation.id)
   })
 
@@ -581,12 +569,10 @@ function connect() {
 
   s.on('new_message', (data: { message: Message }) => {
     if (data.message.conversationId === conversationId.value) {
-      // If AI streaming just completed, don't duplicate the final message
       if (data.message.senderType === 'ai' && isAiStreaming.value) {
         isAiStreaming.value = false
         aiStreamingText.value = ''
         _userScrolledUp = false // reset scroll lock when streaming ends
-        // The persisted message replaces the streaming bubble
       }
       messages.value.push(data.message)
       capMessages()
@@ -614,7 +600,6 @@ function connect() {
   s.on('ai_stream', (data: { conversationId: string; token: string; isComplete: boolean; fullText?: string }) => {
     if (data.conversationId !== conversationId.value) return
     if (data.isComplete) {
-      // Stream finished — the new_message event will add the final message
       return
     }
     isAiStreaming.value = true
@@ -643,22 +628,19 @@ function connect() {
   })
 
   s.on('error', (data: { message: string }) => {
-    console.error('[OmniChat Widget] Error:', data.message)
+    console.error('Widget Error:', data.message)
     if (data.message === 'Failed to resolve conversation') {
       isResolved.value = true
     }
   })
 
   s.on('disconnect', () => {
-    console.log('[OmniChat Widget] Disconnected')
   })
 
   socket.value = s
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+
 const MAX_MESSAGES = 200
 
 function capMessages(): void {
@@ -672,9 +654,7 @@ function formatTicketId(id: string | null): string {
   return id.slice(-8).toUpperCase()
 }
 
-// ---------------------------------------------------------------------------
-// Actions
-// ---------------------------------------------------------------------------
+
 function onPanelDragEnter(event: DragEvent) {
   if (!conversationId.value || !isOpen.value) return
   event.preventDefault()
@@ -831,17 +811,11 @@ async function processFile(file: File) {
                        file.type === 'image/heic' || file.type === 'image/heif' ||
                        file.type === 'image/heic-sequence' || file.type === 'image/heif-sequence'
     
-    console.log('File details:', {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      isHeicFile
-    })
+
     
     // Only compress non-HEIC images in the browser
     // HEIC files will be converted on the backend
     if (isHeicFile) {
-      console.log('HEIC file detected - will be converted on backend')
     } else if (file.type.match(/image\/(jpeg|jpg|png|webp)/)) {
       file = await compressImage(file, 1200, 0.8)
     } else {
@@ -881,16 +855,19 @@ async function processFile(file: File) {
 
     const data = await res.json()
 
-    // Send message as image
+    if (data.uploadToken) {
+      uploadToken.value = data.uploadToken
+    }
+
     socket.value?.emit('send_message', {
       conversationId: conversationId.value,
-      content: '', // Optional caption if we want
+      content: '',
       messageType: 'image',
       attachmentUrl: `${props.serverUrl}${data.url}`,
       attachmentThumbnailUrl: `${props.serverUrl}${data.thumbnailUrl || data.url}`,
     })
   } catch (error) {
-    console.error('File upload error:', error)
+    console.error('Upload error:', error)
     alert('Failed to upload file.')
   } finally {
     isUploading.value = false
@@ -977,7 +954,6 @@ function scrollToBottom(instant = false) {
       // Instant scroll — used during AI streaming to prevent freeze
       messagesArea.value.scrollTop = messagesArea.value.scrollHeight
     } else {
-      // Smooth scroll for normal messages
       messagesArea.value.scrollTo({
         top: messagesArea.value.scrollHeight,
         behavior: 'smooth',
@@ -1014,9 +990,7 @@ function requestHuman() {
   })
 }
 
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
+
 onMounted(() => {
   refreshViewport()
   initializeWidgetPosition(props.position)
@@ -1042,15 +1016,12 @@ onMounted(() => {
       initializeWidgetPosition(siteWebsitePosition.value)
     })
     .catch(() => {
-      // Config endpoint is optional — widget still works with prop defaults
     })
 
   window.addEventListener('resize', refreshViewport)
   connect()
 })
 
-// Insert a hidden DOM node into the host element at runtime so it is visible
-// in the final compiled output / inspector. This avoids build-time stripping.
 onMounted(() => {
   try {
     const host = document.querySelector('omnichat-widget') as HTMLElement | null
@@ -1088,9 +1059,7 @@ watch(showLangPopover, (val) => {
 </script>
 
 <template>
-  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
-  <!-- Floating chat bubble -->
   <div class="chat-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
@@ -1112,9 +1081,7 @@ watch(showLangPopover, (val) => {
     </div>
   </div>
 
-  <!-- Chat panel -->
   <div v-if="isOpen" :class="['chat-panel', { 'chat-panel-mobile': isSmallScreen }]" :style="dynamicPanelStyle" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
-    <!-- Header -->
     <div class="panel-header" :class="{ draggable: !isSmallScreen }" :style="{ backgroundColor: currentBubbleColor }" @pointerdown="startWidgetDrag">
       <div style="display: flex; flex-direction: column;">
         <h3 style="margin: 0; font-size: 16px;">Chat with us</h3>
@@ -1182,7 +1149,6 @@ watch(showLangPopover, (val) => {
         </button>
       </div>
     </div>
-    <!-- Drag Overlay -->
     <div
       v-if="isDragging"
       class="drag-overlay"
@@ -1193,7 +1159,6 @@ watch(showLangPopover, (val) => {
       </div>
     </div>
 
-    <!-- Welcome screen (no active conversation) -->
     <template v-if="!conversationId">
       <div class="welcome-screen">
         <template v-if="siteIsOfflineMode && !isAiEnabled">
@@ -1224,9 +1189,7 @@ watch(showLangPopover, (val) => {
       </div>
     </template>
 
-    <!-- Active conversation -->
     <template v-else>
-      <!-- Messages area -->
       <div ref="messagesArea" class="messages-area">
         <div
           v-for="msg in messages"
@@ -1272,18 +1235,15 @@ watch(showLangPopover, (val) => {
         </div>
       </div>
 
-      <!-- AI streaming bubble -->
       <div v-if="isAiStreaming && aiStreamingText" class="msg-bubble ai ai-streaming" style="align-self: flex-start;">
         <div class="ai-label">AI Agent</div>
         <div class="md-content" v-html="renderMarkdown(aiStreamingText)"></div><span class="ai-cursor">|</span>
       </div>
 
-      <!-- Typing indicator -->
       <div v-if="isTyping" class="typing-hint">
         <span>{{ typingUser }} is typing</span>
       </div>
 
-      <!-- Resolved state & Review -->
       <template v-if="isResolved">
         <div class="resolved-banner">
           This conversation has been resolved. <br/>
@@ -1315,9 +1275,7 @@ watch(showLangPopover, (val) => {
         </div>
       </template>
 
-      <!-- Input area (only when conversation is active) -->
       <template v-else>
-        <!-- End Chat Confirmation Overlay -->
         <div v-if="showEndChatConfirm" class="confirm-action-area">
           <span class="confirm-text">End this chat?</span>
           <div class="confirm-buttons">
@@ -1379,11 +1337,9 @@ watch(showLangPopover, (val) => {
     </template>
   </div>
 
-  <!-- Lightbox overlay -->
   <div v-if="selectedImage" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2147483647; display: flex; align-items: center; justify-content: center;" @click="closeImage">
     <button style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: white; font-size: 32px; cursor: pointer;">&times;</button>
     <img :src="selectedImage" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;" @click.stop />
   </div>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
-  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
 </template>

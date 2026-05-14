@@ -45,7 +45,6 @@ async function deleteTool(id: string) {
   <div class="h-full overflow-y-auto p-6">
     <h1 class="text-2xl font-bold text-gray-800 mb-6">Tool Registry</h1>
 
-    <!-- Built-in Tools -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="text-lg font-semibold mb-4">Built-in Tools</h2>
       <p class="text-sm text-gray-500 mb-4">
@@ -66,7 +65,6 @@ async function deleteTool(id: string) {
       </div>
     </div>
 
-    <!-- External Tools -->
     <div class="bg-white rounded-lg shadow p-6">
       <h2 class="text-lg font-semibold mb-4">External Tools</h2>
       <p class="text-sm text-gray-500 mb-4">
@@ -100,7 +98,6 @@ async function deleteTool(id: string) {
         </div>
       </div>
 
-      <!-- Developer Guide -->
       <div class="mt-6 bg-gray-50 rounded-lg p-4">
         <h3 class="text-sm font-semibold text-gray-700 mb-2">Developer Guide: Creating External Tools</h3>
         <div class="text-xs text-gray-600 space-y-2">

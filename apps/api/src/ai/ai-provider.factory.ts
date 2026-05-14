@@ -17,9 +17,7 @@ export interface AiProviderConfig {
   embeddingModelId: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Provider metadata — single source of truth for defaults
-// ---------------------------------------------------------------------------
+// Provider metadata — source of truth for defaults
 interface ProviderMeta {
   defaultBaseUrl?: string;          // Required for non-OpenAI providers
   defaultEmbeddingModel?: string;   // null = provider doesn't support embeddings
@@ -123,10 +121,7 @@ export class AiProviderFactory {
     return config.baseUrl || meta?.defaultBaseUrl || undefined;
   }
 
-  /**
-   * Fetch the active AI provider configuration from the database.
-   * Decrypts the API key before returning.
-   */
+  /** Fetch the active AI provider configuration from the database. */
   async getActiveProvider(): Promise<AiProviderConfig | null> {
     const provider = await this.prisma.aiProvider.findFirst({
       where: { isActive: true },
@@ -142,9 +137,7 @@ export class AiProviderFactory {
     return provider;
   }
 
-  /**
-   * Create a Vercel AI SDK language model from the provider config.
-   */
+  /** Create a language model from the provider config. */
   createLanguageModel(config: AiProviderConfig): LanguageModelV1 {
     const meta = PROVIDER_META[config.providerType];
     if (!meta) {
@@ -176,11 +169,7 @@ export class AiProviderFactory {
     }
   }
 
-  /**
-   * Create an embedding model from the provider config.
-   * Uses provider-specific default embedding models when none is configured.
-   * Throws a clear error for providers that don't support embeddings.
-   */
+  /** Create an embedding model from the provider config. */
   createEmbeddingModel(config: AiProviderConfig): EmbeddingModel<string> {
     const meta = PROVIDER_META[config.providerType];
     if (!meta) {
@@ -213,18 +202,14 @@ export class AiProviderFactory {
     }
   }
 
-  /**
-   * Check if a provider supports image (multi-modal) inputs.
-   */
+  /** Check if a provider supports image (multi-modal) inputs. */
   supportsImages(config: AiProviderConfig): boolean {
     const meta = PROVIDER_META[config.providerType];
     if (!meta) return false;
     return meta.supportsImages;
   }
 
-  /**
-   * Test the connection to the AI provider.
-   */
+  /** Test the connection to the AI provider. */
   async testConnection(config: AiProviderConfig): Promise<{ success: boolean; error?: string }> {
     try {
       const { generateText } = await import('ai');

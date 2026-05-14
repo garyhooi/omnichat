@@ -23,11 +23,7 @@ interface ChatRequestBody {
   visitorId?: string;
 }
 
-/**
- * REST endpoint for AI chat streaming via SSE.
- * Used by the visitor widget's `useChat` composable from `@ai-sdk/vue`.
- * This is a public endpoint (no JWT auth) — secured by conversation validation + rate limiting.
- */
+/** REST endpoint for AI chat streaming via SSE. */
 @Controller('ai/chat')
 export class AiChatController {
   constructor(
