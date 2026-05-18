@@ -10,11 +10,11 @@
         body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; }
     </style>
 
-    <!-- Load OmniChat Visitor Bundle from jsDelivr CDN -->
-    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-visitor.js" crossorigin="anonymous"></script> -->
+    <!-- Load OmniChat Chat Page Bundle from jsDelivr CDN -->
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-chat-page.js" crossorigin="anonymous"></script> -->
 
     <!-- Fallback for local testing if the CDN version isn't pushed yet -->
-    <script src="../apps/web/dist/omnichat-visitor.js"></script>
+    <script src="../apps/web/dist/omnichat-chat-page.js"></script>
 </head>
 <body>
     <script>
@@ -29,11 +29,11 @@
         const welcomeMsg = params.get('welcome') || 'Hello! How can we help you today?'
 
         // Create and mount the custom element
-        const visitor = document.createElement('omnichat-visitor')
-        visitor.setAttribute('server-url', serverUrl)
-        visitor.setAttribute('bubble-color', bubbleColor)
-        visitor.setAttribute('welcome-message', welcomeMsg)
-        document.body.appendChild(visitor)
+        const chatPage = document.createElement('omnichat-chat-page')
+        chatPage.setAttribute('server-url', serverUrl)
+        chatPage.setAttribute('bubble-color', bubbleColor)
+        chatPage.setAttribute('welcome-message', welcomeMsg)
+        document.body.appendChild(chatPage)
     </script>
 </body>
 </html>

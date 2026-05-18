@@ -6,7 +6,7 @@ import { resolve } from 'path'
 // Vite config — Development server
 // ---------------------------------------------------------------------------
 // This config is used for `vite dev` during development.
-// For production builds, use vite.config.admin.ts or vite.config.client.ts.
+// For production builds, use vite.config.admin-portal.ts, vite.config.chat-widget.ts, vite.config.agent-widget.ts, or vite.config.chat-page.ts.
 // ---------------------------------------------------------------------------
 
 export default defineConfig({

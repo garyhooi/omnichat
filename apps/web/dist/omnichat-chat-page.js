@@ -1,4 +1,4 @@
-var OmniChatVisitor=function(Ht){"use strict";var sd=Object.defineProperty;var id=(Ht,ht,J)=>ht in Ht?sd(Ht,ht,{enumerable:!0,configurable:!0,writable:!0,value:J}):Ht[ht]=J;var ce=(Ht,ht,J)=>id(Ht,typeof ht!="symbol"?ht+"":ht,J);/**
+var OmniChatChatPage=function(Ht){"use strict";var sd=Object.defineProperty;var id=(Ht,ht,J)=>ht in Ht?sd(Ht,ht,{enumerable:!0,configurable:!0,writable:!0,value:J}):Ht[ht]=J;var ce=(Ht,ht,J)=>id(Ht,typeof ht!="symbol"?ht+"":ht,J);/**
 * @vue/shared v3.5.32
 * (c) 2018-present Yuxi (Evan) You and Vue contributors
 * @license MIT
@@ -1983,4 +1983,4 @@ video {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-`]});return customElements.define("omnichat-visitor",Il),Ht.OmniChatVisitor=Il,Object.defineProperty(Ht,Symbol.toStringTag,{value:"Module"}),Ht}({});
+`]});return customElements.define("omnichat-chat-page",Il),Ht.OmniChatChatPage=Il,Object.defineProperty(Ht,Symbol.toStringTag,{value:"Module"}),Ht}({});

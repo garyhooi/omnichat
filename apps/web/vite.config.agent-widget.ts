@@ -3,20 +3,18 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 // ---------------------------------------------------------------------------
-// Vite config — Visitor Widget build
+// Vite config — Agent Widget build
 // ---------------------------------------------------------------------------
-// Output: dist/omnichat-client.js
+// Output: dist/omnichat-agent-widget.js
 // Format: IIFE (no module loader required — just a <script> tag)
-// Custom element: <omnichat-widget>
+// Custom element: <omnichat-agent-widget>
 // ---------------------------------------------------------------------------
 
 export default defineConfig({
   plugins: [
     vue({
-      // Enable custom element mode for .ce.vue files
       customElement: true,
     }),
-    // Suppress extracted CSS file — all styles are inlined in the custom element
     {
       name: 'no-css-file',
       enforce: 'post' as const,
@@ -32,24 +30,19 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/client/main.ts'),
+      entry: resolve(__dirname, 'src/agent-widget/main.ts'),
       formats: ['iife'],
-      name: 'OmniChatWidget',
-      fileName: () => 'omnichat-client.js',
+      name: 'OmniChatAgentWidget',
+      fileName: () => 'omnichat-agent-widget.js',
     },
     rollupOptions: {
       output: {
-        // Single-file output — all dependencies inlined
         inlineDynamicImports: true,
       },
     },
-    // Target modern browsers for smaller bundles
     target: 'es2020',
-    // Minify for production
     minify: 'terser',
-    // Output to dist/
     outDir: 'dist',
-    // Don't clear dist — we want both admin and client bundles to coexist
     emptyOutDir: false,
   },
   resolve: {

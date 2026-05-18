@@ -6,13 +6,20 @@
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)
 ![Socket.io](https://img.shields.io/badge/Socket.io-010101?logo=socket.io&logoColor=white)
 
-**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight Vue 3 widget for instant visitor engagement and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website and integrate the powerful agent dashboard directly into their existing backoffice.
+**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight Vue 3 chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
 
 <div align="center">
-  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Dashboard" width="48%" />
-  <img src="docs/img/ss-widget.png" alt="OmniChat Visitor Widget" width="48%" />
+  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Portal" width="48%" />
+  <img src="docs/img/ss-widget.png" alt="OmniChat Chat Widget" width="48%" />
   <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent" width="48%" />
   <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="48%" />
+</div>
+
+<div align="center">
+  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Portal" width="23%" style="margin:4px" />
+  <img src="docs/img/ss-widget.png" alt="OmniChat Chat Widget" width="23%" style="margin:4px" />
+  <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent" width="23%" style="margin:4px" />
+  <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="23%" style="margin:4px" />
 </div>
 
 ## ✨ Features
@@ -54,19 +61,20 @@ This project is structured as a Bun workspace monorepo:
 * **Backend (`apps/api`)**: NestJS, Prisma (MongoDB, PostgreSQL, MySQL), Socket.io, Multer, Sharp.
 * **Frontend (`apps/web`)**: Vue 3 (compiled to Custom Web Components via Vite).
 
-## 🧩 Widget Usage & Attributes
+## 🧩 Web Component Usage & Attributes
 
 OmniChat is compiled into native Web Components, meaning you can drop them into any framework (React, Angular, Vue, Blazor) or plain HTML.
 
-### Client Visitor Widget (`<omnichat-widget>`)
+### Chat Widget (`<omnichat-chat-widget>`)
+A floating bubble that opens a chat panel. Drop it onto any page for instant visitor engagement.
 ```html
-<omnichat-widget
+<omnichat-chat-widget
   server-url="https://api.yoursite.com"
   bubble-color="#4F46E5"
   welcome-message="Hello! How can we help you?"
   position="bottom-right"
   assign-username="logged_in_user123">
-</omnichat-widget>
+</omnichat-chat-widget>
 ```
 **Supported Attributes:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
@@ -75,24 +83,25 @@ OmniChat is compiled into native Web Components, meaning you can drop them into 
 * `position` (Optional): Where the widget renders on the screen (defaults to `bottom-right`).
 * `assign-username` (Optional): Automatically link an authenticated visitor's username to their chat session for tracking.
 
-### Admin Dashboard Widget (`<omnichat-admin>`)
+### Admin Portal (`<omnichat-admin-portal>`)
+A full admin dashboard for managing conversations, AI settings, knowledge base, tools, logs, and users. Embed it as a standalone page or within your own admin iframe.
 ```html
-<omnichat-admin
+<omnichat-admin-portal
   server-url="https://api.yoursite.com"
   token="eyJhbGciOiJIUzI1NiIsInR...">
-</omnichat-admin>
+</omnichat-admin-portal>
 ```
 **Supported Attributes:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
 * `token` (Required): The JWT authentication token for the logged-in agent/admin.
 
-### Admin Floating Widget (`<omnichat-admin-widget>`)
+### Agent Widget (`<omnichat-agent-widget>`)
 A compact, always-accessible chat panel for agents to embed in their own backoffice or admin dashboard. Agents can manage conversations from any page without switching views.
 ```html
-<omnichat-admin-widget
+<omnichat-agent-widget
   server-url="https://api.yoursite.com"
   token="eyJhbGciOiJIUzI1NiIsInR...">
-</omnichat-admin-widget>
+</omnichat-agent-widget>
 ```
 **Key Features:**
 * **Draggable Bubble & Panel**: Drag the floating bubble anywhere on screen; reposition the panel by its header.
@@ -107,6 +116,34 @@ A compact, always-accessible chat panel for agents to embed in their own backoff
 **Supported Attributes:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
 * `token` (Required): The JWT authentication token for the logged-in agent/admin. The agent's username is extracted from the JWT payload.
+
+### Chat Page (`<omnichat-chat-page>`)
+A full-page live chat that opens in a new tab. Ideal for embedding deep links on your website — visitors click the link and get a complete chat interface, not a floating bubble.
+
+Also works as an embeddable custom element inside any page.
+
+**As a custom element:**
+```html
+<omnichat-chat-page
+  server-url="https://api.yoursite.com"
+  bubble-color="#4F46E5"
+  welcome-message="Hello! How can we help you?">
+</omnichat-chat-page>
+```
+
+**As a standalone page:** Link to `chat-app.html?server=http://localhost:3001` to open a full-page chat in a new tab. Supports query params `?server=`, `?color=`, and `?welcome=`.
+
+**Key Features:**
+* **Full-Page Experience**: No floating bubble — the entire viewport is the chat interface.
+* **All Widget Features**: Pre-chat form, real-time messaging, AI streaming, typing indicators, file upload, translation, reviews, and more.
+* **Responsive**: Works on mobile and desktop with viewport-filling layout.
+* **Embeddable**: Use `<omnichat-chat-page>` as a custom element or link directly to the standalone HTML page.
+* **Standalone Demo**: Available at `demo/chat-app.html?server=http://localhost:3001`.
+
+**Supported Attributes:**
+* `server-url` (Required): The base URL of your OmniChat backend API.
+* `bubble-color` (Optional): Hex color code for the chat theme (defaults to `#4F46E5`). Can be overridden by backend site config.
+* `welcome-message` (Optional): The default greeting message. Can be overridden by backend site config.
 
 ## 🚀 Quick Start
 
@@ -218,9 +255,10 @@ Both deployment methods provide **identical HEIC conversion functionality**. Cho
 
 You can easily embed OmniChat via CDN:
 
-* **Admin Portal Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js`
-* **Admin Floating Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin-widget.js`
-* **Client Visitor Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-client.js`
+* **Admin Portal**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin-portal.js`
+* **Chat Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-chat-widget.js`
+* **Agent Widget**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-agent-widget.js`
+* **Chat Page**: `https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-chat-page.js`
 
 ### Prerequisites
 * Bun
@@ -278,17 +316,25 @@ omnichat/
 │   │   └── .env.example
 │   └── web/                        ← Vue 3 Web Components
 │       ├── src/
-│       │   ├── admin/
+│       │   ├── admin-portal/
 │       │   │   ├── AdminDashboard.ce.vue
 │       │   │   └── main.ce.ts
-│       │   ├── admin-widget/
+│       │   ├── agent-widget/
 │       │   │   ├── App.ce.vue
 │       │   │   └── main.ts
-│       │   ├── client/
+│       │   ├── chat-widget/
+│       │   │   ├── App.ce.vue
+│       │   │   └── main.ts
+│       │   ├── chat-page/
 │       │   │   ├── App.ce.vue
 │       │   │   └── main.ts
 │       │   └── utils/
-│       └── vite.config.ts
+│       ├── demo/
+│       │   ├── admin.html
+│       │   ├── widget.html
+│       │   ├── chat-page.html
+│       │   └── chat-app.html
+│       └── vite.config.*.ts
 ├── docker-compose.yml
 └── scripts/
     └── use-provider.sh
@@ -308,6 +354,13 @@ For more detailed setup instructions, including Docker and Production deployment
 ## 🤝 Contributing
 
 Contributions are welcome! If you'd like to improve OmniChat, please fork the repository and submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## 💖 Support
+
+If you find OmniChat useful, consider supporting its development:
+
+* **USDT (TRC20):** `TPZ1yCehxRQsJWRW1Sq8f3BBm56WLVBWzA`
+* **USDC (Arbitrum One):** `0x2cE5a401a2AEaf78376E72c8C88a962c5862adA3`
 
 ## 📄 License
 

@@ -1024,7 +1024,7 @@ onMounted(() => {
 
 onMounted(() => {
   try {
-    const host = document.querySelector('omnichat-widget') as HTMLElement | null
+    const host = document.querySelector('omnichat-chat-widget') as HTMLElement | null
     if (host) {
       const marker = document.createElement('p')
       marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'

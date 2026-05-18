@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniChat Visitor — Standalone Demo</title>
+    <title>OmniChat Chat Page — Standalone Demo</title>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -47,14 +47,14 @@
         }
     </style>
 
-    <!-- Load OmniChat Visitor Bundle -->
-    <script src="../apps/web/dist/omnichat-visitor.js"></script>
+    <!-- Load OmniChat Chat Page Bundle -->
+    <script src="../apps/web/dist/omnichat-chat-page.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
                 console.warn('CDN script failed. Falling back to local build...');
                 const localScript = document.createElement('script');
-                localScript.src = '../apps/web/dist/omnichat-visitor.js';
+                localScript.src = '../apps/web/dist/omnichat-chat-page.js';
                 document.head.appendChild(localScript);
             }
         }, true);
@@ -62,19 +62,19 @@
 </head>
 <body>
     <div class="container">
-        <h1>OmniChat Visitor</h1>
+        <h1>OmniChat Chat Page</h1>
         <p>
-            The Visitor page opens a full-page live chat in a new tab — perfect for embedding links on your website that visitors can open to start a conversation.
+            The Chat Page opens a full-page live chat in a new tab — perfect for embedding links on your website that visitors can open to start a conversation.
         </p>
         <p>
-            It's also available as an embeddable custom element: <code>&lt;omnichat-visitor&gt;</code>.
+            It's also available as an embeddable custom element: <code>&lt;omnichat-chat-page&gt;</code>.
         </p>
 
         <hr>
 
         <h3>Open Chat in New Tab</h3>
         <p>Click the button below to open the full-page chat in a new tab.</p>
-        <a href="visitor-app.html?server=http://localhost:3001" target="_blank" class="demo-btn">
+        <a href="chat-app.html?server=http://localhost:3001" target="_blank" class="demo-btn">
             Open Live Chat
         </a>
 
@@ -82,20 +82,20 @@
 
         <h3>Embed as Custom Element</h3>
         <p>Add the component directly to any page:</p>
-        <pre style="background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>&lt;script src="omnichat-visitor.js"&gt;&lt;/script&gt;
+        <pre style="background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>&lt;script src="omnichat-chat-page.js"&gt;&lt;/script&gt;
 
-&lt;omnichat-visitor
+&lt;omnichat-chat-page
   server-url="http://localhost:3001"
   bubble-color="#4F46E5"
-  welcome-message="Hi there! How can we help?&gt;
-&lt;/omnichat-visitor&gt;</code></pre>
+  welcome-message="Hi there! How can we help?">
+&lt;/omnichat-chat-page&gt;</code></pre>
 
         <!-- Embedded demo -->
-        <omnichat-visitor
+        <omnichat-chat-page
             server-url="http://localhost:3001"
             bubble-color="#4F46E5"
             welcome-message="Hi! Try embedding this component on any page. 👇">
-        </omnichat-visitor>
+        </omnichat-chat-page>
     </div>
 </body>
 </html>

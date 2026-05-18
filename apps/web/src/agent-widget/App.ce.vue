@@ -16,7 +16,7 @@ const DESKTOP_PANEL_GAP = 16
 
 
 // Props
-// Usage: <omnichat-admin-widget server-url="https://api.yoursite.com" token="jwt-token"></omnichat-admin-widget>
+// Usage: <omnichat-agent-widget server-url="https://api.yoursite.com" token="jwt-token"></omnichat-agent-widget>
 
 const props = defineProps({
   serverUrl: { type: String, required: true },
@@ -1097,7 +1097,7 @@ onMounted(() => {
 
   // Insert hidden attribution marker
   try {
-    const host = document.querySelector('omnichat-admin-widget') as HTMLElement | null
+    const host = document.querySelector('omnichat-agent-widget') as HTMLElement | null
     if (host) {
       const marker = document.createElement('p')
       marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'

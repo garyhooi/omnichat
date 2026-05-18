@@ -38,10 +38,10 @@ serve({
       // Serve any demo subpaths under demo/ for the admin demo
       const subPath = url.pathname.replace('/admin/', '');
       filePath = `./demo/${subPath}`;
-    } else if (url.pathname === '/visitor' || url.pathname === '/visitor/') {
-      filePath = './demo/visitor.html';
-    } else if (url.pathname.startsWith('/visitor/')) {
-      const subPath = url.pathname.replace('/visitor/', '');
+    } else if (url.pathname === '/chat-page' || url.pathname === '/chat-page/') {
+      filePath = './demo/chat-page.html';
+    } else if (url.pathname.startsWith('/chat-page/')) {
+      const subPath = url.pathname.replace('/chat-page/', '');
       filePath = `./demo/${subPath}`;
     } else if (url.pathname.startsWith('/assets/')) {
       // Static assets from the built dist/ directory
@@ -90,7 +90,7 @@ serve({
 console.log(`\n======================================================`);
 console.log(`Demo Server running at: http://localhost:${PORT}`);
 console.log(`======================================================`);
-console.log(`Admin CE demo:    http://localhost:${PORT}/demo/admin.html`);
-console.log(`Visitor Widget:   http://localhost:${PORT}/demo/widget.html`);
-console.log(`Visitor Standalone: http://localhost:${PORT}/demo/visitor.html`);
+console.log(`Admin Portal:       http://localhost:${PORT}/demo/admin.html`);
+console.log(`Chat Widget:        http://localhost:${PORT}/demo/widget.html`);
+console.log(`Chat Page Standalone: http://localhost:${PORT}/demo/chat-page.html`);
 console.log(`\n(Make sure the API server is running on port 3001)`);

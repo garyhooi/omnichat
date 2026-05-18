@@ -3,14 +3,14 @@
   "version": "3.1.0",
   "private": true,
   "type": "module",
-  "description": "OmniChat Vue 3 Web Components (Admin Portal & Visitor Widget)",
+  "description": "OmniChat Vue 3 Web Components (Admin Portal, Chat Widget & Visitor Page)",
   "scripts": {
     "dev": "bun vite",
-    "build:admin": "bun vite build --config vite.config.admin.ts",
-    "build:client": "bun vite build --config vite.config.client.ts",
-    "build:admin-widget": "bun vite build --config vite.config.admin-widget.ts",
-    "build:visitor": "bun vite build --config vite.config.visitor.ts",
-    "build": "bun run build:admin && bun run build:client && bun run build:admin-widget && bun run build:visitor",
+    "build:admin-portal": "bun vite build --config vite.config.admin-portal.ts",
+    "build:chat-widget": "bun vite build --config vite.config.chat-widget.ts",
+    "build:agent-widget": "bun vite build --config vite.config.agent-widget.ts",
+    "build:chat-page": "bun vite build --config vite.config.chat-page.ts",
+    "build": "bun run build:admin-portal && bun run build:chat-widget && bun run build:agent-widget && bun run build:chat-page",
     "preview": "bun vite preview"
   },
   "dependencies": {

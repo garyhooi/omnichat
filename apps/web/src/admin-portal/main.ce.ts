@@ -6,15 +6,15 @@ import style from './style.css?inline'
 // ---------------------------------------------------------------------------
 // OmniChat Admin Portal — Custom Element Entry Point
 // ---------------------------------------------------------------------------
-// Registers <omnichat-admin> as a web component with Shadow DOM.
+// Registers <omnichat-admin-portal> as a web component with Shadow DOM.
 // Uses Vue's configureApp to install Pinia inside the custom element.
 // ---------------------------------------------------------------------------
 
-const OmniChatAdmin = defineCustomElement(AdminDashboard, {
+const OmniChatAdminPortal = defineCustomElement(AdminDashboard, {
   styles: [style],
   configureApp(app) {
     app.use(createPinia())
   },
 })
 
-customElements.define('omnichat-admin', OmniChatAdmin)
+customElements.define('omnichat-admin-portal', OmniChatAdminPortal)

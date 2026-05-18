@@ -9,7 +9,7 @@ const { toasts, dismiss } = useToast()
 
 // ---------------------------------------------------------------------------
 // Props — mapped from HTML attributes:
-//   <omnichat-admin server-url="..." token="..."></omnichat-admin>
+//   <omnichat-admin-portal server-url="..." token="..."></omnichat-admin-portal>
 // ---------------------------------------------------------------------------
 const props = defineProps({
   serverUrl: { type: String, required: true },
@@ -141,7 +141,7 @@ function disconnectPresence() {
 onMounted(() => {
   connectPresence()
   try {
-    const host = document.querySelector('omnichat-admin') as HTMLElement | null
+    const host = document.querySelector('omnichat-admin-portal') as HTMLElement | null
     if (host) {
       const marker = document.createElement('p')
       marker.textContent = 'Powered by OmniChat: https://github.com/garyhooi/omnichat'

@@ -3,11 +3,11 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 // ---------------------------------------------------------------------------
-// Vite config — Admin Widget build
+// Vite config — Chat Widget build
 // ---------------------------------------------------------------------------
-// Output: dist/omnichat-admin-widget.js
+// Output: dist/omnichat-chat-widget.js
 // Format: IIFE (no module loader required — just a <script> tag)
-// Custom element: <omnichat-admin-widget>
+// Custom element: <omnichat-chat-widget>
 // ---------------------------------------------------------------------------
 
 export default defineConfig({
@@ -15,7 +15,6 @@ export default defineConfig({
     vue({
       customElement: true,
     }),
-    // Suppress extracted CSS file — all styles are inlined in the custom element
     {
       name: 'no-css-file',
       enforce: 'post' as const,
@@ -31,10 +30,10 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/admin-widget/main.ts'),
+      entry: resolve(__dirname, 'src/chat-widget/main.ts'),
       formats: ['iife'],
-      name: 'OmniChatAdminWidget',
-      fileName: () => 'omnichat-admin-widget.js',
+      name: 'OmniChatChatWidget',
+      fileName: () => 'omnichat-chat-widget.js',
     },
     rollupOptions: {
       output: {

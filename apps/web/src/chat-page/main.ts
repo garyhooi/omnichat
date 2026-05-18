@@ -3,22 +3,22 @@ import App from './App.ce.vue'
 import styles from './style.css?inline'
 
 // ---------------------------------------------------------------------------
-// OmniChat Visitor — Custom Element Registration
+// OmniChat Chat Page — Custom Element Registration
 // ---------------------------------------------------------------------------
-// Usage in any host page:
+// Full-page chat custom element. Usage in any host page:
 //
-//   <omnichat-visitor
+//   <omnichat-chat-page
 //     server-url="https://api.yoursite.com"
 //     bubble-color="#4F46E5"
 //     welcome-message="Hi there! How can we help?">
-//   </omnichat-visitor>
-//   <script src="https://cdn.yoursite.com/omnichat-visitor.js"></script>
+//   </omnichat-chat-page>
+//   <script src="https://cdn.yoursite.com/omnichat-chat-page.js"></script>
 // ---------------------------------------------------------------------------
 
-const OmniChatVisitor = defineCustomElement(App, {
+const OmniChatChatPage = defineCustomElement(App, {
   styles: [styles],
 })
 
-customElements.define('omnichat-visitor', OmniChatVisitor)
+customElements.define('omnichat-chat-page', OmniChatChatPage)
 
-export { OmniChatVisitor }
+export { OmniChatChatPage }

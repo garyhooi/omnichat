@@ -2,6 +2,14 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import path from 'path'
 
+// ---------------------------------------------------------------------------
+// Vite config — Chat Page build
+// ---------------------------------------------------------------------------
+// Output: dist/omnichat-chat-page.js
+// Format: IIFE (full-page chat custom element)
+// Custom element: <omnichat-chat-page>
+// ---------------------------------------------------------------------------
+
 export default defineConfig({
   plugins: [vue()],
   define: {
@@ -16,10 +24,10 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: false,
     lib: {
-      entry: path.resolve(__dirname, './src/visitor/main.ts'),
+      entry: path.resolve(__dirname, './src/chat-page/main.ts'),
       formats: ['iife'],
-      name: 'OmniChatVisitor',
-      fileName: () => 'omnichat-visitor.js',
+      name: 'OmniChatChatPage',
+      fileName: () => 'omnichat-chat-page.js',
     },
     rollupOptions: {
       output: {
