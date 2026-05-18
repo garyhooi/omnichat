@@ -38,6 +38,11 @@ serve({
       // Serve any demo subpaths under demo/ for the admin demo
       const subPath = url.pathname.replace('/admin/', '');
       filePath = `./demo/${subPath}`;
+    } else if (url.pathname === '/visitor' || url.pathname === '/visitor/') {
+      filePath = './demo/visitor.html';
+    } else if (url.pathname.startsWith('/visitor/')) {
+      const subPath = url.pathname.replace('/visitor/', '');
+      filePath = `./demo/${subPath}`;
     } else if (url.pathname.startsWith('/assets/')) {
       // Static assets from the built dist/ directory
       filePath = `./apps/web/dist${url.pathname}`;
@@ -85,6 +90,7 @@ serve({
 console.log(`\n======================================================`);
 console.log(`Demo Server running at: http://localhost:${PORT}`);
 console.log(`======================================================`);
-console.log(`Admin CE demo:  http://localhost:${PORT}/demo/admin.html`);
-console.log(`Visitor Widget:  http://localhost:${PORT}/demo/widget.html`);
+console.log(`Admin CE demo:    http://localhost:${PORT}/demo/admin.html`);
+console.log(`Visitor Widget:   http://localhost:${PORT}/demo/widget.html`);
+console.log(`Visitor Standalone: http://localhost:${PORT}/demo/visitor.html`);
 console.log(`\n(Make sure the API server is running on port 3001)`);

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniChat Visitor — Standalone Demo</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f9fafb;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 640px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 { color: #4f46e5; }
+        p { line-height: 1.6; }
+        .demo-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 9999px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.2s;
+        }
+        .demo-btn:hover {
+            transform: translateY(-1px);
+        }
+        hr { margin: 30px 0; border: 0; border-top: 1px solid #e5e7eb; }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+
+    <!-- Load OmniChat Visitor Bundle -->
+    <script src="../apps/web/dist/omnichat-visitor.js"></script>
+    <script>
+        window.addEventListener('error', function(e) {
+            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
+                console.warn('CDN script failed. Falling back to local build...');
+                const localScript = document.createElement('script');
+                localScript.src = '../apps/web/dist/omnichat-visitor.js';
+                document.head.appendChild(localScript);
+            }
+        }, true);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>OmniChat Visitor</h1>
+        <p>
+            The Visitor page opens a full-page live chat in a new tab — perfect for embedding links on your website that visitors can open to start a conversation.
+        </p>
+        <p>
+            It's also available as an embeddable custom element: <code>&lt;omnichat-visitor&gt;</code>.
+        </p>
+
+        <hr>
+
+        <h3>Open Chat in New Tab</h3>
+        <p>Click the button below to open the full-page chat in a new tab.</p>
+        <a href="visitor-app.html?server=http://localhost:3001" target="_blank" class="demo-btn">
+            Open Live Chat
+        </a>
+
+        <hr>
+
+        <h3>Embed as Custom Element</h3>
+        <p>Add the component directly to any page:</p>
+        <pre style="background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>&lt;script src="omnichat-visitor.js"&gt;&lt;/script&gt;
+
+&lt;omnichat-visitor
+  server-url="http://localhost:3001"
+  bubble-color="#4F46E5"
+  welcome-message="Hi there! How can we help?&gt;
+&lt;/omnichat-visitor&gt;</code></pre>
+
+        <!-- Embedded demo -->
+        <omnichat-visitor
+            server-url="http://localhost:3001"
+            bubble-color="#4F46E5"
+            welcome-message="Hi! Try embedding this component on any page. 👇">
+        </omnichat-visitor>
+    </div>
+</body>
+</html>
