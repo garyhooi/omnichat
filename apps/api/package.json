@@ -24,7 +24,7 @@
     "@nestjs/platform-socket.io": "^10.3.0",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^10.3.0",
-    "@prisma/client": "^5.9.0",
+    "@prisma/client": "^5.22.0",
     "ai": "^4.0.0",
     "argon2": "^0.44.0",
     "class-transformer": "^0.5.1",
@@ -60,7 +60,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@types/sharp": "^0.31.1",
     "@types/ua-parser-js": "^0.7.39",
-    "prisma": "^5.9.0",
+    "prisma": "^5.22.0",
     "typescript": "^5.3.3"
   }
 }
