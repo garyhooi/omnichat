@@ -146,6 +146,24 @@ vite.config.ts.timestamp-*
 .idea/
 .vscode/
 
+# AI Coding Assistants
+.cursor/
+.claude/
+.cline/
+.continue/
+.kiro/
+.roo/
+.superagent/
+.openclaw/
+.aider.cache/
+# Chinese AI IDEs / assistants
+.trae/              # Trae IDE (ByteDance)
+.codebuddy/         # CodeBuddy (ByteDance)
+.qoder/             # Qoder (Alibaba/Aliyun)
+.lingma/            # Tongyi Lingma (Alibaba)
+.comate/            # Baidu Comate (文心助手)
+.hunyuan/           # Hunyuan (Tencent)
+
 # .NET Build Output
 [Bb]in/
 [Oo]bj/
