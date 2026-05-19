@@ -145,6 +145,91 @@ Also works as an embeddable custom element inside any page.
 * `bubble-color` (Optional): Hex color code for the chat theme (defaults to `#4F46E5`). Can be overridden by backend site config.
 * `welcome-message` (Optional): The default greeting message. Can be overridden by backend site config.
 
+## 🔐 Token Handling Best Practices
+
+### Chat Widget – `external-auth-token` (Visitor JWT)
+
+The chat widget supports an optional `external-auth-token` attribute:
+
+```html
+<omnichat-chat-widget
+  server-url="https://api.yoursite.com"
+  external-auth-token="eyJhbGciOiJIUzI1NiIs..."
+></omnichat-chat-widget>
+```
+
+What it is:
+- A short-lived JWT issued by your own authentication provider (e.g., Keycloak, Auth0, custom auth).
+- Used by OmniChat to:
+  - Optionally identify the visitor.
+  - Perform token-exchange for external tools when configured with `authType: "token-exchange"`.
+
+When it’s required:
+- **Not required** for basic chat, AI chat, or human agent conversations.
+- **Required** only if you:
+  - Use external tools with `token-exchange` auth.
+  - Want to extract the visitor identity from a custom JWT.
+
+How to set it safely:
+- Generate the token on your backend (e.g., after login) and:
+  - Render it server-side into the page:
+    - `<omnichat-chat-widget external-auth-token="{{ externalAuthToken }}" ...></omnichat-chat-widget>`
+  - Or inject via a protected, authenticated page (SSR / Razor / Blade, etc.).
+- Use a reasonable lifetime (e.g., 30–180 minutes).
+- Only send it over HTTPS.
+- Never:
+  - Hardcode tokens in client-side JS.
+  - Log them to the console or expose them in URLs.
+  - Share them with third-party scripts or analytics.
+
+Notes:
+- The token is stored in conversation metadata on the OmniChat backend (not persisted long-term).
+- External tool endpoints can validate this JWT via their own token-exchange handler.
+
+### Admin Portal & Agent Widget – `token` (Agent/Admin JWT)
+
+The Admin Portal and Agent Widget require a `token` attribute:
+
+- Admin Portal:
+  ```html
+  <omnichat-admin-portal
+    server-url="https://api.yoursite.com"
+    token="eyJhbGciOiJIUzI1NiIs..."
+  ></omnichat-admin-portal>
+  ```
+- Agent Widget:
+  ```html
+  <omnichat-agent-widget
+    server-url="https://api.yoursite.com"
+    token="eyJhbGciOiJIUzI1NiIs..."
+  ></omnichat-agent-widget>
+  ```
+
+What it is:
+- A JWT issued by the OmniChat backend after authenticating an agent/admin (via `/auth/login` or your integration).
+- The agent/admin username and role are read from this token payload.
+
+How to set it safely:
+- After login:
+  - Use the JWT returned by your OmniChat backend.
+  - Or generate it in your own backend and embed it into the admin page via SSR or a protected template.
+- Prefer using httpOnly cookies for backend auth where possible; embed the JWT only within protected admin pages.
+- Only serve admin and agent pages over HTTPS.
+- Rotate tokens and restrict them via your backend security (shorter-lived tokens for embedded use are recommended).
+- Never:
+  - Embed long-lived tokens in public pages or demo files.
+  - Expose admin/agent pages without your own authentication guard.
+
+Example flow (embedding Admin Portal):
+1. Agent logs in to your internal system.
+2. Your backend calls OmniChat’s login or uses a shared auth to obtain a JWT.
+3. Your backend renders an admin page:
+   - `<omnichat-admin-portal server-url="https://api.yoursite.com" token="{{ agentJwt }}"></omnichat-admin-portal>`
+4. This page is behind your internal auth so only authorized staff can load it.
+
+For more details on AI Agent, external tools, and token-exchange, see:
+- docs/ai-agent.md
+
 ## 🚀 Quick Start
 
 ### 🐳 Docker Deployment (Recommended)
