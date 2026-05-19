@@ -65,6 +65,13 @@ This project is structured as a Bun workspace monorepo:
 
 OmniChat is compiled into native Web Components, meaning you can drop them into any framework (React, Angular, Vue, Blazor) or plain HTML.
 
+- **Visitor components** (embedded on your website for customers):
+  - `<omnichat-chat-widget>`
+  - `<omnichat-chat-page>`
+- **Admin / Agent components** (embedded in your internal admin or backoffice pages):
+  - `<omnichat-admin-portal>`
+  - `<omnichat-agent-widget>`
+
 ### Chat Widget (`<omnichat-chat-widget>`)
 A floating bubble that opens a chat panel. Drop it onto any page for instant visitor engagement.
 ```html
@@ -72,8 +79,7 @@ A floating bubble that opens a chat panel. Drop it onto any page for instant vis
   server-url="https://api.yoursite.com"
   bubble-color="#4F46E5"
   welcome-message="Hello! How can we help you?"
-  position="bottom-right"
-  assign-username="logged_in_user123">
+  position="bottom-right">
 </omnichat-chat-widget>
 ```
 **Supported Attributes:**
@@ -81,7 +87,6 @@ A floating bubble that opens a chat panel. Drop it onto any page for instant vis
 * `bubble-color` (Optional): Hex color code for the chat widget theme (defaults to `#4F46E5`). Can be overridden by backend site config.
 * `welcome-message` (Optional): The default greeting message. Can be overridden by backend site config.
 * `position` (Optional): Where the widget renders on the screen (defaults to `bottom-right`).
-* `assign-username` (Optional): Automatically link an authenticated visitor's username to their chat session for tracking.
 
 ### Admin Portal (`<omnichat-admin-portal>`)
 A full admin dashboard for managing conversations, AI settings, knowledge base, tools, logs, and users. Embed it as a standalone page or within your own admin iframe.
