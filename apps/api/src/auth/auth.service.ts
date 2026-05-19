@@ -18,10 +18,7 @@ export class AuthService {
     private readonly securityLogger: SecurityLoggerService,
   ) {}
 
-  /**
-   * Register a new admin user.
-   * Password is hashed using Argon2 (memory-hard, resistant to GPU/ASIC attacks).
-   */
+  /** Register a new admin user using Argon2 (memory-hard, resistant to GPU/ASIC attacks). */
   async register(
     username: string,
     password: string,
@@ -29,7 +26,6 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ) {
-    // Check if user already exists
     const existing = await this.prisma.adminUser.findUnique({
       where: { username },
     });
@@ -37,7 +33,6 @@ export class AuthService {
       throw new ConflictException('Username already registered');
     }
 
-    // Hash password with Argon2
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
       memoryCost: 65536, // 64 MB
@@ -62,10 +57,7 @@ export class AuthService {
     return this.generateToken(user);
   }
 
-  /**
-   * Authenticate an admin user and return a JWT.
-   * Password is verified against Argon2 hash.
-   */
+  /** Authenticate an admin user and return a JWT. */
   async login(username: string, password: string, ip?: string, userAgent?: string) {
     const user = await this.prisma.adminUser.findUnique({
       where: { username },
@@ -76,14 +68,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Verify password against Argon2 hash
     const isPasswordValid = await argon2.verify(user.passwordHash, password);
     if (!isPasswordValid) {
       this.securityLogger.logAuthAttempt(username, false, ip || 'unknown', 'Invalid password');
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if user is locked
     if (user.isLocked) {
       this.securityLogger.logAuthAttempt(username, false, ip || 'unknown', 'Account locked');
       throw new UnauthorizedException('Account is locked. Please contact an administrator.');
@@ -91,7 +81,6 @@ export class AuthService {
 
     this.securityLogger.logAuthAttempt(username, true, ip || 'unknown');
 
-    // Update last login info
     await this.prisma.adminUser.update({
       where: { id: user.id },
       data: {
@@ -103,10 +92,7 @@ export class AuthService {
     return this.generateToken(user);
   }
 
-  /**
-   * Validate a JWT payload and return the user. Used by the Socket.io
-   * handshake guard to authenticate WebSocket connections.
-   */
+  /** Validate a JWT payload and return the user. */
   async validateToken(token: string) {
     try {
       const payload = this.jwtService.verify<JwtPayload>(token);

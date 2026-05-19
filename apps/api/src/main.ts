@@ -26,7 +26,6 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // Apply HTTP security headers
   app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
     contentSecurityPolicy: {
@@ -50,23 +49,18 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
-  // Serve static files for uploads
   expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads')));
-
-  // Serve RAG templates as downloadable files
   expressApp.use('/rag-templates', express.static(join(process.cwd(), '..', '..', 'rag_templates')));
 
   const prisma = app.get(PrismaService);
   
-  // Enable CORS dynamically using the DB config
   app.enableCors({
     origin: async (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
+          if (!origin) {
         return callback(null, true);
       }
 
-      // Allow localhost for development
+      // Allow localhost
       if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
         return callback(null, true);
       }
@@ -86,7 +80,7 @@ async function bootstrap() {
 
         const allowed = config.allowedOrigins.split(',').map((s: string) => s.trim());
         
-        // Exact match or genuine subdomain match (parse as URL to prevent spoofing)
+        // Exact match or genuine subdomain match
         const isAllowed = allowed.some((allowedOrigin: string) => {
           try {
             const candidateHost = new URL(origin).hostname;
@@ -110,7 +104,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global validation pipe for DTO validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

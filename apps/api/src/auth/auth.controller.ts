@@ -6,9 +6,7 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
-// ---------------------------------------------------------------------------
-// DTOs
-// ---------------------------------------------------------------------------
+
 export class RegisterDto {
   @IsString()
   @IsNotEmpty()
@@ -33,9 +31,7 @@ export class LoginDto {
   password: string;
 }
 
-// ---------------------------------------------------------------------------
-// Controller
-// ---------------------------------------------------------------------------
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

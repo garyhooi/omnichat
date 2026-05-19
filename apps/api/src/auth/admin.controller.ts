@@ -16,9 +16,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-// ---------------------------------------------------------------------------
-// DTOs
-// ---------------------------------------------------------------------------
+
 class UpdateUserDto {
   @IsString()
   @IsOptional()
@@ -29,9 +27,7 @@ class UpdateUserDto {
   isLocked?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Controller
-// ---------------------------------------------------------------------------
+
 @Controller('admin')
 export class AdminController {
   constructor(
@@ -39,10 +35,7 @@ export class AdminController {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * List / search users with fuzzy matching on displayName, username, and role.
-   * Admin only.
-   */
+  /** List / search users with fuzzy matching on displayName, username, and role. */
   @Get('users')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   async getUsers(
@@ -53,7 +46,6 @@ export class AdminController {
     const where: any = {};
     const conditions: any[] = [];
 
-    // Fuzzy search — matches displayName OR username (case-insensitive contains)
     if (search) {
       conditions.push(
         { displayName: { contains: search, mode: 'insensitive' } },
@@ -61,7 +53,6 @@ export class AdminController {
       );
     }
 
-    // Role filter
     if (role) {
       where.role = role;
     }
@@ -87,7 +78,6 @@ export class AdminController {
       orderBy: { createdAt: 'desc' },
     });
 
-    // For each user, count active sessions and compute effective online status
     const now = new Date();
     const usersWithSessionCount = await Promise.all(
       users.map(async (user) => {
@@ -98,13 +88,11 @@ export class AdminController {
             expiresAt: { gt: now },
           },
         });
-        // Effective online: must have isOnline=true AND at least one valid session
         const effectiveOnline = user.isOnline && activeSessions > 0;
         return { ...user, activeSessions, effectiveOnline };
       }),
     );
 
-    // Apply online/offline filter on effective status
     if (online === 'true') {
       return usersWithSessionCount.filter((u) => u.effectiveOnline);
     } else if (online === 'false') {
@@ -114,9 +102,7 @@ export class AdminController {
     return usersWithSessionCount;
   }
 
-  /**
-   * Update user role or lock status. Admin only.
-   */
+  /** Update user role or lock status. */
   @Patch('users/:id')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
@@ -141,7 +127,6 @@ export class AdminController {
       },
     });
 
-    // If user was locked, revoke all their active sessions immediately
     if (dto.isLocked === true) {
       await this.prisma.session.updateMany({
         where: {
@@ -155,9 +140,7 @@ export class AdminController {
     return user;
   }
 
-  /**
-   * Force logout a user — revokes ALL their active sessions. Admin only.
-   */
+  /** Force logout a user — revokes all active sessions. */
   @Delete('users/:id/sessions')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   @Roles('admin')

@@ -9,22 +9,12 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { HttpLogService } from './http-log.service';
 
-/** Headers whose values should be redacted from logs */
 const SENSITIVE_HEADERS = new Set([
-  'authorization',
-  'cookie',
-  'x-admin-api-key',
-  'set-cookie',
+  'authorization', 'cookie', 'x-admin-api-key', 'set-cookie',
 ]);
 
-/** Body fields whose values should be redacted */
 const SENSITIVE_BODY_FIELDS = new Set([
-  'password',
-  'passwordHash',
-  'apiKey',
-  'token',
-  'accessToken',
-  'secret',
+  'password', 'passwordHash', 'apiKey', 'token', 'accessToken', 'secret',
 ]);
 
 function sanitiseHeaders(
@@ -43,12 +33,9 @@ function sanitiseBody(body: any): string | undefined {
   try {
     const clone = { ...body };
     for (const key of Object.keys(clone)) {
-      if (SENSITIVE_BODY_FIELDS.has(key)) {
-        clone[key] = '***';
-      }
+      if (SENSITIVE_BODY_FIELDS.has(key)) clone[key] = '***';
     }
     const str = JSON.stringify(clone);
-    // Truncate very large bodies
     return str.length > 4096 ? str.slice(0, 4096) + '...[truncated]' : str;
   } catch {
     return '[unserializable]';
@@ -69,12 +56,34 @@ function truncateResponse(body: any): string | undefined {
 export class HttpLogInterceptor implements NestInterceptor {
   private readonly logger = new Logger(HttpLogInterceptor.name);
 
-  private sequentialLogPromise = Promise.resolve();
+  private static readonly MAX_QUEUE_SIZE = 100;
+  private logQueue: Array<() => Promise<void>> = [];
+  private processing = false;
 
   constructor(private readonly httpLogService: HttpLogService) {}
 
   private enqueueLog(logFn: () => Promise<void>): void {
-    this.sequentialLogPromise = this.sequentialLogPromise.then(() => logFn());
+    if (this.logQueue.length >= HttpLogInterceptor.MAX_QUEUE_SIZE) {
+      this.logger.warn('Log queue full, dropping oldest entry');
+      this.logQueue.shift();
+    }
+    this.logQueue.push(logFn);
+    this.processQueue();
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processing) return;
+    this.processing = true;
+    while (this.logQueue.length > 0) {
+      const fn = this.logQueue[0];
+      try {
+        await fn();
+      } catch (err) {
+        this.logger.error(`Failed to write HTTP log: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      this.logQueue.shift();
+    }
+    this.processing = false;
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -82,7 +91,6 @@ export class HttpLogInterceptor implements NestInterceptor {
     const req = ctx.getRequest();
     const start = Date.now();
 
-    // Extract user info if available (populated by JWT guard)
     const userId = req.user?.sub || req.user?.id || undefined;
     const username = req.user?.username || undefined;
 
@@ -92,7 +100,6 @@ export class HttpLogInterceptor implements NestInterceptor {
           const res = ctx.getResponse();
           const duration = Date.now() - start;
 
-          // Capture data before async call to release responseBody reference
           const logData = {
             method: req.method,
             url: req.originalUrl || req.url,

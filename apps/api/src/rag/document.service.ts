@@ -14,9 +14,7 @@ export class DocumentService {
     private readonly vectorStore: VectorStoreProvider,
   ) {}
 
-  /**
-   * List all knowledge documents.
-   */
+  /** List all knowledge documents. */
   async listDocuments() {
     return this.prisma.knowledgeDocument.findMany({
       orderBy: { createdAt: 'desc' },
@@ -35,9 +33,7 @@ export class DocumentService {
     });
   }
 
-  /**
-   * Upload and process a document: extract text, chunk, embed, store.
-   */
+  /** Upload a document: extract text, chunk, embed, store. */
   async uploadDocument(file: {
     originalname: string;
     mimetype: string;
@@ -66,17 +62,13 @@ export class DocumentService {
     return doc;
   }
 
-  /**
-   * Delete a document and its chunks.
-   */
+  /** Delete a document and its chunks. */
   async deleteDocument(id: string) {
     await this.vectorStore.deleteByDocumentId(id);
     return this.prisma.knowledgeDocument.delete({ where: { id } });
   }
 
-  /**
-   * Get a document by ID with chunk count.
-   */
+  /** Get a document by ID with chunk count. */
   async getDocument(id: string) {
     return this.prisma.knowledgeDocument.findUnique({
       where: { id },
@@ -84,9 +76,7 @@ export class DocumentService {
     });
   }
 
-  // =========================================================================
   // Text Extraction
-  // =========================================================================
 
   private getFileType(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase() || '';
@@ -154,13 +144,9 @@ export class DocumentService {
     }
   }
 
-  // =========================================================================
   // Chunking & Embedding Pipeline
-  // =========================================================================
 
-  /**
-   * Split text into chunks with overlap.
-   */
+  /** Split text into chunks with overlap. */
   private chunkText(text: string, maxChunkSize: number = 1000, overlap: number = 200): string[] {
     const chunks: string[] = [];
     const sentences = text.split(/(?<=[.!?\n])\s+/);
@@ -185,9 +171,7 @@ export class DocumentService {
     return chunks.length > 0 ? chunks : [text];
   }
 
-  /**
-   * Process document: chunk text, generate embeddings, store in vector store.
-   */
+  /** Process document: chunk text, generate embeddings, store in vector store. */
   private async processEmbeddings(documentId: string, content: string): Promise<void> {
     try {
       const textChunks = this.chunkText(content);

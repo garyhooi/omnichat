@@ -23,15 +23,12 @@ import { RagService } from '../rag/rag.service';
 import { AiLogService } from '../ai/ai-log.service';
 import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-base.tool';
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
-import { GetBusinessHoursTool } from '../ai/tools/builtin/get-business-hours.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
 import { join, extname } from 'path';
 
-// ---------------------------------------------------------------------------
 // Types for inbound/outbound events
-// ---------------------------------------------------------------------------
 interface JoinConversationPayload {
   conversationId: string;
 }
@@ -67,7 +64,6 @@ interface StartConversationPayload {
   visitorLanguage?: string;
   visitorScreenRes?: string;
   visitorReferrer?: string;
-  assignUsername?: string;
 }
 
 interface ReadMessagePayload {
@@ -87,17 +83,13 @@ interface UpdateConversationDetailsPayload {
   agentRemarks?: string;
 }
 
-// ---------------------------------------------------------------------------
 // Rate Limiting Types
-// ---------------------------------------------------------------------------
 interface RateLimitInfo {
   count: number;
   resetTime: number;
 }
 
-// ---------------------------------------------------------------------------
 // Extended socket with user data attached during handshake
-// ---------------------------------------------------------------------------
 interface AuthenticatedSocket extends Socket {
   data: {
     user?: {
@@ -114,12 +106,7 @@ interface AuthenticatedSocket extends Socket {
 import { SiteConfigService } from '../config/site-config.service';
 import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
 
-/**
- * Parse a URL origin and compare hostnames safely.
- * Returns true if candidateHost exactly matches allowedHost,
- * or is a genuine subdomain (e.g. "sub.example.com" matches "example.com"
- * but "evil-example.com" does not).
- */
+/** Parse a URL origin and compare hostnames safely. */
 function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolean {
   try {
     const candidateHost = new URL(candidateOrigin).hostname;
@@ -132,20 +119,13 @@ function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolea
   }
 }
 
-// ---------------------------------------------------------------------------
 // Chat Gateway — Socket.io WebSocket handler
-// ---------------------------------------------------------------------------
 
 @WebSocketGateway({
   cors: {
     origin: true,
     credentials: true,
   },
-  // Uncomment the following lines for Redis adapter (multi-instance scaling):
-  // adapter: require('@socket.io/redis-adapter').createAdapter(
-  //   require('redis').createClient({ url: process.env.REDIS_URL }),
-  //   require('redis').createClient({ url: process.env.REDIS_URL }),
-  // ),
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
   @WebSocketServer()
@@ -171,6 +151,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   private static readonly STALE_CHECK_INTERVAL_MS = 60_000; // every 60s
   private static readonly STALE_THRESHOLD_MS = 2 * 60_000; // 2 minutes without heartbeat
 
+  // Rate limit eviction sweep interval
+  private rateLimitCleanupInterval: NodeJS.Timeout | null = null;
+  private static readonly RATE_LIMIT_CLEANUP_MS = 60_000;
+
   // DB-based auto-resolve safety net interval
   private autoResolveInterval: NodeJS.Timeout | null = null;
   private static readonly AUTO_RESOLVE_INTERVAL_MS = 60_000; // every 60s
@@ -194,19 +178,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Register built-in tools
     this.toolRegistry.registerBuiltin(new SearchKnowledgeBaseTool(this.ragService));
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
-    this.toolRegistry.registerBuiltin(new GetBusinessHoursTool());
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
   }
 
-  // =========================================================================
-  // LIFECYCLE — startup reset & periodic stale-check
-  // =========================================================================
-
-  /**
-   * On server boot, reset all users to offline. Any previously-online users
-   * whose WebSocket connections were lost (e.g. server crash/restart) are
-   * cleaned up here.
-   */
+  /** On server boot, reset all users to offline. */
   async onModuleInit() {
     const result = await this.prisma.adminUser.updateMany({
       where: { isOnline: true },
@@ -227,6 +202,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       ChatGateway.AUTO_RESOLVE_INTERVAL_MS,
     );
     this.logger.log('Auto-resolve safety net started (every 60s, timeout 5min)');
+
+    // Start rate limit Map eviction sweep
+    this.rateLimitCleanupInterval = setInterval(
+      () => this.evictStaleRateLimits(),
+      ChatGateway.RATE_LIMIT_CLEANUP_MS,
+    );
+    this.logger.log('Rate limit eviction sweep started (every 60s)');
   }
 
   onModuleDestroy() {
@@ -238,12 +220,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       clearInterval(this.autoResolveInterval);
       this.autoResolveInterval = null;
     }
+    if (this.rateLimitCleanupInterval) {
+      clearInterval(this.rateLimitCleanupInterval);
+      this.rateLimitCleanupInterval = null;
+    }
   }
 
-  /**
-   * Periodically mark users offline if their lastSeenAt is older than
-   * STALE_THRESHOLD_MS and they have no active WebSocket connections.
-   */
+  /** Mark users offline if their lastSeenAt exceeds threshold and they have no active sockets. */
   private async markStaleUsersOffline() {
     try {
       const threshold = new Date(Date.now() - ChatGateway.STALE_THRESHOLD_MS);
@@ -277,11 +260,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Periodically resolve conversations that have been inactive for too long.
-   * This is a DB-based safety net that works even under memory pressure or
-   * delayed setTimeout from the in-memory inactivity timers.
-   */
+  /** Resolve conversations inactive beyond the timeout threshold. DB-based safety net. */
   private async checkStaleConversations() {
     try {
       const threshold = new Date(Date.now() - ChatGateway.AUTO_RESOLVE_TIMEOUT_MS);
@@ -324,20 +303,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Internal Simple Rate Limiter
-   * Allows 'limit' requests per 'ttl' milliseconds.
-   */
+  /** Simple rate limiter — allows limit requests per ttl ms. */
   private isRateLimited(key: string, limit: number, ttl: number): boolean {
     const now = Date.now();
     const info = this.rateLimits.get(key);
 
-    if (!info) {
-      this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
-      return false;
-    }
-
-    if (now > info.resetTime) {
+    if (!info || now > info.resetTime) {
       this.rateLimits.set(key, { count: 1, resetTime: now + ttl });
       return false;
     }
@@ -350,9 +321,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     return false;
   }
 
-  // =========================================================================
+  /** Evict expired entries from rateLimits Map to prevent unbounded growth. */
+  private evictStaleRateLimits(): void {
+    const now = Date.now();
+    let evicted = 0;
+    for (const [key, info] of this.rateLimits) {
+      if (now > info.resetTime) {
+        this.rateLimits.delete(key);
+        evicted++;
+      }
+    }
+    if (evicted > 0) {
+      this.logger.log(`Evicted ${evicted} stale rate-limit entries (${this.rateLimits.size} remain)`);
+    }
+  }
+
   // INACTIVITY TIMERS
-  // =========================================================================
 
   private resetInactivityTimer(conversationId: string) {
     this.clearInactivityTimer(conversationId);
@@ -400,15 +384,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.inactivityResolves.delete(conversationId);
   }
 
-  // =========================================================================
   // CONNECTION LIFECYCLE
-  // =========================================================================
 
-  /**
-   * Handles new socket connections. Authenticates agents via JWT Bearer token
-   * in the handshake. Visitors connect without a token and are marked as
-   * visitor sockets.
-   */
+  /** Handle new socket connections — authenticate agents, mark visitors. */
   async handleConnection(client: AuthenticatedSocket) {
     let token = undefined;
 
@@ -427,7 +405,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       // Fallback to auth payload or header
       if (!token) {
         const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-        if (fallbackToken && fallbackToken !== 'cookie-auth' && fallbackToken !== 'demo-token-123') {
+        if (fallbackToken && fallbackToken !== 'cookie-auth') {
           token = fallbackToken;
         }
       }
@@ -497,10 +475,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Validate visitor connection origin against allowed origins in database.
-   * Visitors MUST provide an origin or referer header.
-   */
+  /** Validate visitor origin against allowed origins in database. */
   private async validateVisitorOrigin(origin: string | undefined, referer: string | undefined): Promise<void> {
     // Visitors must provide an origin or referer — reject bare requests
     if (!origin && !referer) {
@@ -556,10 +531,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Handles socket disconnections. Updates agent online status when agents
-   * disconnect.
-   */
+  /** Handle socket disconnections and update agent online status. */
   async handleDisconnect(client: AuthenticatedSocket) {
     // Clean up rate limiter entries for this socket
     for (const key of this.rateLimits.keys()) {
@@ -603,14 +575,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
   // CONVERSATION EVENTS
-  // =========================================================================
 
-  /**
-   * Agent heartbeat — keeps lastSeenAt fresh to prevent stale-check timeout.
-   * The admin dashboard should emit this every ~30 seconds.
-   */
+  /** Agent heartbeat — keeps lastSeenAt fresh to prevent stale-check timeout. */
   @SubscribeMessage('heartbeat')
   async handleHeartbeat(@ConnectedSocket() client: AuthenticatedSocket) {
     if (client.data.user && !client.data.isVisitor) {
@@ -621,10 +588,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Start a new conversation (visitor-initiated).
-   * Creates a Conversation record and auto-joins the visitor to the room.
-   */
+  /** Start a new conversation (visitor-initiated). */
   @SubscribeMessage('start_conversation')
   async handleStartConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -664,6 +628,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
+    // Extract username from externalAuthToken JWT if present
+    let assignedUsername = payload.visitorName || '';
+    if (parsedMetadata.externalAuthToken && !assignedUsername) {
+      try {
+        const token = parsedMetadata.externalAuthToken as string;
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+        assignedUsername = payload.preferred_username || payload.sub || payload.username || '';
+        this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
+      } catch {
+        this.logger.warn('Failed to decode externalAuthToken JWT payload');
+      }
+    }
+
     // Extract IP and User-Agent
     const visitorIp = client.handshake.headers['x-forwarded-for']?.toString().split(',')[0] || client.handshake.address;
     const userAgentString = client.handshake.headers['user-agent'] || '';
@@ -686,7 +663,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       visitorLanguage: payload.visitorLanguage,
       visitorScreenRes: payload.visitorScreenRes,
       visitorReferrer: payload.visitorReferrer,
-      assignedUsername: payload.assignUsername,
+      assignedUsername: assignedUsername || undefined,
     });
 
     // Join the visitor to the conversation room
@@ -720,10 +697,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     return { conversationId: conversation.id };
   }
 
-  /**
-   * Initialize AI agent for a new conversation.
-   * Sends greeting message if configured.
-   */
+  /** Initialize AI agent for a new conversation. */
   private async initAiForConversation(conversationId: string, client: AuthenticatedSocket) {
     try {
       const aiEnabled = await this.aiService.isEnabled();
@@ -761,10 +735,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Join an existing conversation room.
-   * Both visitors and agents call this to subscribe to conversation updates.
-   */
+  /** Join an existing conversation room. */
   @SubscribeMessage('join_conversation')
   async handleJoinConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -814,11 +785,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     );
   }
 
-  /**
-   * Send a message within a conversation.
-   * CRITICAL: Message is persisted BEFORE emitting to the room.
-   * Failed writes do NOT emit — this is the persistence contract.
-   */
+  /** Send a message within a conversation — persisted BEFORE emission. */
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -856,8 +823,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       : client.data.user?.id;
 
     try {
-      // PERSIST FIRST — this is the persistence contract.
-      // The message is only emitted to the room after a successful DB write.
+      // Persist first — emit only after successful DB write
       const message = await this.chatService.createMessage({
         conversationId,
         senderType,
@@ -886,7 +852,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         });
       }
     } catch (error) {
-      // Failed write — do NOT emit. Notify only the sender of the failure.
+      // Failed write — notify only the sender
       this.logger.error(
         `Failed to persist message in ${conversationId}: ${error.message}`,
       );
@@ -897,9 +863,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
-  // MESSAGE & CONVERSATION ENHANCEMENTS (Read Receipts, Reviews)
-  // =========================================================================
+  // MESSAGE ENHANCEMENTS (Read Receipts, Reviews)
 
   @SubscribeMessage('read_message')
   async handleReadMessage(
@@ -969,9 +933,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  // =========================================================================
-  // TYPING INDICATORS (no DB write — ephemeral events)
-  // =========================================================================
+  // TYPING INDICATORS
 
   @SubscribeMessage('typing_start')
   handleTypingStart(
@@ -1008,14 +970,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     });
   }
 
-  // =========================================================================
   // CONVERSATION MANAGEMENT
-  // =========================================================================
 
-  /**
-   * Transfer conversation to a specialist.
-   * Only agents should call this.
-   */
+  /** Transfer conversation to a specialist (agents only). */
   @SubscribeMessage('transfer_to_specialist')
   async handleTransferToSpecialist(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1055,10 +1012,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Resolve (close) a conversation.
-   * Only agents should call this.
-   */
+  /** Resolve (close) a conversation. */
   @SubscribeMessage('resolve_conversation')
   async handleResolveConversation(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1096,9 +1050,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * List conversations — agent only.
-   */
+  /** List conversations (agents only). */
   @SubscribeMessage('list_conversations')
   async handleListConversations(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1123,14 +1075,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     });
   }
 
-  // =========================================================================
   // AI AGENT RESPONSE HANDLING
-  // =========================================================================
 
-  /**
-   * Handle AI response for a visitor message.
-   * Checks if AI is enabled, not handed off, and streams a response.
-   */
+  /** Handle AI response for a visitor message. */
   private async handleAiResponse(conversationId: string, client: AuthenticatedSocket) {
     try {
       // Check if AI is enabled
@@ -1238,15 +1185,55 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         }),
       );
 
+      // Parse metadata for tool context (includes externalAuthToken)
+      let parsedMetadata: Record<string, any> = {};
+      if (conversation.metadata) {
+        try {
+          parsedMetadata = JSON.parse(conversation.metadata);
+        } catch {}
+      }
+
       // Get tools
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId: conversation.visitorId,
+        metadata: parsedMetadata,
         services: {
           prisma: this.prisma,
           siteConfigService: this.siteConfigService,
         },
       });
+
+      // Append tool descriptions to system prompt so the model knows what tools are available
+      const toolNames = Object.keys(tools);
+      let systemPrompt = agentConfig.systemPrompt;
+      if (toolNames.length > 0) {
+        const toolList = toolNames
+          .map((name) => {
+            const t = tools[name];
+            const desc = t.description ? `: ${t.description}` : '';
+            return `- ${name}${desc}`;
+          })
+          .join('\n');
+        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.`;
+      }
+
+      // Auto-inject knowledge base context — the AI sees it even if it doesn't call the tool
+      const lastQuery = lastVisitorMsg?.content;
+      if (lastQuery) {
+        try {
+          const ragResults = await this.ragService.searchKnowledgeBase(lastQuery, 3);
+          if (ragResults.length > 0) {
+            const kbContext = ragResults
+              .map((r) => r.content)
+              .join('\n\n---\n\n');
+            systemPrompt += `\n\nRelevant knowledge base context:\n${kbContext}`;
+            this.logger.log(`Injected ${ragResults.length} KB chunks into system prompt for ${conversationId}`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`KB search failed for context injection: ${err.message}`);
+        }
+      }
 
       // Emit typing indicator
       this.server.to(`conv:${conversationId}`).emit('agent_typing', {
@@ -1289,7 +1276,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         result = await this.aiService.streamChat({
           conversationId,
           messages,
-          systemPrompt: agentConfig.systemPrompt,
+          systemPrompt,
           tools: hasTools ? tools : undefined,
           maxTokens: agentConfig.maxTokensPerResponse,
           temperature: agentConfig.temperature,
@@ -1319,7 +1306,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             this.logger.error(`AI stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
           }
         }
-        this.activeAiStreams.delete(conversationId);
       } catch (toolError: any) {
         // Retry without tools — some providers don't support tool calling
         // Record tool error and retry without tools
@@ -1333,36 +1319,46 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         this.logger.warn(`Streaming with tools failed for ${conversationId}, retrying without tools`);
         fullText = '';
 
-        result = await this.aiService.streamChat({
-          conversationId,
-          messages,
-          abortSignal: abortController.signal,
-          systemPrompt: agentConfig.systemPrompt,
-          maxTokens: agentConfig.maxTokensPerResponse,
-          temperature: agentConfig.temperature,
-          onFinish,
-        });
+        try {
+          result = await this.aiService.streamChat({
+            conversationId,
+            messages,
+            abortSignal: abortController.signal,
+            systemPrompt,
+            maxTokens: agentConfig.maxTokensPerResponse,
+            temperature: agentConfig.temperature,
+            onFinish,
+          });
 
-        // Consume retry stream and emit text deltas
-        for await (const part of result.fullStream) {
-          if (abortController.signal.aborted) break;
-          if (part.type === 'text-delta') {
-            fullText += part.textDelta;
-            this.server.to(`conv:${conversationId}`).emit('ai_stream', {
-              conversationId,
-              token: part.textDelta,
-              isComplete: false,
-            });
-          } else if (part.type === 'error') {
-            await this.aiLogService.createLog({
-              conversationId,
-              providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
-              eventType: 'stream_error_retry',
-              message: part.error?.message || 'stream_error',
-              details: part.error || part,
-            });
-            this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+          // Consume retry stream and emit text deltas
+          for await (const part of result.fullStream) {
+            if (abortController.signal.aborted) break;
+            if (part.type === 'text-delta') {
+              fullText += part.textDelta;
+              this.server.to(`conv:${conversationId}`).emit('ai_stream', {
+                conversationId,
+                token: part.textDelta,
+                isComplete: false,
+              });
+            } else if (part.type === 'error') {
+              await this.aiLogService.createLog({
+                conversationId,
+                providerId: (await this.aiConfigService.getActiveProvider())?.id || null,
+                eventType: 'stream_error_retry',
+                message: part.error?.message || 'stream_error',
+                details: part.error || part,
+              });
+              this.logger.error(`AI retry stream error for ${conversationId}: ${part.error?.message ?? 'unknown'}`);
+            }
           }
+        } catch (retryError: any) {
+          this.logger.error(`AI retry also failed for ${conversationId}: ${retryError.message}`);
+          // Mark cleanup as already handled since we'll fall through to the finally block
+        }
+      } finally {
+        if (abortController.signal.aborted) {
+          // If aborted externally (disconnect), clean up to release resources
+          this.logger.log(`AI stream aborted for conversation ${conversationId}`);
         }
         this.activeAiStreams.delete(conversationId);
       }
@@ -1534,10 +1530,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Read an uploaded image from disk and return a base64 data URL
-   * for use as a multi-modal input to the AI model.
-   */
+  /** Read an uploaded image from disk and return a base64 data URL. */
   private async readImageAsDataUrl(attachmentUrl: string): Promise<string | null> {
     try {
       // HTTP/HTTPS URLs can be passed directly to the AI SDK
@@ -1561,10 +1554,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /**
-   * Trigger a handoff to human agents.
-   * Persists state, sends system message, notifies agents.
-   */
+  /** Trigger a handoff to human agents. */
   private async triggerHandoff(conversationId: string, reason: string) {
     await this.handoffService.executeHandoff(conversationId, reason);
 

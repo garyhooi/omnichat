@@ -23,11 +23,7 @@ interface ChatRequestBody {
   visitorId?: string;
 }
 
-/**
- * REST endpoint for AI chat streaming via SSE.
- * Used by the visitor widget's `useChat` composable from `@ai-sdk/vue`.
- * This is a public endpoint (no JWT auth) — secured by conversation validation + rate limiting.
- */
+/** REST endpoint for AI chat streaming via SSE. */
 @Controller('ai/chat')
 export class AiChatController {
   constructor(
@@ -121,26 +117,56 @@ export class AiChatController {
     }
 
     try {
+      // Fetch conversation to get metadata (includes externalAuthToken)
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+      });
+      let parsedMetadata: Record<string, any> = {};
+      if (conversation?.metadata) {
+        try {
+          parsedMetadata = JSON.parse(conversation.metadata);
+        } catch {}
+      }
+
       // Get tools
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId,
+        metadata: parsedMetadata,
         services: {
           prisma: this.prisma,
           siteConfigService: this.siteConfigService,
         },
       });
 
+      // Append tool descriptions to system prompt so the model knows what tools are available
+      const toolNames = Object.keys(tools);
+      let systemPrompt = agentConfig.systemPrompt;
+      if (toolNames.length > 0) {
+        const toolList = toolNames
+          .map((name) => {
+            const t = tools[name];
+            const desc = t.description ? `: ${t.description}` : '';
+            return `- ${name}${desc}`;
+          })
+          .join('\n');
+        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.`;
+      }
+
       // Create abort controller for client disconnect
       const abortController = new AbortController();
-      req.on('close', () => abortController.abort());
+      const onReqClose = () => {
+        abortController.abort();
+        req.off('close', onReqClose);
+      };
+      req.on('close', onReqClose);
 
       // Stream AI response
       const result = await this.aiService.streamChat({
         conversationId,
         messages,
         abortSignal: abortController.signal,
-        systemPrompt: agentConfig.systemPrompt,
+        systemPrompt,
         tools,
         maxTokens: agentConfig.maxTokensPerResponse,
         temperature: agentConfig.temperature,
@@ -173,7 +199,10 @@ export class AiChatController {
       
       try {
         while (true) {
-          if (abortController.signal.aborted) break;
+          if (abortController.signal.aborted) {
+            reader.cancel();
+            break;
+          }
           const { done, value } = await reader.read();
           if (done) break;
           res.write(decoder.decode(value, { stream: true }));

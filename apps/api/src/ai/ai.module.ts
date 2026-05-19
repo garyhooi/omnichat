@@ -7,6 +7,7 @@ import { AiChatController } from './ai-chat.controller';
 import { HandoffService } from './handoff.service';
 import { AiSecurityService } from './ai-security.service';
 import { ToolRegistry } from './tools/tool-registry';
+import { ExternalToolAuthService } from './tools/external-tool-auth.service';
 import { AiTranslateController } from './ai-translate.controller';
 import { AiLogService } from './ai-log.service';
 import { SessionStateModule } from '../session-state/session-state.module';
@@ -21,6 +22,7 @@ import { AppConfigModule } from '../config/config.module';
     HandoffService,
     AiSecurityService,
     ToolRegistry,
+    ExternalToolAuthService,
     AiLogService,
   ],
   controllers: [AiConfigController, AiChatController, AiTranslateController],
@@ -31,6 +33,7 @@ import { AppConfigModule } from '../config/config.module';
     HandoffService,
     AiSecurityService,
     ToolRegistry,
+    ExternalToolAuthService,
     AiLogService,
   ],
 })

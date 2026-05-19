@@ -5,28 +5,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SiteConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Get the active site configuration.
-   * Returns the first active config (for single-site deployments).
-   */
+  /** Get the active site configuration. */
   async getActiveConfig() {
     return this.prisma.siteConfig.findFirst({
       where: { isActive: true },
     }) || null;
   }
 
-  /**
-   * Get site configuration by ID.
-   */
+  /** Get site configuration by ID. */
   async getConfig(id: string) {
     return this.prisma.siteConfig.findUnique({
       where: { id },
     });
   }
 
-  /**
-   * Create a new site configuration.
-   */
+  /** Create a new site configuration. */
   async createConfig(data: {
     siteName: string;
     bubbleColor?: string;
@@ -45,9 +38,7 @@ export class SiteConfigService {
     return this.prisma.siteConfig.create({ data });
   }
 
-  /**
-   * Update an existing site configuration.
-   */
+  /** Update an existing site configuration. */
   async updateConfig(
     id: string,
     data: {
@@ -73,9 +64,7 @@ export class SiteConfigService {
     });
   }
 
-  /**
-   * List all site configurations.
-   */
+  /** List all site configurations. */
   async listConfigs() {
     return this.prisma.siteConfig.findMany({
       orderBy: { createdAt: 'desc' },

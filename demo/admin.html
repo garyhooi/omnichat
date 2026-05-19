@@ -14,7 +14,7 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         .header {
             background-color: #ffffff;
             border-bottom: 1px solid #e5e7eb;
@@ -41,9 +41,9 @@
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        
-        /* The omnichat-admin component needs to be told to take up full space */
-        omnichat-admin {
+
+        /* The omnichat-admin-portal component needs to be told to take up full space */
+        omnichat-admin-portal {
             display: block;
             width: 100%;
             height: 100%;
@@ -109,7 +109,7 @@
             font-size: 0.875rem;
             display: none;
         }
-        
+
         .loading-message {
             color: #2563eb;
             margin-top: 1rem;
@@ -119,19 +119,20 @@
         }
     </style>
 
-    <!-- Load OmniChat Admin Bundle from jsDelivr CDN -->
-    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin.js" crossorigin="anonymous"></script> -->
-    
+    <!-- Load OmniChat Admin Portal & Agent Widget Bundles from jsDelivr CDN -->
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-admin-portal.js" crossorigin="anonymous"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-agent-widget.js" crossorigin="anonymous"></script> -->
+
     <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
-    <script src="../apps/web/dist/omnichat-admin.js"></script>
-    <script src="../apps/web/dist/omnichat-admin-widget.js"></script>
+    <script src="../apps/web/dist/omnichat-admin-portal.js"></script>
+    <script src="../apps/web/dist/omnichat-agent-widget.js"></script>
     <script>
         window.addEventListener('error', function(e) {
             if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
                 console.warn('CDN script failed to load. Falling back to local build...');
                 const localScript = document.createElement('script');
                 if (e.target.src.includes('omnichat-admin')) {
-                    localScript.src = '../apps/web/dist/omnichat-admin.js';
+                    localScript.src = '../apps/web/dist/omnichat-admin-portal.js';
                 }
                 document.head.appendChild(localScript);
             }
@@ -155,18 +156,18 @@
         <!-- Content will be injected here via JavaScript -->
     </div>
 
-    <!-- Admin floating widget — persists across all pages/tabs -->
-    <omnichat-admin-widget
-        id="admin-widget"
+    <!-- Agent floating widget — persists across all pages/tabs -->
+    <omnichat-agent-widget
+        id="agent-widget"
         server-url="http://localhost:3001"
         token="">
-    </omnichat-admin-widget>
+    </omnichat-agent-widget>
 
     <script>
         const SERVER_URL = 'http://localhost:3001';
 
-        function setAdminWidgetToken(token) {
-            const widget = document.getElementById('admin-widget');
+        function setAgentWidgetToken(token) {
+            const widget = document.getElementById('agent-widget');
             if (widget) {
                 widget.setAttribute('token', token || '');
             }
@@ -175,7 +176,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('omnichat_demo_logged_in') === 'true';
             const isDemo = localStorage.getItem('omnichat_ui_demo_mode');
-            
+
             if (isDemo === 'true') {
                 renderDemoMode();
                 updateTabStyles('tab-demo');
@@ -189,7 +190,6 @@
 
             document.getElementById('tab-login').addEventListener('click', () => {
                 localStorage.removeItem('omnichat_ui_demo_mode');
-                // Force logout when clicking the Login tab manually
                 localStorage.removeItem('omnichat_demo_logged_in');
                 updateTabStyles('tab-login');
                 renderLoginForm();
@@ -218,11 +218,10 @@
             const container = document.getElementById('dashboard-container');
             container.innerHTML = `
                 <div style="width: 100%; height: 100%; position: relative;">
-                    <!-- Admin Dashboard -->
-                    <omnichat-admin server-url="http://localhost:3001" token="demo-token-123"></omnichat-admin>
+                    <omnichat-admin-portal server-url="http://localhost:3001" token="demo-token-123"></omnichat-admin-portal>
                 </div>
             `;
-            setAdminWidgetToken('demo-token-123');
+            setAgentWidgetToken('demo-token-123');
         }
 
         function renderLoginForm() {
@@ -273,7 +272,6 @@
                         throw new Error(data.message || 'Invalid credentials');
                     }
 
-                    // Save token and load the component
                     localStorage.setItem('omnichat_demo_logged_in', 'true');
                     localStorage.removeItem('omnichat_ui_demo_mode');
                     renderAdminComponent('cookie-auth');
@@ -290,12 +288,10 @@
             const container = document.getElementById('dashboard-container');
             container.innerHTML = ''; // Clear container
 
-            // Create the custom web element
-            const adminElement = document.createElement('omnichat-admin');
+            const adminElement = document.createElement('omnichat-admin-portal');
             adminElement.setAttribute('server-url', SERVER_URL);
             adminElement.setAttribute('token', token);
 
-            // Handle the logout event emitted by the component
             adminElement.addEventListener('omnichat:logout', () => {
                 localStorage.removeItem('omnichat_demo_logged_in');
                 localStorage.removeItem('omnichat_ui_demo_mode');
@@ -303,7 +299,7 @@
             });
 
             container.appendChild(adminElement);
-            setAdminWidgetToken(token);
+            setAgentWidgetToken(token);
         }
     </script>
 </body>

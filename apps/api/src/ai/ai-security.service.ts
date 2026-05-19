@@ -30,7 +30,6 @@ const INJECTION_PATTERNS = [
 export class AiSecurityService {
   private readonly logger = new Logger(AiSecurityService.name);
 
-  // Global circuit breaker state
   private globalFailureCount = 0;
   private globalFailureResetTime = 0;
   private circuitBreakerOpen = false;
@@ -40,9 +39,7 @@ export class AiSecurityService {
     private readonly stateStore: SessionStateStore,
   ) {}
 
-  /**
-   * Run all security checks on an incoming visitor message.
-   */
+  /** Run all security checks on an incoming visitor message. */
   async checkMessage(
     conversationId: string,
     message: string,
@@ -70,7 +67,7 @@ export class AiSecurityService {
       }
     }
 
-    // 3. Message length check (prevent token abuse)
+    // 3. Message length check
     if (message.length > 5000) {
       return { allowed: false, reason: 'Message too long for AI processing' };
     }
@@ -139,16 +136,12 @@ export class AiSecurityService {
     this.logger.warn(`Blacklisted IP ${visitorIp} for ${blacklistMinutes} minute(s): ${reason}`);
   }
 
-  /**
-   * Detect prompt injection attempts.
-   */
+  /** Detect prompt injection attempts. */
   private detectInjection(message: string): boolean {
     return INJECTION_PATTERNS.some((pattern) => pattern.test(message));
   }
 
-  /**
-   * Simple numeric hash for spam detection.
-   */
+  /** Simple numeric hash for spam detection. */
   private hashMessage(message: string): number {
     let hash = 0;
     for (let i = 0; i < message.length; i++) {
@@ -159,9 +152,7 @@ export class AiSecurityService {
     return Math.abs(hash);
   }
 
-  /**
-   * Record a global AI failure for circuit breaker logic.
-   */
+  /** Record a global AI failure for circuit breaker logic. */
   recordGlobalFailure(): void {
     this.globalFailureCount++;
     if (this.globalFailureCount >= 5) {
@@ -171,9 +162,7 @@ export class AiSecurityService {
     }
   }
 
-  /**
-   * Reset global failure counter (called on successful AI response).
-   */
+  /** Reset global failure counter (called on successful AI response). */
   resetGlobalFailure(): void {
     this.globalFailureCount = 0;
   }

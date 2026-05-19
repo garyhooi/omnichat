@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Chat Support</title>
+    <style>
+        body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; }
+    </style>
+
+    <!-- Load OmniChat Chat Page Bundle from jsDelivr CDN -->
+    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-chat-page.js" crossorigin="anonymous"></script> -->
+
+    <!-- Fallback for local testing if the CDN version isn't pushed yet -->
+    <script src="../apps/web/dist/omnichat-chat-page.js"></script>
+</head>
+<body>
+    <script>
+        // Read server URL from query parameter
+        const params = new URLSearchParams(window.location.search)
+        const serverUrl = params.get('server') || 'http://localhost:3001'
+
+        // Read optional bubble color
+        const bubbleColor = params.get('color') || '#4F46E5'
+
+        // Read optional welcome message
+        const welcomeMsg = params.get('welcome') || 'Hello! How can we help you today?'
+
+        // Create and mount the custom element
+        const chatPage = document.createElement('omnichat-chat-page')
+        chatPage.setAttribute('server-url', serverUrl)
+        chatPage.setAttribute('bubble-color', bubbleColor)
+        chatPage.setAttribute('welcome-message', welcomeMsg)
+        document.body.appendChild(chatPage)
+    </script>
+</body>
+</html>

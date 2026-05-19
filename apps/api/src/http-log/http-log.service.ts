@@ -22,7 +22,8 @@ export class HttpLogService {
     duration?: number;
   }) {
     try {
-      return (this.prisma as any)['httpLog'].create({ data });
+      const prisma = this.prisma as any;
+      return prisma.httpLog.create({ data });
     } catch (err) {
       this.logger.error(`Failed to write HTTP log: ${err.message}`);
       return null;
@@ -62,14 +63,15 @@ export class HttpLogService {
       where.url = { contains: params.search, mode: 'insensitive' };
     }
 
+    const prisma = this.prisma as any;
     const [data, total] = await Promise.all([
-      (this.prisma as any)['httpLog'].findMany({
+      prisma.httpLog.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      (this.prisma as any)['httpLog'].count({ where }),
+      prisma.httpLog.count({ where }),
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };

@@ -17,38 +17,20 @@ import { HttpLogModule } from './http-log/http-log.module';
 
 @Module({
   imports: [
-    // Load .env and make ConfigService available globally
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // Enhanced rate limiting for HTTP endpoints with multiple tiers
     ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000, // 1 second
-        limit: 10, // 10 requests per second
-      },
-      {
-        name: 'medium',
-        ttl: 60000, // 1 minute
-        limit: 100, // 100 requests per minute
-      },
-      {
-        name: 'long',
-        ttl: 3600000, // 1 hour
-        limit: 1000, // 1000 requests per hour
-      },
-      {
-        name: 'strict',
-        ttl: 60000, // 1 minute
-        limit: 20, // 20 requests per minute for sensitive endpoints
-      },
+      { name: 'short', ttl: 1000, limit: 10 },
+      { name: 'medium', ttl: 60000, limit: 100 },
+      { name: 'long', ttl: 3600000, limit: 1000 },
+      { name: 'strict', ttl: 60000, limit: 20 },
     ]),
     PrismaModule,
     AdminSecurityModule,
     SessionStateModule,
-    CommonModule, // Security middleware
+    CommonModule,
     AuthModule,
     AiModule,
     RagModule,
