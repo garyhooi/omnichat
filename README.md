@@ -15,13 +15,6 @@
   <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="48%" />
 </div>
 
-<div align="center">
-  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Portal" width="23%" style="margin:4px" />
-  <img src="docs/img/ss-widget.png" alt="OmniChat Chat Widget" width="23%" style="margin:4px" />
-  <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent" width="23%" style="margin:4px" />
-  <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="23%" style="margin:4px" />
-</div>
-
 ## ✨ Features
 
 * **⚡ Real-time Communication**: Powered by Socket.io for sub-millisecond latency.
