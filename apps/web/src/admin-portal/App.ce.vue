@@ -7,7 +7,6 @@ import { io, Socket } from 'socket.io-client'
 
 const props = defineProps({
   serverUrl: { type: String, required: true },
-  token: { type: String, required: true },
 })
 
 
@@ -306,7 +305,6 @@ const isActive = computed(() => activeConversationData.value?.status === 'active
 
 function connect() {
   const s = io(props.serverUrl, {
-    auth: { token: props.token },
     transports: ['websocket', 'polling'],
     withCredentials: true,
   })

@@ -628,6 +628,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
+    // Read external auth token from cookie (set by embedding site for token-exchange flow)
+    if (client.handshake.headers.cookie) {
+      const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
+      if (match) {
+        parsedMetadata.externalAuthToken = match[1];
+      }
+    }
+
     // Extract username from externalAuthToken JWT if present
     let assignedUsername = payload.visitorName || '';
     if (parsedMetadata.externalAuthToken && !assignedUsername) {

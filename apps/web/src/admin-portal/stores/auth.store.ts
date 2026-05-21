@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await fetch(`${serverUrl.value}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-api-key': adminApiKey.value },
         credentials: 'include',
         body: JSON.stringify({ username, password }),
       })
@@ -46,6 +46,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await fetch(`${serverUrl.value}/auth/me`, {
         credentials: 'include',
+        headers: adminApiKey.value ? { 'x-admin-api-key': adminApiKey.value } : {},
       })
       if (res.ok) {
         const data = await res.json()

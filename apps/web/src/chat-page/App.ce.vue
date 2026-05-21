@@ -74,6 +74,7 @@ const siteOfflineMode = ref(false)
 const siteEnableReadReceipts = ref(true)
 const isMuted = ref(localStorage.getItem('omnichat_visitor_muted') === 'true')
 const translationSoundUrl = ref('')
+const isVisible = ref(true)
 
 const translateLang = ref(getDefaultLang('omnichat_visitor_translate_lang'))
 const showLangPopover = ref(false)
@@ -539,6 +540,7 @@ onMounted(() => {
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
       if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.showVisitorWidget !== undefined) isVisible.value = config.showVisitorWidget
     })
     .catch(() => {})
 
@@ -569,7 +571,7 @@ function handleClose() {
 </script>
 
 <template>
-  <div class="panel-wrapper" :style="{
+  <div v-if="isVisible" class="panel-wrapper" :style="{
     left: '0px', top: '0px', width: '100vw', height: '100dvh',
     borderRadius: '0px', border: 'none',
   }" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">

@@ -15,7 +15,6 @@ const props = defineProps({
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
   position: { type: String, default: 'bottom-right' },
-  externalAuthToken: { type: String, default: '' },
 })
 
 
@@ -133,6 +132,7 @@ const isSmallScreen = computed(
 
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
+const isVisible = ref(true)
 
 function toggleMute() {
   isMuted.value = !isMuted.value
@@ -743,7 +743,6 @@ function startConversation() {
     visitorReferrer: document.referrer || null,
     metadata: JSON.stringify({
       userAgent: navigator.userAgent,
-      externalAuthToken: props.externalAuthToken || undefined,
     }),
   })
 }
@@ -1011,7 +1010,8 @@ onMounted(() => {
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
-    if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.showVisitorWidget !== undefined) isVisible.value = config.showVisitorWidget
 
       initializeWidgetPosition(siteWebsitePosition.value)
     })
@@ -1060,7 +1060,7 @@ watch(showLangPopover, (val) => {
 
 <template>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
-  <div class="chat-bubble-wrap" :style="bubbleWrapperStyle">
+  <div v-if="isVisible" class="chat-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
       type="button"

@@ -152,44 +152,17 @@ Also works as an embeddable custom element inside any page.
 
 ## 🔐 Token Handling Best Practices
 
-### Chat Widget – `external-auth-token` (Visitor JWT)
+### Visitor JWT (Cookie-based for token-exchange)
 
-The chat widget supports an optional `external-auth-token` attribute:
+For token-exchange flow with external tools, set a JWT in a secure cookie (`omnichat_auth_token`) from your backend:
 
-```html
-<omnichat-chat-widget
-  server-url="https://api.yoursite.com"
-  external-auth-token="eyJhbGciOiJIUzI1NiIs..."
-></omnichat-chat-widget>
+```
+Set-Cookie: omnichat_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=Lax
 ```
 
-What it is:
-- A short-lived JWT issued by your own authentication provider (e.g., Keycloak, Auth0, custom auth).
-- Used by OmniChat to:
-  - Optionally identify the visitor.
-  - Perform token-exchange for external tools when configured with `authType: "token-exchange"`.
+The JWT is read from the cookie during conversation creation and stored in conversation metadata. It is used to obtain tool-scoped JWTs from your external auth endpoint.
 
-When it’s required:
-- **Not required** for basic chat, AI chat, or human agent conversations.
-- **Required** only if you:
-  - Use external tools with `token-exchange` auth.
-  - Want to extract the visitor identity from a custom JWT.
-
-How to set it safely:
-- Generate the token on your backend (e.g., after login) and:
-  - Render it server-side into the page:
-    - `<omnichat-chat-widget external-auth-token="{{ externalAuthToken }}" ...></omnichat-chat-widget>`
-  - Or inject via a protected, authenticated page (SSR / Razor / Blade, etc.).
-- Use a reasonable lifetime (e.g., 30–180 minutes).
-- Only send it over HTTPS.
-- Never:
-  - Hardcode tokens in client-side JS.
-  - Log them to the console or expose them in URLs.
-  - Share them with third-party scripts or analytics.
-
-Notes:
-- The token is stored in conversation metadata on the OmniChat backend (not persisted long-term).
-- External tool endpoints can validate this JWT via their own token-exchange handler.
+- Visitor identity (`preferred_username` / `sub` / `username` claim) is automatically extracted and assigned as the visitor's display name.
 
 ### Admin Portal & Agent Widget – `token` (Agent/Admin JWT)
 

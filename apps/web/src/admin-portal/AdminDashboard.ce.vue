@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, defineAsyncComponent, markRaw, computed, type Component } from 'vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent, markRaw, computed, type Component, watch } from 'vue'
 import { useAuthStore } from './stores/auth.store'
 import { useToast } from './stores/toast.store'
 import { io, type Socket } from 'socket.io-client'
@@ -13,7 +13,6 @@ const { toasts, dismiss } = useToast()
 // ---------------------------------------------------------------------------
 const props = defineProps({
   serverUrl: { type: String, required: true },
-  token: { type: String, required: true },
   adminApiKey: { type: String, default: '' },
 })
 
@@ -66,15 +65,12 @@ const sidebarCollapsed = ref(false)
 // connections. This prevents socket.io-client from defaulting to the host
 // origin and requesting /socket.io on the demo server.
 const authStore = useAuthStore()
-authStore.configure(props.serverUrl, props.token)
+authStore.configure(props.serverUrl, 'cookie-auth', props.adminApiKey)
 authStore.fetchMe()
 
-// Watch for prop changes (e.g. token refresh)
+// Watch for prop changes
 watch(() => props.serverUrl, (v) => {
-  authStore.configure(v, props.token, props.adminApiKey)
-})
-watch(() => props.token, (v) => {
-  authStore.configure(props.serverUrl, v, props.adminApiKey)
+  authStore.configure(v, 'cookie-auth', props.adminApiKey)
 })
 
 // Logout handler called from the sidebar button
@@ -102,11 +98,7 @@ function connectPresence() {
     heartbeatInterval = null
   }
 
-  const token = authStore.token
-  if (!token) return
-
   presenceSocket = io(authStore.serverUrl, {
-    auth: token !== 'cookie-auth' ? { token } : undefined,
     transports: ['websocket', 'polling'],
     withCredentials: true,
   })
