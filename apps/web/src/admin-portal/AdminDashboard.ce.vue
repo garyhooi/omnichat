@@ -8,12 +8,10 @@ import { appVersion } from '../version'
 const { toasts, dismiss } = useToast()
 
 // ---------------------------------------------------------------------------
-// Props — mapped from HTML attributes:
-//   <omnichat-admin-portal server-url="..." token="..."></omnichat-admin-portal>
+// Props — mapped from HTML attributes
 // ---------------------------------------------------------------------------
 const props = defineProps({
   serverUrl: { type: String, required: true },
-  adminApiKey: { type: String, default: '' },
 })
 
 // ---------------------------------------------------------------------------
@@ -65,12 +63,12 @@ const sidebarCollapsed = ref(false)
 // connections. This prevents socket.io-client from defaulting to the host
 // origin and requesting /socket.io on the demo server.
 const authStore = useAuthStore()
-authStore.configure(props.serverUrl, 'cookie-auth', props.adminApiKey)
+authStore.configure(props.serverUrl, 'cookie-auth')
 authStore.fetchMe()
 
 // Watch for prop changes
 watch(() => props.serverUrl, (v) => {
-  authStore.configure(v, 'cookie-auth', props.adminApiKey)
+  authStore.configure(v, 'cookie-auth')
 })
 
 // Logout handler called from the sidebar button

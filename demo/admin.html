@@ -164,7 +164,6 @@
 
     <script>
         const SERVER_URL = 'http://localhost:3001';
-        const ADMIN_API_KEY = 'omnichat-admin-key-change-in-production';
 
         document.addEventListener('DOMContentLoaded', () => {
             const isLoggedIn = localStorage.getItem('omnichat_demo_logged_in') === 'true';
@@ -211,7 +210,7 @@
             const container = document.getElementById('dashboard-container');
             container.innerHTML = `
                 <div style="width: 100%; height: 100%; position: relative;">
-                    <omnichat-admin-portal server-url="http://localhost:3001" admin-api-key="omnichat-admin-key-change-in-production"></omnichat-admin-portal>
+                    <omnichat-admin-portal server-url="http://localhost:3001"></omnichat-admin-portal>
                 </div>
             `;
         }
@@ -250,10 +249,7 @@
                 try {
                     const response = await fetch(`${SERVER_URL}/auth/login`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-admin-api-key': ADMIN_API_KEY
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ username, password }),
                         credentials: 'include'
                     });
@@ -282,7 +278,6 @@
 
             const adminElement = document.createElement('omnichat-admin-portal');
             adminElement.setAttribute('server-url', SERVER_URL);
-            adminElement.setAttribute('admin-api-key', ADMIN_API_KEY);
 
             adminElement.addEventListener('omnichat:logout', () => {
                 localStorage.removeItem('omnichat_demo_logged_in');

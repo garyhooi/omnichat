@@ -92,20 +92,17 @@ A floating bubble that opens a chat panel. Drop it onto any page for instant vis
 A full admin dashboard for managing conversations, AI settings, knowledge base, tools, logs, and users. Embed it as a standalone page or within your own admin iframe.
 ```html
 <omnichat-admin-portal
-  server-url="https://api.yoursite.com"
-  token="eyJhbGciOiJIUzI1NiIsInR...">
+  server-url="https://api.yoursite.com">
 </omnichat-admin-portal>
 ```
-**Supported Attributes:**
+**Supported Attribute:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
-* `token` (Required): The JWT authentication token for the logged-in agent/admin.
 
 ### Agent Widget (`<omnichat-agent-widget>`)
 A compact, always-accessible chat panel for agents to embed in their own backoffice or admin dashboard. Agents can manage conversations from any page without switching views.
 ```html
 <omnichat-agent-widget
-  server-url="https://api.yoursite.com"
-  token="eyJhbGciOiJIUzI1NiIsInR...">
+  server-url="https://api.yoursite.com">
 </omnichat-agent-widget>
 ```
 **Key Features:**
@@ -116,11 +113,9 @@ A compact, always-accessible chat panel for agents to embed in their own backoff
 * **Conversation Details**: Inspect visitor info (IP, browser, URL), update customer username, and add internal agent remarks.
 * **AI Translation**: Inline translate messages into 20+ languages with per-message toggle.
 * **Widget Settings Sync**: Automatically applies bubble color, size, pattern, icon, and notification sound from the admin Settings → Widget Setup page.
-* **JWT-Authenticated**: Identity is derived from the JWT token payload — no client-modifiable username attribute.
 
-**Supported Attributes:**
+**Supported Attribute:**
 * `server-url` (Required): The base URL of your OmniChat backend API.
-* `token` (Required): The JWT authentication token for the logged-in agent/admin. The agent's username is extracted from the JWT payload.
 
 ### Chat Page (`<omnichat-chat-page>`)
 A full-page live chat that opens in a new tab. Ideal for embedding deep links on your website — visitors click the link and get a complete chat interface, not a floating bubble.
@@ -163,47 +158,6 @@ Set-Cookie: omnichat_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=L
 The JWT is read from the cookie during conversation creation and stored in conversation metadata. It is used to obtain tool-scoped JWTs from your external auth endpoint.
 
 - Visitor identity (`preferred_username` / `sub` / `username` claim) is automatically extracted and assigned as the visitor's display name.
-
-### Admin Portal & Agent Widget – `token` (Agent/Admin JWT)
-
-The Admin Portal and Agent Widget require a `token` attribute:
-
-- Admin Portal:
-  ```html
-  <omnichat-admin-portal
-    server-url="https://api.yoursite.com"
-    token="eyJhbGciOiJIUzI1NiIs..."
-  ></omnichat-admin-portal>
-  ```
-- Agent Widget:
-  ```html
-  <omnichat-agent-widget
-    server-url="https://api.yoursite.com"
-    token="eyJhbGciOiJIUzI1NiIs..."
-  ></omnichat-agent-widget>
-  ```
-
-What it is:
-- A JWT issued by the OmniChat backend after authenticating an agent/admin (via `/auth/login` or your integration).
-- The agent/admin username and role are read from this token payload.
-
-How to set it safely:
-- After login:
-  - Use the JWT returned by your OmniChat backend.
-  - Or generate it in your own backend and embed it into the admin page via SSR or a protected template.
-- Prefer using httpOnly cookies for backend auth where possible; embed the JWT only within protected admin pages.
-- Only serve admin and agent pages over HTTPS.
-- Rotate tokens and restrict them via your backend security (shorter-lived tokens for embedded use are recommended).
-- Never:
-  - Embed long-lived tokens in public pages or demo files.
-  - Expose admin/agent pages without your own authentication guard.
-
-Example flow (embedding Admin Portal):
-1. Agent logs in to your internal system.
-2. Your backend calls OmniChat’s login or uses a shared auth to obtain a JWT.
-3. Your backend renders an admin page:
-   - `<omnichat-admin-portal server-url="https://api.yoursite.com" token="{{ agentJwt }}"></omnichat-admin-portal>`
-4. This page is behind your internal auth so only authorized staff can load it.
 
 For more details on AI Agent, external tools, and token-exchange, see:
 - docs/ai-agent.md
