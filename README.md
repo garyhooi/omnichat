@@ -150,7 +150,7 @@ Set-Cookie: omnichat_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=L
 
 The JWT is read from the cookie during conversation creation and stored in conversation metadata. It is used to obtain tool-scoped JWTs from your external auth endpoint.
 
-- Visitor identity (`preferred_username` / `sub` / `username` claim) is automatically extracted and assigned as the visitor's display name.
+- Visitor identity (`username` claim) is automatically extracted and assigned as the visitor's display name.
 
 For more details on AI Agent, external tools, and token-exchange, see:
 - docs/ai-agent.md

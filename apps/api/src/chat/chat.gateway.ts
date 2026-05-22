@@ -642,7 +642,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       try {
         const token = parsedMetadata.externalAuthToken as string;
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-        assignedUsername = payload.preferred_username || payload.sub || payload.username || '';
+         assignedUsername = payload.username || '';
         this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
       } catch {
         this.logger.warn('Failed to decode externalAuthToken JWT payload');
