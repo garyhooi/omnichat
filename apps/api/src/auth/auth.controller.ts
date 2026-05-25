@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards, Request, Ip, Headers, Res } from '@nestjs/common';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
 import { AdminIpAllowlistGuard } from './admin-ip-allowlist.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
+import { Request as ExpressReq } from 'express';
 import { AuthService } from './auth.service';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
@@ -80,6 +81,31 @@ export class AuthController {
     }
     res.clearCookie('omnichat_auth_token');
     return { success: true };
+  }
+
+  @Post('visitor')
+  async visitorSession(
+    @Body() body: { visitorId?: string },
+    @Req() req: ExpressReq,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // Reuse existing visitorId if valid cookie already present (prevents new ID on refresh)
+    let visitorId = body.visitorId;
+    if (req.cookies?.['omnichat_visitor_token']) {
+      try {
+        const v = this.authService.validateVisitorToken(req.cookies['omnichat_visitor_token']);
+        visitorId = v.visitorId;
+      } catch { /* expired/invalid, use body.visitorId or generate new */ }
+    }
+    const result = this.authService.generateVisitorToken(visitorId);
+    res.cookie('omnichat_visitor_token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
+    });
+    return { visitorId: result.visitorId };
   }
 
   @Get('me')

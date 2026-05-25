@@ -142,10 +142,10 @@ Also works as an embeddable custom element inside any page.
 
 ### Visitor JWT (Cookie-based for token-exchange)
 
-For token-exchange flow with external tools, set a JWT in a secure cookie (`omnichat_auth_token`) from your backend:
+For token-exchange flow with external tools, set a JWT in a secure cookie (`omnichat_external_auth_token`) from your backend:
 
 ```
-Set-Cookie: omnichat_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=Lax
+Set-Cookie: omnichat_external_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=Lax
 ```
 
 The JWT is read from the cookie during conversation creation and stored in conversation metadata. It is used to obtain tool-scoped JWTs from your external auth endpoint.

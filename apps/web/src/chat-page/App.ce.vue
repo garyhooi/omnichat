@@ -171,21 +171,30 @@ const selectedImage = ref<string | null>(null)
 
 const wordLimitError = ref('')
 
-function getVisitorId(): string {
-  const storageKey = 'omnichat_visitor_id'
-  let id = localStorage.getItem(storageKey)
-  if (!id) {
-    id = window.crypto && crypto.randomUUID ? 'v_' + crypto.randomUUID() : 'v_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
-    localStorage.setItem(storageKey, id)
-  }
-  return id
-}
+async function connect() {
+  const base = props.serverUrl.replace(/\/$/, '')
 
-function connect() {
-  visitorId.value = getVisitorId()
+  // One-time migration: move old localStorage visitorId into httpOnly cookie
+  const legacyId = localStorage.getItem('omnichat_visitor_id')
+  if (legacyId) localStorage.removeItem('omnichat_visitor_id')
+  const connectId = legacyId || `v_${crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10)}`
+
+  // Must set cookie before connecting to prevent race on first load
+  try {
+    const res = await fetch(`${base}/auth/visitor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitorId: connectId }),
+      credentials: 'include',
+    })
+    const data = await res.json()
+    if (data.visitorId) visitorId.value = data.visitorId
+  } catch { /* best-effort, connect with fallback */ }
+
   const s = io(props.serverUrl, {
-    auth: { visitorId: visitorId.value },
+    auth: { visitorId: connectId },
     transports: ['websocket', 'polling'],
+    withCredentials: true,
   })
 
   s.on('connect', () => {
