@@ -16,11 +16,10 @@ const DESKTOP_PANEL_GAP = 16
 
 
 // Props
-// Usage: <omnichat-agent-widget server-url="https://api.yoursite.com" token="jwt-token"></omnichat-agent-widget>
+// Usage: <omnichat-agent-widget server-url="https://api.yoursite.com"></omnichat-agent-widget>
 
 const props = defineProps({
   serverUrl: { type: String, required: true },
-  token: { type: String, required: true },
 })
 
 
@@ -64,9 +63,6 @@ interface Conversation {
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { ...extra }
-  if (props.token && props.token !== 'cookie-auth') {
-    h['Authorization'] = `Bearer ${props.token}`
-  }
   return h
 }
 
@@ -110,6 +106,7 @@ const siteBubblePattern = ref('solid')
 const siteBubbleIcon = ref('💬')
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_admin_widget_muted') === 'true')
+const isVisible = ref(true)
 
 
 // Socket & data state
@@ -557,7 +554,6 @@ function toggleWidget() {
 
 function connect() {
   const s = io(props.serverUrl, {
-    auth: props.token && props.token !== 'cookie-auth' ? { token: props.token } : undefined,
     transports: ['websocket', 'polling'],
     withCredentials: true,
   })
@@ -1086,6 +1082,7 @@ onMounted(() => {
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
       if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.showAdminWidget !== undefined) isVisible.value = config.showAdminWidget
     })
     .catch(() => {
       // Config endpoint is optional — widget still works with defaults
@@ -1137,7 +1134,7 @@ watch(showLangPopover, (val) => {
 <template>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
 
-  <div class="aw-bubble-wrap" :style="bubbleWrapperStyle">
+  <div v-if="isVisible" class="aw-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
       type="button"

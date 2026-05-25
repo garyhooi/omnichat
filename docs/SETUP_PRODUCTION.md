@@ -130,10 +130,8 @@ Create an admin page in your application (like we did in Blazor) and add this sn
 <script src="https://cdn.your-domain.com/js/omnichat-admin.js" defer></script>
 
 <!-- 2. Add the custom element -->
-<!-- Note: You will need to dynamically set the 'token' attribute after the user logs in -->
 <omnichat-admin
     server-url="https://api.your-domain.com"
-    token="YOUR_JWT_TOKEN_HERE"
 ></omnichat-admin>
 ```
 
@@ -145,10 +143,8 @@ Add this snippet to the root layout of your backoffice/agent dashboard. The floa
 <script src="https://cdn.your-domain.com/js/omnichat-admin-widget.js" defer></script>
 
 <!-- 2. Add the custom element to the root layout -->
-<!-- Note: Set the token attribute dynamically after the agent logs in -->
 <omnichat-admin-widget
     server-url="https://api.your-domain.com"
-    token="YOUR_AGENT_JWT_TOKEN"
 ></omnichat-admin-widget>
 ```
 

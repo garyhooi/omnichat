@@ -43,6 +43,8 @@ const soundFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
 const allowedOrigins = ref('')
 const adminAllowedIps = ref('')
+const showAdminWidget = ref(true)
+const showVisitorWidget = ref(true)
 
 // Quick replies
 const quickReplies = ref<{ id: string; title: string; content: string }[]>([])
@@ -112,6 +114,8 @@ async function loadConfig() {
     enableReadReceipts.value = data.enableReadReceipts ?? false
     isOfflineMode.value = data.isOfflineMode ?? false
     notificationSoundUrl.value = data.notificationSoundUrl ?? ''
+    showAdminWidget.value = data.showAdminWidget ?? true
+    showVisitorWidget.value = data.showVisitorWidget ?? true
     allowedOrigins.value = data.allowedOrigins ?? ''
     adminAllowedIps.value = data.adminAllowedIps ?? ''
   } catch {
@@ -151,6 +155,8 @@ async function saveSettings() {
     enableReadReceipts: enableReadReceipts.value,
     isOfflineMode: isOfflineMode.value,
     notificationSoundUrl: notificationSoundUrl.value,
+    showAdminWidget: showAdminWidget.value,
+    showVisitorWidget: showVisitorWidget.value,
   }
   try {
     let res: Response
@@ -165,7 +171,10 @@ async function saveSettings() {
         body: JSON.stringify(body),
       })
     }
-    if (!res.ok) throw new Error('Failed to save')
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.message || `HTTP ${res.status} ${res.statusText}`)
+    }
     const data = await res.json()
     siteConfigId.value = data.id ?? data._id ?? siteConfigId.value
     toast.success('Settings saved successfully')
@@ -468,32 +477,60 @@ async function deleteQuickReply(id: string) {
           </div>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Read Receipts</label>
-            <div class="inline-flex rounded-md overflow-hidden border border-gray-300 text-sm">
-              <button
-                type="button"
-                :class="[
-                  'px-4 py-1.5 font-medium transition-colors',
-                  !enableReadReceipts
-                    ? 'bg-gray-500 text-white'
-                    : 'bg-white text-gray-500 hover:bg-gray-50'
-                ]"
-                @click="enableReadReceipts = false"
-              >Off</button>
-              <button
-                type="button"
-                :class="[
-                  'px-4 py-1.5 font-medium transition-colors',
-                  enableReadReceipts
-                    ? 'bg-indigo-500 text-white'
-                    : 'bg-white text-gray-500 hover:bg-gray-50'
-                ]"
-                @click="enableReadReceipts = true"
-              >On</button>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Widget Visibility</label>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="text-sm font-medium text-gray-700">Show Admin Widget</label>
+                  <p class="text-xs text-gray-400">Show agent widget for team members to receive messages</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" v-model="showAdminWidget" class="sr-only peer" @change="saveSettings">
+                  <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                </label>
+              </div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="text-sm font-medium text-gray-700">Show Visitor Widget</label>
+                  <p class="text-xs text-gray-400">Show chat widget on your website for visitors</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" v-model="showVisitorWidget" class="sr-only peer" @change="saveSettings">
+                  <div class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                </label>
+              </div>
             </div>
-            <p class="text-xs text-gray-400 mt-1">When on, agents can see if customers have read their messages. Customers never see read receipts.</p>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Read Receipts</label>
+              <div class="inline-flex rounded-md overflow-hidden border border-gray-300 text-sm">
+                <button
+                  type="button"
+                  :class="[
+                    'px-4 py-1.5 font-medium transition-colors',
+                    !enableReadReceipts
+                      ? 'bg-gray-500 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50'
+                  ]"
+                  @click="enableReadReceipts = false"
+                >Off</button>
+                <button
+                  type="button"
+                  :class="[
+                    'px-4 py-1.5 font-medium transition-colors',
+                    enableReadReceipts
+                      ? 'bg-indigo-500 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50'
+                  ]"
+                  @click="enableReadReceipts = true"
+                >On</button>
+              </div>
+              <p class="text-xs text-gray-400 mt-1">When on, agents can see if customers have read their messages. Customers never see read receipts.</p>
+            </div>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Human Agent Status</label>

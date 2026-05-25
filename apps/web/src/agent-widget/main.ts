@@ -11,7 +11,6 @@ import styles from './style.css?inline'
 //
 //   <omnichat-agent-widget
 //     server-url="https://api.yoursite.com"
-//     token="your-jwt-token"
 //   ></omnichat-agent-widget>
 //   <script src="https://cdn.yoursite.com/omnichat-agent-widget.js"></script>
 //

@@ -162,6 +162,24 @@ export class AuthService {
     };
   }
 
+  generateVisitorToken(existingVisitorId?: string): { token: string; visitorId: string } {
+    const visitorId = existingVisitorId || `v_${crypto.randomUUID()}`;
+    const jti = crypto.randomUUID();
+    const token = this.jwtService.sign(
+      { sub: visitorId, type: 'visitor', jti },
+      { issuer: 'omnichat', expiresIn: '30d' },
+    );
+    return { token, visitorId };
+  }
+
+  validateVisitorToken(token: string): { visitorId: string } {
+    const payload = this.jwtService.verify<{ sub: string; type: string }>(token);
+    if (payload.type !== 'visitor') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+    return { visitorId: payload.sub };
+  }
+
   async logout(jti: string) {
     await this.prisma.session.update({
       where: { jti },

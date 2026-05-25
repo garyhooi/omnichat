@@ -59,6 +59,14 @@ class CreateSiteConfigDto {
   @IsOptional()
   notificationSoundUrl?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  showAdminWidget?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  showVisitorWidget?: boolean;
+
   @IsString()
   @IsNotEmpty()
   allowedOrigins: string;
@@ -108,6 +116,14 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   bubbleIcon?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  showAdminWidget?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  showVisitorWidget?: boolean;
 
   @IsString()
   @IsOptional()

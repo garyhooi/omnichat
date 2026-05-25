@@ -12,7 +12,6 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(null)
   const serverUrl = ref('')
-  const adminApiKey = ref('')
 
   const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -74,11 +73,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** Configure auth from custom element attributes (CE mode) */
-  function configure(url: string, tok: string, apiKey?: string) {
+  function configure(url: string, tok: string) {
     serverUrl.value = url
     token.value = tok
-    if (apiKey) adminApiKey.value = apiKey
   }
 
-  return { user, token, serverUrl, adminApiKey, isAdmin, init, login, logout, setUser, configure, fetchMe }
+  return { user, token, serverUrl, isAdmin, init, login, logout, setUser, configure, fetchMe }
 })

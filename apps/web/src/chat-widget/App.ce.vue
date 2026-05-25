@@ -15,7 +15,6 @@ const props = defineProps({
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
   position: { type: String, default: 'bottom-right' },
-  externalAuthToken: { type: String, default: '' },
 })
 
 
@@ -133,6 +132,7 @@ const isSmallScreen = computed(
 
 const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_client_muted') === 'true')
+const isVisible = ref(true)
 
 function toggleMute() {
   isMuted.value = !isMuted.value
@@ -488,27 +488,30 @@ function closeImage() {
 }
 
 // Generate or retrieve persistent visitor ID
-function getVisitorId(): string {
-  const storageKey = 'omnichat_visitor_id'
-  let id = localStorage.getItem(storageKey)
-  if (!id) {
-    if (window.crypto && crypto.randomUUID) {
-      id = 'v_' + crypto.randomUUID()
-    } else {
-      id = 'v_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
-    }
-    localStorage.setItem(storageKey, id)
-  }
-  return id
-}
+async function connect() {
+  const base = props.serverUrl.replace(/\/$/, '')
 
+  // One-time migration: move old localStorage visitorId into httpOnly cookie
+  const legacyId = localStorage.getItem('omnichat_visitor_id')
+  if (legacyId) localStorage.removeItem('omnichat_visitor_id')
+  const connectId = legacyId || `v_${crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10)}`
 
-function connect() {
-  visitorId.value = getVisitorId()
+  // Must set cookie before connecting to prevent race on first load
+  try {
+    const res = await fetch(`${base}/auth/visitor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitorId: connectId }),
+      credentials: 'include',
+    })
+    const data = await res.json()
+    if (data.visitorId) visitorId.value = data.visitorId
+  } catch { /* best-effort, connect with fallback */ }
 
   const s = io(props.serverUrl, {
-    auth: { visitorId: visitorId.value },
+    auth: { visitorId: connectId },
     transports: ['websocket', 'polling'],
+    withCredentials: true,
   })
 
   s.on('connect', () => {
@@ -743,7 +746,6 @@ function startConversation() {
     visitorReferrer: document.referrer || null,
     metadata: JSON.stringify({
       userAgent: navigator.userAgent,
-      externalAuthToken: props.externalAuthToken || undefined,
     }),
   })
 }
@@ -1011,7 +1013,8 @@ onMounted(() => {
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
-    if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
+      if (config.showVisitorWidget !== undefined) isVisible.value = config.showVisitorWidget
 
       initializeWidgetPosition(siteWebsitePosition.value)
     })
@@ -1060,7 +1063,7 @@ watch(showLangPopover, (val) => {
 
 <template>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
-  <div class="chat-bubble-wrap" :style="bubbleWrapperStyle">
+  <div v-if="isVisible" class="chat-bubble-wrap" :style="bubbleWrapperStyle">
     <button
       v-if="!isOpen"
       type="button"

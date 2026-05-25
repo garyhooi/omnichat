@@ -411,6 +411,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       }
     }
 
+    // Check for visitor session cookie
+    let visitorCookieId: string | undefined;
+    if (client.handshake.headers.cookie) {
+      const visitorMatch = client.handshake.headers.cookie.match(/omnichat_visitor_token=([^;]+)/);
+      if (visitorMatch) {
+        try {
+          const v = this.authService.validateVisitorToken(visitorMatch[1]);
+          visitorCookieId = v.visitorId;
+        } catch {
+          // Invalid visitor token, fall through to handshake.auth fallback
+        }
+      }
+    }
+
     const origin = client.handshake.headers.origin as string;
     const referer = client.handshake.headers.referer as string;
 
@@ -464,10 +478,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         client.disconnect();
       }
     } else {
-      // Visitor connection — no authentication required
+      // Visitor connection — prefer validated cookie visitorId over handshake.auth fallback
       client.data.isVisitor = true;
       client.data.visitorId =
-        (client.handshake.auth?.visitorId as string) || client.id;
+        visitorCookieId ||
+        (client.handshake.auth?.visitorId as string) ||
+        client.id;
 
       this.logger.log(
         `Visitor connected: ${client.data.visitorId} (${client.id})`,
@@ -608,6 +624,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
 
     const visitorId = payload.visitorId || client.data.visitorId || client.id;
+
+    // Sync socket visitorId for subsequent ownership checks (handles cookie migration timing)
+    if (client.data.isVisitor && payload.visitorId) {
+      client.data.visitorId = payload.visitorId;
+    }
     
     // Rate limit: 2 starts per 60 seconds
     const rlKey = `start:${client.handshake.address}:${visitorId}`;
@@ -628,13 +649,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
+    // Read external auth token from cookie (set by embedding site for token-exchange flow)
+    if (client.handshake.headers.cookie) {
+      const match = client.handshake.headers.cookie.match(/omnichat_external_auth_token=([^;]+)/);
+      if (match) {
+        parsedMetadata.externalAuthToken = match[1];
+      }
+    }
+
     // Extract username from externalAuthToken JWT if present
     let assignedUsername = payload.visitorName || '';
     if (parsedMetadata.externalAuthToken && !assignedUsername) {
       try {
         const token = parsedMetadata.externalAuthToken as string;
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-        assignedUsername = payload.preferred_username || payload.sub || payload.username || '';
+         assignedUsername = payload.username || '';
         this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
       } catch {
         this.logger.warn('Failed to decode externalAuthToken JWT payload');
@@ -821,6 +850,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const senderId = client.data.isVisitor
       ? client.data.visitorId
       : client.data.user?.id;
+
+    // Validate conversation ownership for visitors
+    if (senderType === 'visitor') {
+      const conversation = await this.chatService.getConversation(conversationId);
+      if (!conversation || conversation.visitorId !== client.data.visitorId) {
+        client.emit('message_error', {
+          conversationId,
+          error: 'Conversation not found.',
+        });
+        return;
+      }
+    }
 
     try {
       // Persist first — emit only after successful DB write
