@@ -145,10 +145,16 @@ Also works as an embeddable custom element inside any page.
 For token-exchange flow with external tools, set a JWT in a secure cookie (`omnichat_external_auth_token`) from your backend:
 
 ```
-Set-Cookie: omnichat_external_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=Lax
+Set-Cookie: omnichat_external_auth_token=<your-jwt>; Path=/; HttpOnly; Secure; SameSite=Strict
 ```
 
 The JWT is read from the cookie during conversation creation and stored in conversation metadata. It is used to obtain tool-scoped JWTs from your external auth endpoint.
+
+`SameSite=Strict` is appropriate for both common usage patterns:
+- **Widget with built-in bubble** (`<omnichat-chat-widget>`): The web component is rendered on your frontend (e.g., `yourdomain.com/app`). When the visitor clicks the floating bubble, the chat panel opens inline on the same page — no cross-site navigation involved.
+- **Custom button + full-page chat** (`<omnichat-chat-page>`): Your frontend has its own live chat button. When clicked, it opens a new page on the same domain (e.g., `yourdomain.com/chat`) rendering the `<omnichat-chat-page>` web component. The cookie is sent because the navigation is same-site.
+
+If your users may land on the chat page from cross-site links (email, search results, social media), use `SameSite=Lax` instead to preserve their session on first load.
 
 - Visitor identity (`username` claim) is automatically extracted and assigned as the visitor's display name.
 
