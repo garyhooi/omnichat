@@ -83,7 +83,7 @@ class UpdateToolDto {
 // ---------------------------------------------------------------------------
 @Controller('ai/config')
 @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-@Roles('admin')
+@Roles('admin', 'developer')
 export class AiConfigController {
   constructor(private readonly aiConfigService: AiConfigService) {}
 

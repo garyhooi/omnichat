@@ -2,10 +2,12 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -35,7 +37,6 @@ export class AdminController {
     private readonly prisma: PrismaService,
   ) {}
 
-  /** List / search users with fuzzy matching on displayName, username, and role. */
   @Get('users')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
   async getUsers(
@@ -102,14 +103,18 @@ export class AdminController {
     return usersWithSessionCount;
   }
 
-  /** Update user role or lock status. */
   @Patch('users/:id')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'developer')
   async updateUser(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
+    @Req() req: any,
   ) {
+    if (dto.role === 'developer' && req.user?.role !== 'developer') {
+      throw new ForbiddenException('Only developers can promote users to developer role');
+    }
+
     const data: any = {};
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isLocked !== undefined) data.isLocked = dto.isLocked;
@@ -140,10 +145,9 @@ export class AdminController {
     return user;
   }
 
-  /** Force logout a user — revokes all active sessions. */
   @Delete('users/:id/sessions')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'developer')
   async forceLogoutUser(@Param('id') id: string) {
     const result = await this.prisma.session.updateMany({
       where: {

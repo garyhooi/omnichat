@@ -122,6 +122,17 @@ Individual web builds (run from `apps/web` or `cd apps/web && bun run build:xxx`
 - After switching: verify `DATABASE_URL` in `apps/api/.env` matches, then `bun run prisma:push`.
 - Provider differences: MongoDB uses `@map("_id")`, no cascading FKs, no `@db.Text`. SQL variants use standard relations + `@@index` + `onDelete`.
 
+## Auth architecture
+
+- JWT stored in localStorage, sent via `Authorization: Bearer`.
+  - `POST /auth/login` returns `{ accessToken, refreshToken, siteToken, user }`.
+  - `POST /auth/refresh` — exchanges refresh token for new access + refresh tokens.
+  - `POST /auth/visitor` — accepts optional `externalToken` in body for widget external site auth.
+  - `x-external-site-token` header required on all authenticated endpoints (origin-bound companion JWT).
+- Roles: `agent` < `admin` < `developer`. Only developer can manage CORS / IP allowlist and promote to developer.
+- CORS & IP allowlist managed via Admin UI → Developer tab (no longer in Settings).
+- External site JWTs (widget visitor flow) verified using `EXTERNAL_SITE_JWT_SECRET` env var (HS256).
+
 ## Dev / demo flow
 
 ```

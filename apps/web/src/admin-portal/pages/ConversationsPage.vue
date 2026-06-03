@@ -313,10 +313,10 @@ function closeImage() {
 
 // Socket.io connection & event handlers
 function connect() {
+  const accessToken = localStorage.getItem('accessToken')
   const s = io(authStore.serverUrl, {
-    auth: authStore.token && authStore.token !== 'cookie-auth' ? { token: authStore.token } : undefined,
+    auth: accessToken ? { token: accessToken } : undefined,
     transports: ['websocket', 'polling'],
-    withCredentials: true,
   })
 
   s.on('connect', () => {

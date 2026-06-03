@@ -8,8 +8,7 @@ const toast = useToast()
 const base = () => auth.serverUrl
 
 // --- State ---
-const settingsTab = ref<'widget' | 'security' | 'quick-replies'>('widget')
-const canManageSecurity = computed(() => auth.isAdmin)
+const settingsTab = ref<'widget' | 'quick-replies'>('widget')
 
 function parseWidgetPosition(value?: string | null) {
   if (!value?.startsWith('xy:')) return null
@@ -41,8 +40,6 @@ const notificationSoundUrl = ref('')
 const isUploadingSound = ref(false)
 const soundFileInput = ref<HTMLInputElement | null>(null)
 const siteConfigId = ref<string | null>(null)
-const allowedOrigins = ref('')
-const adminAllowedIps = ref('')
 const showAdminWidget = ref(true)
 const showVisitorWidget = ref(true)
 
@@ -116,8 +113,6 @@ async function loadConfig() {
     notificationSoundUrl.value = data.notificationSoundUrl ?? ''
     showAdminWidget.value = data.showAdminWidget ?? true
     showVisitorWidget.value = data.showVisitorWidget ?? true
-    allowedOrigins.value = data.allowedOrigins ?? ''
-    adminAllowedIps.value = data.adminAllowedIps ?? ''
   } catch {
     // ignore
   }
@@ -180,30 +175,6 @@ async function saveSettings() {
     toast.success('Settings saved successfully')
   } catch (e: any) {
     toast.error(e.message || 'Failed to save settings')
-  }
-}
-
-async function saveSecuritySettings() {
-  if (!siteConfigId.value) {
-    toast.error('Site config must exist before updating security settings')
-    return
-  }
-
-  try {
-    const res = await apiFetch(`/config/${siteConfigId.value}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        allowedOrigins: allowedOrigins.value.trim(),
-        adminAllowedIps: adminAllowedIps.value.trim(),
-      }),
-    })
-    if (!res.ok) throw new Error('Failed to save security settings')
-    const data = await res.json()
-    allowedOrigins.value = data.allowedOrigins ?? allowedOrigins.value.trim()
-    adminAllowedIps.value = data.adminAllowedIps ?? adminAllowedIps.value.trim()
-    toast.success('Security settings saved successfully')
-  } catch (e: any) {
-    toast.error(e.message || 'Failed to save security settings')
   }
 }
 
@@ -375,16 +346,6 @@ async function deleteQuickReply(id: string) {
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
         >
           Widget Setup
-        </button>
-        <button
-          v-if="canManageSecurity"
-          @click="settingsTab = 'security'"
-          class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          :class="settingsTab === 'security'
-            ? 'bg-indigo-600 text-white'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
-        >
-          Site security
         </button>
         <button
           @click="settingsTab = 'quick-replies'"
@@ -578,41 +539,6 @@ async function deleteQuickReply(id: string) {
         <div class="pt-2">
           <button @click="saveSettings" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
             Save Settings
-          </button>
-        </div>
-      </div>
-
-      <div v-if="settingsTab === 'security' && canManageSecurity" class="bg-white rounded-lg shadow p-6 space-y-6">
-        <div>
-          <h2 class="text-lg font-semibold text-gray-800">Site security</h2>
-          <p class="mt-1 text-sm text-gray-500">Enter comma-separated origins or `*` to allow all origins.</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Allowed Origins</label>
-          <textarea
-            v-model="allowedOrigins"
-            rows="5"
-            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="https://example.com, https://*.example.com"
-          />
-          <p class="text-xs text-gray-400 mt-1">Used to validate widget and API origins for incoming requests.</p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Admin Allowed IP Addresses</label>
-          <textarea
-            v-model="adminAllowedIps"
-            rows="5"
-            class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="203.0.113.10, 198.51.100.5"
-          />
-          <p class="text-xs text-gray-400 mt-1">When this list is not empty, only these IP addresses can access admin portal endpoints, including register and login.</p>
-        </div>
-
-        <div class="pt-2">
-          <button @click="saveSecuritySettings" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-            Save Security Settings
           </button>
         </div>
       </div>

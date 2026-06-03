@@ -7,29 +7,19 @@ import { Request as ExpressReq } from 'express';
 import { AuthService } from './auth.service';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
-
 export class RegisterDto {
-  @IsString()
-  @IsNotEmpty()
-  username: string;
-
-  @IsString()
-  @MinLength(8)
-  password: string;
-
-  @IsString()
-  @IsNotEmpty()
-  displayName: string;
+  @IsString() @IsNotEmpty() username: string;
+  @IsString() @MinLength(8) password: string;
+  @IsString() @IsNotEmpty() displayName: string;
 }
 
 export class LoginDto {
-  @IsString()
-  @IsNotEmpty()
-  username: string;
+  @IsString() @IsNotEmpty() username: string;
+  @IsString() @IsNotEmpty() password: string;
+}
 
-  @IsString()
-  @IsNotEmpty()
-  password: string;
+export class RefreshDto {
+  @IsString() @IsNotEmpty() refreshToken: string;
 }
 
 
@@ -40,72 +30,75 @@ export class AuthController {
   @Post('register')
   @UseGuards(AdminIpAllowlistGuard, AdminApiKeyGuard)
   async register(
-    @Body() dto: RegisterDto,
-    @Ip() ip: string,
+    @Body() dto: RegisterDto, @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
-    @Res({ passthrough: true }) res: Response,
+    @Headers('origin') origin: string,
   ) {
-    const result = await this.authService.register(dto.username, dto.password, dto.displayName, ip, userAgent);
-    res.cookie('omnichat_auth_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
-    return result;
+    return this.authService.register(dto.username, dto.password, dto.displayName, ip, userAgent, origin);
   }
 
   @Post('login')
   @UseGuards(AdminIpAllowlistGuard, AdminApiKeyGuard)
   async login(
-    @Body() dto: LoginDto,
-    @Ip() ip: string,
+    @Body() dto: LoginDto, @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
-    @Res({ passthrough: true }) res: Response,
+    @Headers('origin') origin: string,
   ) {
-    const result = await this.authService.login(dto.username, dto.password, ip, userAgent);
-    res.cookie('omnichat_auth_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
-    return result;
+    return this.authService.login(dto.username, dto.password, ip, userAgent, origin);
+  }
+
+  @Post('refresh')
+  @UseGuards(AdminIpAllowlistGuard)
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Headers('origin') origin: string,
+  ) {
+    return this.authService.refreshAccessToken(dto.refreshToken, origin);
   }
 
   @Post('logout')
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
-  async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
+  async logout(@Request() req: any) {
     if (req.user && req.user.jti) {
       await this.authService.logout(req.user.jti);
     }
-    res.clearCookie('omnichat_auth_token');
+    if (req.user?.id) {
+      await this.authService.revokeRefreshTokens(req.user.id);
+    }
     return { success: true };
   }
 
   @Post('visitor')
   async visitorSession(
-    @Body() body: { visitorId?: string },
+    @Body() body: { visitorId?: string; externalToken?: string },
     @Req() req: ExpressReq,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // Reuse existing visitorId if valid cookie already present (prevents new ID on refresh)
     let visitorId = body.visitorId;
     if (req.cookies?.['omnichat_visitor_token']) {
       try {
         const v = this.authService.validateVisitorToken(req.cookies['omnichat_visitor_token']);
         visitorId = v.visitorId;
-      } catch { /* expired/invalid, use body.visitorId or generate new */ }
+      } catch {}
     }
-    const result = this.authService.generateVisitorToken(visitorId);
+
+    let operatorName: string | undefined;
+    if (body.externalToken) {
+      try {
+        const claims = this.authService.verifyExternalSiteJwt(body.externalToken);
+        operatorName = claims.operatorName;
+      } catch {}
+    }
+
+    const result = this.authService.generateVisitorToken(visitorId, operatorName);
     res.cookie('omnichat_visitor_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
-    return { visitorId: result.visitorId };
+    return { visitorId: result.visitorId, operatorName: operatorName || null };
   }
 
   @Get('me')

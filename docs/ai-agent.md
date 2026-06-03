@@ -135,7 +135,7 @@ POST /ai/config/tools
 
 ### Token exchange flow
 
-1. Embedding site sets a JWT in `omnichat_external_auth_token` cookie (JWT from embedding site, ~3h lifespan)
+1. Embedding site generates an HS256 JWT signed with `EXTERNAL_SITE_JWT_SECRET` and passes it via `<omnichat-chat-widget data-external-token="...">` (~3h lifespan)
 2. Stored in conversation metadata
 3. Before calling the tool, OmniChat POSTs `{ external_auth_token }` to the configured `tokenUrl`
 4. External auth API verifies the JWT signature and returns `{ access_token, expires_in }`

@@ -306,7 +306,9 @@ const isActive = computed(() => activeConversationData.value?.status === 'active
 function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
-    withCredentials: true,
+    auth: {
+      token: localStorage.getItem('accessToken') || undefined,
+    },
   })
 
   s.on('connect', () => {

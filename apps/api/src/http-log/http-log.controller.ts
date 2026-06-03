@@ -12,7 +12,7 @@ import { HttpLogService } from './http-log.service';
 
 @Controller('logs/http')
 @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-@Roles('admin')
+@Roles('admin', 'developer')
 export class HttpLogController {
   constructor(private readonly httpLogService: HttpLogService) {}
 

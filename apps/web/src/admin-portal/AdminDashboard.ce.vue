@@ -7,16 +7,10 @@ import { appVersion } from '../version'
 
 const { toasts, dismiss } = useToast()
 
-// ---------------------------------------------------------------------------
-// Props — mapped from HTML attributes
-// ---------------------------------------------------------------------------
 const props = defineProps({
   serverUrl: { type: String, required: true },
 })
 
-// ---------------------------------------------------------------------------
-// Pages — statically imported (IIFE build inlines everything)
-// ---------------------------------------------------------------------------
 import ConversationsPage from './pages/ConversationsPage.vue'
 import AiSetupPage from './pages/AiSetupPage.vue'
 import KnowledgeBasePage from './pages/KnowledgeBasePage.vue'
@@ -24,6 +18,7 @@ import ToolsPage from './pages/ToolsPage.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import LogsPage from './pages/LogsPage.vue'
 import UserManagementPage from './pages/UserManagementPage.vue'
+import DeveloperPage from './pages/DeveloperPage.vue'
 
 const pages: Record<string, Component> = {
   conversations: markRaw(ConversationsPage),
@@ -33,6 +28,7 @@ const pages: Record<string, Component> = {
   settings: markRaw(SettingsPage),
   logs: markRaw(LogsPage),
   users: markRaw(UserManagementPage),
+  developer: markRaw(DeveloperPage),
 }
 
 const allNavItems = [
@@ -42,49 +38,39 @@ const allNavItems = [
   { key: 'tools', label: 'Tools', icon: '\u{1F527}', adminOnly: true },
   { key: 'logs', label: 'Logs', icon: '\u{1F4CB}', adminOnly: true },
   { key: 'users', label: 'Users', icon: '\u{1F465}', adminOnly: true },
+  { key: 'developer', label: 'Developer', icon: '\u{1F511}', developerOnly: true },
   { key: 'settings', label: 'Settings', icon: '\u2699\uFE0F', adminOnly: false },
 ]
 
 const navItems = computed(() => {
-  return allNavItems.filter(item => !item.adminOnly || authStore.isAdmin)
+  return allNavItems.filter(item => {
+    if (item.developerOnly) return authStore.isDeveloper
+    if (item.adminOnly) return authStore.isAdmin
+    return true
+  })
 })
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
 const currentPage = ref('conversations')
 const sidebarCollapsed = ref(false)
 
-// ---------------------------------------------------------------------------
-// Lifecycle — configure auth store with CE props
-// ---------------------------------------------------------------------------
-// Configure auth store immediately so child components (which mount during
-// the same render cycle) see the serverUrl/token before they attempt socket
-// connections. This prevents socket.io-client from defaulting to the host
-// origin and requesting /socket.io on the demo server.
 const authStore = useAuthStore()
 authStore.configure(props.serverUrl, 'cookie-auth')
 authStore.fetchMe()
 
-// Watch for prop changes
 watch(() => props.serverUrl, (v) => {
   authStore.configure(v, 'cookie-auth')
 })
 
-// Logout handler called from the sidebar button
 function handleLogout() {
-  // call the store logout then reload so host/demo can show login UI
   authStore.logout().then(() => {
     try { window.location.reload() } catch (e) { /* ignore */ }
   })
 }
 
-// ---------------------------------------------------------------------------
-// Presence socket — lightweight connection that stays alive across all pages
-// to keep the agent's online status fresh via heartbeat.
-// ---------------------------------------------------------------------------
 let presenceSocket: Socket | null = null
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+
+const isBearer = true
 
 function connectPresence() {
   if (presenceSocket) {
@@ -96,10 +82,19 @@ function connectPresence() {
     heartbeatInterval = null
   }
 
-  presenceSocket = io(authStore.serverUrl, {
+  const opts: any = {
     transports: ['websocket', 'polling'],
-    withCredentials: true,
-  })
+  }
+
+  if (isBearer) {
+    opts.auth = {
+      token: localStorage.getItem('accessToken') || undefined,
+    }
+  } else {
+    opts.withCredentials = true
+  }
+
+  presenceSocket = io(authStore.serverUrl, opts)
 
   presenceSocket.on('connect', () => {
     heartbeatInterval = setInterval(() => {
@@ -126,8 +121,6 @@ function disconnectPresence() {
   }
 }
 
-// Insert a hidden DOM node into the host element at runtime so it is visible
-// in the final compiled output / inspector. This avoids build-time stripping.
 onMounted(() => {
   connectPresence()
   try {
@@ -141,7 +134,6 @@ onMounted(() => {
       host.appendChild(marker)
     }
   } catch (e) {
-    // noop
   }
 })
 
@@ -151,10 +143,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
   <div style="display: flex; height: 100%; width: 100%; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1e293b; font-size: 14px; overflow: hidden; border-radius: 16px;">
     <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
-    <!-- Sidebar Navigation -->
     <aside
       :style="{
         display: 'flex',
@@ -168,7 +158,6 @@ onUnmounted(() => {
         overflow: 'hidden',
       }"
     >
-      <!-- Logo -->
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid #374151;">
         <span v-if="!sidebarCollapsed" style="font-size: 16px; font-weight: 700;">OmniChat</span>
         <button
@@ -179,7 +168,6 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Nav Items -->
       <nav style="flex: 1; padding: 12px 0;">
         <button
           v-for="item in navItems"
@@ -205,9 +193,7 @@ onUnmounted(() => {
           <span v-if="!sidebarCollapsed" style="margin-left: 12px;">{{ item.label }}</span>
         </button>
       </nav>
-      <!-- Footer note (bottom of sidebar) -->
       <div style="padding: 8px 12px; border-top: 1px solid #374151; flex-shrink: 0;">
-        <!-- Logout button -->
         <button
           @click="handleLogout"
           :title="sidebarCollapsed ? 'Logout' : undefined"
@@ -239,14 +225,12 @@ onUnmounted(() => {
       </div>
     </aside>
 
-    <!-- Main Content -->
     <main style="flex: 1; overflow: hidden; min-width: 0; height: 100%;">
       <component :is="pages[currentPage]" />
     </main>
   </div>
   <p hidden style="display:none;margin:0;padding:0;line-height:0;">Powered by OmniChat: https://github.com/garyhooi/omnichat</p>
 
-  <!-- Toast notifications -->
   <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none;">
     <div
       v-for="toast in toasts"
@@ -275,6 +259,4 @@ onUnmounted(() => {
       >&times;</button>
     </div>
   </div>
-
-  <!-- Powered by OmniChat: https://github.com/garyhooi/omnichat -->
 </template>

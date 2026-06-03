@@ -68,13 +68,18 @@ model Message {
   @@index([conversationId])
   @@index([createdAt])
 }
+enum AdminRole {
+  agent
+  admin
+  developer
+}
 
 model AdminUser {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
   displayName  String
-  role         String   @default("agent")
+  role         AdminRole @default(agent)
   isOnline     Boolean  @default(false)
   isLocked     Boolean  @default(false)
   registrationIp String?
@@ -86,11 +91,25 @@ model AdminUser {
 
   conversations Conversation[]
   sessions      Session[]
+  refreshTokens RefreshToken[]
 }
 
 model Session {
   id          String   @id @default(cuid())
   jti         String   @unique
+  adminUserId String
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
   adminUserId String
   expiresAt   DateTime
   revoked     Boolean  @default(false)

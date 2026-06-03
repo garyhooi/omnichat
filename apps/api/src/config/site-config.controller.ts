@@ -205,8 +205,8 @@ export class SiteConfigController {
   @Post()
   @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'))
   async createConfig(@Body() dto: CreateSiteConfigDto, @Req() req: AuthenticatedRequest) {
-    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'admin') {
-      throw new ForbiddenException('Only admins can update site security settings');
+    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'developer') {
+      throw new ForbiddenException('Only developers can update site security settings');
     }
 
     return this.siteConfigService.createConfig(dto);
@@ -219,8 +219,8 @@ export class SiteConfigController {
     @Body() dto: UpdateSiteConfigDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'admin') {
-      throw new ForbiddenException('Only admins can update site security settings');
+    if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'developer') {
+      throw new ForbiddenException('Only developers can update site security settings');
     }
 
     return this.siteConfigService.updateConfig(id, dto);

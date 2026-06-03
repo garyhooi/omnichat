@@ -15,6 +15,7 @@ const props = defineProps({
   bubbleColor: { type: String, default: '#4F46E5' },
   welcomeMessage: { type: String, default: 'Hello! How can we help you today?' },
   position: { type: String, default: 'bottom-right' },
+  dataExternalToken: { type: String, default: '' },
 })
 
 
@@ -497,11 +498,15 @@ async function connect() {
   const connectId = legacyId || `v_${crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10)}`
 
   // Must set cookie before connecting to prevent race on first load
-  try {
+    try {
+    const body: any = { visitorId: connectId }
+    const extToken = props.dataExternalToken || (window as any).__OMNICHAT_EXTERNAL_TOKEN__
+    if (extToken) body.externalToken = extToken
+
     const res = await fetch(`${base}/auth/visitor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visitorId: connectId }),
+      body: JSON.stringify(body),
       credentials: 'include',
     })
     const data = await res.json()
@@ -509,7 +514,7 @@ async function connect() {
   } catch { /* best-effort, connect with fallback */ }
 
   const s = io(props.serverUrl, {
-    auth: { visitorId: connectId },
+    auth: { visitorId: connectId, externalToken: extToken || undefined },
     transports: ['websocket', 'polling'],
     withCredentials: true,
   })

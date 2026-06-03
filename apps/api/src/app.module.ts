@@ -14,6 +14,7 @@ import { SessionStateModule } from './session-state/session-state.module';
 import { AiModule } from './ai/ai.module';
 import { RagModule } from './rag/rag.module';
 import { HttpLogModule } from './http-log/http-log.module';
+import { SiteTokenGuard } from './auth/site-token.guard';
 
 @Module({
   imports: [
@@ -44,6 +45,10 @@ import { HttpLogModule } from './http-log/http-log.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SiteTokenGuard,
     },
   ],
 })
