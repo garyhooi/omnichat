@@ -498,9 +498,9 @@ async function connect() {
   const connectId = legacyId || `v_${crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10)}`
 
   // Must set cookie before connecting to prevent race on first load
+    const extToken = props.dataExternalToken || (window as any).__OMNICHAT_EXTERNAL_TOKEN__
     try {
     const body: any = { visitorId: connectId }
-    const extToken = props.dataExternalToken || (window as any).__OMNICHAT_EXTERNAL_TOKEN__
     if (extToken) body.externalToken = extToken
 
     const res = await fetch(`${base}/auth/visitor`, {

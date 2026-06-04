@@ -75,15 +75,16 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     let visitorId = body.visitorId;
+    let operatorName: string | undefined;
     if (req.cookies?.['omnichat_visitor_token']) {
       try {
         const v = this.authService.validateVisitorToken(req.cookies['omnichat_visitor_token']);
         visitorId = v.visitorId;
+        if (v.operatorName) operatorName = v.operatorName;
       } catch {}
     }
 
-    let operatorName: string | undefined;
-    if (body.externalToken) {
+    if (!operatorName && body.externalToken) {
       try {
         const claims = this.authService.verifyExternalSiteJwt(body.externalToken);
         operatorName = claims.operatorName;

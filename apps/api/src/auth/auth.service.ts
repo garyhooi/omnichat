@@ -244,12 +244,12 @@ export class AuthService {
     return { token, visitorId };
   }
 
-  validateVisitorToken(token: string): { visitorId: string } {
-    const payload = this.jwtService.verify<{ sub: string; type: string }>(token);
+  validateVisitorToken(token: string): { visitorId: string; operatorName?: string } {
+    const payload = this.jwtService.verify<{ sub: string; type: string; OperatorName?: string }>(token);
     if (payload.type !== 'visitor') {
       throw new UnauthorizedException('Invalid token type');
     }
-    return { visitorId: payload.sub };
+    return { visitorId: payload.sub, operatorName: payload.OperatorName };
   }
 
   /** Verify an external site JWT (widget visitor flow) and extract claims. */
