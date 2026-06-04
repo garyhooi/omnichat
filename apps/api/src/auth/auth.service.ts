@@ -233,23 +233,20 @@ export class AuthService {
     }
   }
 
-  generateVisitorToken(existingVisitorId?: string, operatorName?: string): { token: string; visitorId: string } {
+  generateVisitorToken(existingVisitorId?: string): { token: string; visitorId: string } {
     const visitorId = existingVisitorId || `v_${crypto.randomUUID()}`;
     const jti = crypto.randomUUID();
     const payload: any = { sub: visitorId, type: 'visitor', jti };
-    if (operatorName) {
-      payload.OperatorName = operatorName;
-    }
     const token = this.jwtService.sign(payload, { issuer: 'omnichat', expiresIn: '30d' });
     return { token, visitorId };
   }
 
-  validateVisitorToken(token: string): { visitorId: string; operatorName?: string } {
-    const payload = this.jwtService.verify<{ sub: string; type: string; OperatorName?: string }>(token);
+  validateVisitorToken(token: string): { visitorId: string } {
+    const payload = this.jwtService.verify<{ sub: string; type: string }>(token);
     if (payload.type !== 'visitor') {
       throw new UnauthorizedException('Invalid token type');
     }
-    return { visitorId: payload.sub, operatorName: payload.OperatorName };
+    return { visitorId: payload.sub };
   }
 
   /** Verify an external site JWT (widget visitor flow) and extract claims. */

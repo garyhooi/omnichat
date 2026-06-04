@@ -291,6 +291,12 @@ async function connect() {
 
   s.on('error', (data: { message: string }) => {
     console.error('Visitor Error:', data.message)
+    if (data.message === 'Conversation not found') {
+      localStorage.removeItem('omnichat_conversation_id')
+      conversationId.value = ''
+      isResolved.value = false
+      messages.value = []
+    }
     if (data.message === 'Failed to resolve conversation') isResolved.value = true
   })
 

@@ -75,23 +75,14 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     let visitorId = body.visitorId;
-    let operatorName: string | undefined;
     if (req.cookies?.['omnichat_visitor_token']) {
       try {
         const v = this.authService.validateVisitorToken(req.cookies['omnichat_visitor_token']);
         visitorId = v.visitorId;
-        if (v.operatorName) operatorName = v.operatorName;
       } catch {}
     }
 
-    if (!operatorName && body.externalToken) {
-      try {
-        const claims = this.authService.verifyExternalSiteJwt(body.externalToken);
-        operatorName = claims.operatorName;
-      } catch {}
-    }
-
-    const result = this.authService.generateVisitorToken(visitorId, operatorName);
+    const result = this.authService.generateVisitorToken(visitorId);
     res.cookie('omnichat_visitor_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -99,7 +90,7 @@ export class AuthController {
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
-    return { visitorId: result.visitorId, operatorName: operatorName || null };
+    return { visitorId: result.visitorId };
   }
 
   @Get('me')
