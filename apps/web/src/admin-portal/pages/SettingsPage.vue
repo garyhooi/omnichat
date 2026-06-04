@@ -67,16 +67,11 @@ const emojiOptions = ['💬', '👋', '🤖', '💡', '❓', '🎉', '⭐', '�
 
 // --- Fetch helpers ---
 function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = {}
-  if (auth.token && auth.token !== 'cookie-auth') {
-    h['Authorization'] = `Bearer ${auth.token}`
-  }
-  return h
+  return auth.getAuthHeaders()
 }
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   return fetch(`${base()}${path}`, {
-    credentials: 'include',
     ...opts,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
   })
@@ -205,7 +200,6 @@ async function uploadCustomIcon(e: Event) {
     fd.append('file', blob, 'icon.webp')
     const res = await fetch(`${base()}/upload`, {
       method: 'POST',
-      credentials: 'include',
       headers: authHeaders(),
       body: fd,
     })
@@ -231,7 +225,6 @@ async function uploadCustomSound(e: Event) {
     fd.append('file', file, file.name)
     const res = await fetch(`${base()}/upload`, {
       method: 'POST',
-      credentials: 'include',
       headers: authHeaders(),
       body: fd,
     })

@@ -54,11 +54,11 @@ const currentPage = ref('conversations')
 const sidebarCollapsed = ref(false)
 
 const authStore = useAuthStore()
-authStore.configure(props.serverUrl, 'cookie-auth')
+authStore.configure(props.serverUrl)
 authStore.fetchMe()
 
 watch(() => props.serverUrl, (v) => {
-  authStore.configure(v, 'cookie-auth')
+  authStore.configure(v)
 })
 
 function handleLogout() {

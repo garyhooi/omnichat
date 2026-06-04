@@ -249,30 +249,6 @@ export class AuthService {
     return { visitorId: payload.sub };
   }
 
-  /** Verify an external site JWT (widget visitor flow) and extract claims. */
-  verifyExternalSiteJwt(token: string): { sub: string; username: string; operatorName: string } {
-    const secret = this.config.get<string>('EXTERNAL_SITE_JWT_SECRET', '');
-    if (!secret) {
-      throw new UnauthorizedException('External site JWT secret not configured');
-    }
-    try {
-      const payload = this.jwtService.verify<{
-        sub: string;
-        username: string;
-        operatorName: string;
-        iat: number;
-        exp: number;
-      }>(token, { secret });
-      return {
-        sub: payload.sub,
-        username: payload.username,
-        operatorName: payload.operatorName,
-      };
-    } catch {
-      throw new UnauthorizedException('Invalid external site token');
-    }
-  }
-
   async logout(jti: string) {
     await this.prisma.session.update({
       where: { jti },

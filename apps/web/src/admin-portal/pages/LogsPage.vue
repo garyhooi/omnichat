@@ -35,16 +35,11 @@ const aiSearch = ref('')
 const aiExpandedId = ref<string | null>(null)
 
 function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = {}
-  if (auth.token && auth.token !== 'cookie-auth') {
-    h['Authorization'] = `Bearer ${auth.token}`
-  }
-  return h
+  return auth.getAuthHeaders()
 }
 
 async function apiFetch(path: string) {
   return fetch(`${base()}${path}`, {
-    credentials: 'include',
     headers: { ...authHeaders() },
   })
 }

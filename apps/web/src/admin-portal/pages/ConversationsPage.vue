@@ -13,11 +13,7 @@ const aiStore = useAiStore()
 
 /** Build fetch options with auth headers (supports both cookie and token auth) */
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const h: Record<string, string> = { ...extra }
-  if (authStore.token && authStore.token !== 'cookie-auth') {
-    h['Authorization'] = `Bearer ${authStore.token}`
-  }
-  return h
+  return { ...authStore.getAuthHeaders(), ...extra }
 }
 
 // Interfaces
@@ -682,7 +678,6 @@ async function processFile(file: File) {
 
   try {
     const res = await fetch(`${authStore.serverUrl}/upload`, {
-      credentials: 'include',
       method: 'POST',
       headers: authHeaders(),
       body: formData,
@@ -885,7 +880,6 @@ function insertQuickReply(content: string) {
 async function loadAdminList() {
   try {
     const res = await fetch(`${authStore.serverUrl}/admin/users`, {
-      credentials: 'include',
       headers: authHeaders(),
     })
     if (res.ok) {
@@ -899,7 +893,6 @@ async function loadAdminList() {
 async function loadSettings() {
   try {
     const res = await fetch(`${authStore.serverUrl}/config/admin-active`, {
-      credentials: 'include',
       headers: authHeaders(),
     })
     if (res.ok) {
@@ -925,7 +918,6 @@ async function loadSettings() {
 async function loadQuickReplies() {
   try {
     const res = await fetch(`${authStore.serverUrl}/quick-replies`, {
-      credentials: 'include',
       headers: authHeaders(),
     })
     if (res.ok) {

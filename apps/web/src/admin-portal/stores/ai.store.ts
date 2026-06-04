@@ -161,13 +161,9 @@ export const useAiStore = defineStore('ai', () => {
     formData.append('file', file)
     if (title) formData.append('title', title)
 
-    const uploadHeaders: Record<string, string> = {}
-    if (authStore.token && authStore.token !== 'cookie-auth') {
-      uploadHeaders['Authorization'] = `Bearer ${authStore.token}`
-    }
+    const uploadHeaders = authStore.getAuthHeaders()
     const res = await fetch(`${authStore.serverUrl}/ai/knowledge/documents`, {
       method: 'POST',
-      credentials: 'include',
       headers: uploadHeaders,
       body: formData,
     })

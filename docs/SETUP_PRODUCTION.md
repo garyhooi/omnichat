@@ -140,7 +140,6 @@ The embedding site must generate an HS256-signed JWT on the server side with the
 {
   "sub": "<external_user_id>",
   "username": "<display_name>",
-  "operatorName": "<site_identifier>",
   "iat": 1717000000,
   "exp": 1717000900
 }

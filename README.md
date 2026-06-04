@@ -178,7 +178,6 @@ For authenticated visitors on external sites, generate an HS256-signed JWT serve
 {
   "sub": "<external_user_id>",
   "username": "<display_name>",
-  "operatorName": "<site_identifier>",
   "iat": 1717000000,
   "exp": 1717000900
 }

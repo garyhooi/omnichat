@@ -83,10 +83,19 @@ const transferableAdmins = computed(() =>
   adminList.value.filter(u => u.effectiveOnline || u.username === currentUserUsername.value)
 )
 
+function getAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra }
+  const t = localStorage.getItem('accessToken')
+  if (t) headers['Authorization'] = `Bearer ${t}`
+  const st = localStorage.getItem('siteToken')
+  if (st) headers['x-external-site-token'] = st
+  return headers
+}
+
 async function loadAdminList() {
   try {
     const res = await fetch(`${props.serverUrl}/admin/users`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
     })
     if (res.ok) {
       adminList.value = await res.json()
@@ -154,17 +163,13 @@ function playSound() {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
       const oscillator = audioCtx.createOscillator()
       const gainNode = audioCtx.createGain()
-      
       oscillator.connect(gainNode)
       gainNode.connect(audioCtx.destination)
-      
       oscillator.type = 'sine'
       oscillator.frequency.setValueAtTime(600, audioCtx.currentTime)
       oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1)
-      
       gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime)
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1)
-      
       oscillator.start(audioCtx.currentTime)
       oscillator.stop(audioCtx.currentTime + 0.1)
     } catch (e) {
@@ -183,7 +188,7 @@ async function uploadCustomSound(event: Event) {
     formData.append('file', file) // already handled audio
     
     const res = await fetch(`${props.serverUrl}/upload`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
       method: 'POST',
       body: formData,
     })
@@ -277,7 +282,6 @@ const filteredConversations = computed(() => {
       if (isUsernameSearch) {
         return assigned.includes(q) || specialist.includes(q)
       }
-      
       if (isTicketSearch) {
         return id.includes(q) || ticketId.includes(q)
       }
@@ -285,7 +289,6 @@ const filteredConversations = computed(() => {
       const visitorLabel = getVisitorLabel(c).toLowerCase()
       const email = getVisitorEmail(c)?.toLowerCase() || ''
       const remarks = (c.agentRemarks || '').toLowerCase()
-      
       return visitorLabel.includes(q) || 
              email.includes(q) || 
              assigned.includes(q) || 
@@ -676,7 +679,7 @@ async function processFile(file: File) {
 
   try {
     const res = await fetch(`${props.serverUrl}/upload`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
       method: 'POST',
       body: formData,
     })
@@ -861,7 +864,7 @@ function getLastMessage(conv: Conversation) {
 async function loadSettings() {
   try {
     const res = await fetch(`${props.serverUrl}/config/admin-active`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
     })
     if (res.ok) {
       const config = await res.json()
@@ -897,7 +900,7 @@ async function loadSettings() {
 async function loadQuickReplies() {
   try {
     const res = await fetch(`${props.serverUrl}/quick-replies`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
     })
     if (res.ok) {
       quickReplies.value = await res.json()
@@ -934,11 +937,8 @@ async function saveQuickReply() {
     const method = isNew ? 'POST' : 'PUT'
     
     const res = await fetch(url, {
-      credentials: "include",
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       method,
-      headers: {
-        'Content-Type': 'application/json',
-},
       body: JSON.stringify({
         title: qrDraftTitle.value.trim(),
         content: qrDraftContent.value.trim()
@@ -958,7 +958,7 @@ async function deleteQuickReply(id: string) {
   if (!confirm('Are you sure you want to delete this quick reply?')) return
   try {
     const res = await fetch(`${props.serverUrl}/quick-replies/${id}`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
       method: 'DELETE',
     })
     if (res.ok) {
@@ -1035,7 +1035,7 @@ async function uploadCustomIcon(event: Event) {
     formData.append('file', webpBlob, 'icon.webp')
     
     const res = await fetch(`${props.serverUrl}/upload`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
       method: 'POST',
       body: formData,
     })
@@ -1061,11 +1061,9 @@ async function saveSettings() {
 
     if (siteConfigId.value) {
       res = await fetch(`${props.serverUrl}/config/${siteConfigId.value}`, {
-      credentials: "include",
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-},
         body: JSON.stringify({
           bubbleColor: bubbleColor.value,
           welcomeMessage: welcomeMessage.value,
@@ -1081,11 +1079,9 @@ async function saveSettings() {
       })
     } else {
       res = await fetch(`${props.serverUrl}/config`, {
-      credentials: "include",
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-},
         body: JSON.stringify({
           siteName: 'default',
           bubbleColor: bubbleColor.value,
@@ -1119,7 +1115,7 @@ async function saveSettings() {
 async function handleLogout() {
   try {
     await fetch(`${props.serverUrl}/auth/logout`, {
-      credentials: "include",
+      headers: getAuthHeaders(),
       method: 'POST',
     })
   } catch (err) {
