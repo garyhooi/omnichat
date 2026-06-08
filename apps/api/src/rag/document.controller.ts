@@ -26,7 +26,7 @@ class SearchKnowledgeDto {
 
 @Controller('ai/knowledge')
 @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-@Roles('admin')
+@Roles('admin', 'developer')
 export class DocumentController {
   constructor(
     private readonly documentService: DocumentService,

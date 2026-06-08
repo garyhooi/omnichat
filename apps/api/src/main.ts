@@ -13,6 +13,7 @@ async function bootstrap() {
     const KNOWN_DEFAULTS = [
       'omnichat-local-dev-secret-change-in-production',
       'omnichat-admin-key-change-in-production',
+      'change-me-to-a-random-64-char-string',
     ];
     if (KNOWN_DEFAULTS.includes(process.env.JWT_SECRET || '')) {
       console.error('FATAL: JWT_SECRET is using the default development value. Set a strong, unique secret for production.');
@@ -20,6 +21,10 @@ async function bootstrap() {
     }
     if (KNOWN_DEFAULTS.includes(process.env.ADMIN_API_KEY || '')) {
       console.error('FATAL: ADMIN_API_KEY is using the default development value. Set a strong, unique key for production.');
+      process.exit(1);
+    }
+    if (KNOWN_DEFAULTS.includes(process.env.EXTERNAL_SITE_JWT_SECRET || '')) {
+      console.error('FATAL: EXTERNAL_SITE_JWT_SECRET is using the default value. Set a strong, unique key for production.');
       process.exit(1);
     }
   }

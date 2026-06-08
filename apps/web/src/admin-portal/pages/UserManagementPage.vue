@@ -41,15 +41,15 @@ const roleModalValue = ref('')
 
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = {}
-  if (auth.token && auth.token !== 'cookie-auth') {
-    h['Authorization'] = `Bearer ${auth.token}`
-  }
+  const t = localStorage.getItem('accessToken')
+  const st = localStorage.getItem('siteToken')
+  if (t) h['Authorization'] = `Bearer ${t}`
+  if (st) h['x-external-site-token'] = st
   return h
 }
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   return fetch(`${base()}${path}`, {
-    credentials: 'include',
     ...opts,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
   })
@@ -188,6 +188,7 @@ onMounted(loadUsers)
             <label class="block text-xs text-gray-500 mb-1">Role</label>
             <select v-model="roleFilter" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
               <option value="">All Roles</option>
+              <option value="developer">Developer</option>
               <option value="admin">Admin</option>
               <option value="agent">Agent</option>
             </select>
@@ -232,7 +233,7 @@ onMounted(loadUsers)
               <td class="px-4 py-3">
                 <span
                   class="px-2 py-0.5 rounded text-xs font-medium cursor-pointer hover:opacity-80"
-                  :class="user.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'"
+                  :class="user.role === 'developer' ? 'bg-amber-50 text-amber-700' : user.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'"
                   @click="openRoleModal(user)"
                   title="Click to change role"
                 >{{ user.role }}</span>
@@ -293,6 +294,7 @@ onMounted(loadUsers)
         <div class="mb-4">
           <label class="block text-sm text-gray-600 mb-1">Select Role</label>
           <select v-model="roleModalValue" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="developer" :disabled="auth.user?.role !== 'developer'">{{ auth.user?.role !== 'developer' ? 'Developer (developer only)' : 'Developer' }}</option>
             <option value="admin">Admin</option>
             <option value="agent">Agent</option>
           </select>

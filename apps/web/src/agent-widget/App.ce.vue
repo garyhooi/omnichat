@@ -63,6 +63,10 @@ interface Conversation {
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { ...extra }
+  const t = localStorage.getItem('accessToken')
+  if (t) h['Authorization'] = `Bearer ${t}`
+  const st = localStorage.getItem('siteToken')
+  if (st) h['x-external-site-token'] = st
   return h
 }
 
@@ -555,7 +559,9 @@ function toggleWidget() {
 function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
-    withCredentials: true,
+    auth: {
+      token: localStorage.getItem('accessToken') || undefined,
+    },
   })
 
   s.on('connect', () => {
@@ -942,7 +948,6 @@ async function processFile(file: File) {
 
   try {
     const res = await fetch(`${props.serverUrl}/upload`, {
-      credentials: 'include',
       method: 'POST',
       headers: authHeaders(),
       body: formData,
@@ -1015,7 +1020,6 @@ function cancelTransferConversation() {
 async function loadAdminList() {
   try {
     const res = await fetch(`${props.serverUrl}/admin/users`, {
-      credentials: 'include',
       headers: authHeaders(),
     })
     if (res.ok) {

@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('logs/ai')
 @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
-@Roles('admin')
+@Roles('admin', 'developer')
 export class AiLogController {
   constructor(private readonly prisma: PrismaService) {}
 

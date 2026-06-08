@@ -61,6 +61,7 @@
             <li>Include the <code>&lt;script&gt;</code> tag pointing to the CDN in your <code>&lt;head&gt;</code>.</li>
             <li>Add the <code>&lt;omnichat-chat-widget&gt;</code> element anywhere in your body.</li>
             <li>Point the <code>server-url</code> attribute to your running OmniChat API backend (e.g., <code>http://localhost:3001</code>).</li>
+            <li>For authenticated visitors: add <code>data-external-token</code> attribute with an HS256-signed JWT (signed with <code>EXTERNAL_SITE_JWT_SECRET</code>).</li>
         </ol>
     </div>
 

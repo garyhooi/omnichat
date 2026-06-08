@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +16,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
     private readonly securityLogger: SecurityLoggerService,
   ) {}
 
@@ -25,6 +27,7 @@ export class AuthService {
     displayName: string,
     ip?: string,
     userAgent?: string,
+    origin?: string,
   ) {
     const existing = await this.prisma.adminUser.findUnique({
       where: { username },
@@ -35,13 +38,13 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
-      memoryCost: 65536, // 64 MB
+      memoryCost: 65536,
       timeCost: 3,
       parallelism: 4,
     });
 
     const userCount = await this.prisma.adminUser.count();
-    const role = userCount === 0 ? 'admin' : 'agent';
+    const role = userCount === 0 ? 'developer' : 'agent';
 
     const user = await this.prisma.adminUser.create({
       data: {
@@ -54,11 +57,11 @@ export class AuthService {
       },
     });
 
-    return this.generateToken(user);
+    return this.generateBearerTokens(user, origin);
   }
 
   /** Authenticate an admin user and return a JWT. */
-  async login(username: string, password: string, ip?: string, userAgent?: string) {
+  async login(username: string, password: string, ip?: string, userAgent?: string, origin?: string) {
     const user = await this.prisma.adminUser.findUnique({
       where: { username },
     });
@@ -89,15 +92,116 @@ export class AuthService {
       },
     });
 
-    return this.generateToken(user);
+    return this.generateBearerTokens(user, origin);
+  }
+
+  /** Generate bearer-mode tokens: accessToken + refreshToken + siteToken. */
+  async generateBearerTokens(user: { id: string; username: string; role: string }, origin?: string) {
+    const accessTokenExpiry = this.config.get<string>('ACCESS_TOKEN_EXPIRY', '30m');
+    const refreshTokenExpiry = this.config.get<string>('REFRESH_TOKEN_EXPIRY', '7d');
+
+    const jti = crypto.randomUUID();
+    const accessPayload: any = {
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+      jti,
+      boundOrigin: origin || null,
+    };
+
+    const accessToken = this.jwtService.sign(accessPayload, { expiresIn: accessTokenExpiry });
+
+    const accessExpiresMs = parseDuration(accessTokenExpiry);
+    const expiresAt = new Date(Date.now() + accessExpiresMs);
+
+    await this.prisma.session.create({
+      data: {
+        jti,
+        adminUserId: user.id,
+        expiresAt,
+      },
+    });
+
+    const refreshToken = crypto.randomUUID();
+    const refreshTokenHash = this.hashToken(refreshToken);
+    const refreshExpiresAt = new Date(Date.now() + parseDuration(refreshTokenExpiry));
+
+    await this.prisma.refreshToken.create({
+      data: {
+        tokenHash: refreshTokenHash,
+        adminUserId: user.id,
+        expiresAt: refreshExpiresAt,
+      },
+    });
+
+    const siteToken = this.jwtService.sign(
+      { sub: user.id, origin: origin || null, type: 'site-token' },
+      { expiresIn: accessTokenExpiry },
+    );
+
+    return {
+      accessToken,
+      refreshToken,
+      siteToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+    };
+  }
+
+  /** Refresh an access token using a valid refresh token. */
+  async refreshAccessToken(refreshToken: string, origin?: string) {
+    const tokenHash = this.hashToken(refreshToken);
+
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revoked: true },
+    });
+
+    const user = await this.prisma.adminUser.findUnique({
+      where: { id: stored.adminUserId },
+    });
+
+    if (!user || user.isLocked) {
+      throw new UnauthorizedException('User not found or locked');
+    }
+
+    return this.generateBearerTokens(user, origin);
+  }
+
+  /** Revoke all refresh tokens for a user. */
+  async revokeRefreshTokens(adminUserId: string) {
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        adminUserId,
+        revoked: false,
+      },
+      data: { revoked: true },
+    });
   }
 
   /** Validate a JWT payload and return the user. */
-  async validateToken(token: string) {
+  async validateToken(token: string, origin?: string) {
     try {
-      const payload = this.jwtService.verify<JwtPayload>(token);
+      const payload = this.jwtService.verify<JwtPayload & { boundOrigin?: string }>(token);
       if (!payload.jti) {
         throw new UnauthorizedException('Invalid token: missing jti');
+      }
+
+      if (payload.boundOrigin && origin) {
+        if (!originMatches(payload.boundOrigin, origin)) {
+          throw new UnauthorizedException('Token origin mismatch');
+        }
       }
 
       const session = await this.prisma.session.findUnique({
@@ -129,46 +233,11 @@ export class AuthService {
     }
   }
 
-  async generateToken(user: { id: string; username: string; role: string }) {
-    const jti = crypto.randomUUID();
-    const payload: JwtPayload = {
-      sub: user.id,
-      username: user.username,
-      role: user.role,
-      jti,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
-    
-    // Default expiration is 24 hours in auth.module.ts
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
-
-    await this.prisma.session.create({
-      data: {
-        jti,
-        adminUserId: user.id,
-        expiresAt,
-      },
-    });
-
-    return {
-      accessToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-      },
-    };
-  }
-
   generateVisitorToken(existingVisitorId?: string): { token: string; visitorId: string } {
     const visitorId = existingVisitorId || `v_${crypto.randomUUID()}`;
     const jti = crypto.randomUUID();
-    const token = this.jwtService.sign(
-      { sub: visitorId, type: 'visitor', jti },
-      { issuer: 'omnichat', expiresIn: '30d' },
-    );
+    const payload: any = { sub: visitorId, type: 'visitor', jti };
+    const token = this.jwtService.sign(payload, { issuer: 'omnichat', expiresIn: '30d' });
     return { token, visitorId };
   }
 
@@ -198,5 +267,32 @@ export class AuthService {
         lastSeenAt: true,
       },
     });
+  }
+
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+}
+
+function parseDuration(d: string): number {
+  const match = d.match(/^(\d+)(s|m|h|d)$/);
+  if (!match) return 30 * 60 * 1000;
+  const val = parseInt(match[1], 10);
+  switch (match[2]) {
+    case 's': return val * 1000;
+    case 'm': return val * 60 * 1000;
+    case 'h': return val * 60 * 60 * 1000;
+    case 'd': return val * 24 * 60 * 60 * 1000;
+    default: return 30 * 60 * 1000;
+  }
+}
+
+function originMatches(bound: string, incoming: string): boolean {
+  try {
+    const boundHost = new URL(bound).hostname;
+    const incomingHost = new URL(incoming).hostname;
+    return boundHost === incomingHost;
+  } catch {
+    return bound === incoming;
   }
 }

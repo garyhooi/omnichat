@@ -74,12 +74,12 @@ export const useAiStore = defineStore('ai', () => {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> || {}),
     }
-    if (authStore.token && authStore.token !== 'cookie-auth') {
-      headers['Authorization'] = `Bearer ${authStore.token}`
-    }
+    const accessToken = localStorage.getItem('accessToken')
+    const siteToken = localStorage.getItem('siteToken')
+    if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+    if (siteToken) headers['x-external-site-token'] = siteToken
     const res = await fetch(`${authStore.serverUrl}${path}`, {
       ...options,
-      credentials: 'include',
       headers,
     })
     if (!res.ok) {
@@ -161,13 +161,9 @@ export const useAiStore = defineStore('ai', () => {
     formData.append('file', file)
     if (title) formData.append('title', title)
 
-    const uploadHeaders: Record<string, string> = {}
-    if (authStore.token && authStore.token !== 'cookie-auth') {
-      uploadHeaders['Authorization'] = `Bearer ${authStore.token}`
-    }
+    const uploadHeaders = authStore.getAuthHeaders()
     const res = await fetch(`${authStore.serverUrl}/ai/knowledge/documents`, {
       method: 'POST',
-      credentials: 'include',
       headers: uploadHeaders,
       body: formData,
     })

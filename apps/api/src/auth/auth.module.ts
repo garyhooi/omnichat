@@ -6,6 +6,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AdminController } from './admin.controller';
+import { SiteTokenGuard } from './site-token.guard';
 import { CommonModule } from '../common/common.module';
 
 @Module({
@@ -23,8 +24,8 @@ import { CommonModule } from '../common/common.module';
       }),
     }),
   ],
-  providers: [JwtStrategy, AuthService],
+  providers: [JwtStrategy, AuthService, SiteTokenGuard],
   controllers: [AuthController, AdminController],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, SiteTokenGuard],
 })
 export class AuthModule {}

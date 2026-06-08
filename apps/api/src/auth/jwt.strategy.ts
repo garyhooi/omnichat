@@ -5,10 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface JwtPayload {
-  sub: string; // AdminUser.id
+  sub: string;
   username: string;
   role: string;
   jti?: string;
+  boundOrigin?: string;
 }
 
 @Injectable()
@@ -18,28 +19,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        (request: any) => {
-          let token = null;
-          if (request && request.cookies) {
-            token = request.cookies['omnichat_auth_token'];
-          }
-          if (!token && request.headers.authorization) {
-            token = request.headers.authorization.replace('Bearer ', '');
-          }
-          return token;
-        },
-      ]),
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: config.get<string>('JWT_SECRET'),
+      passReqToCallback: true,
     });
   }
 
-  /**
-   * Called by Passport after the JWT is verified.
-   * Returns the user object that gets attached to request.user.
-   */
-  async validate(payload: JwtPayload) {
+  async validate(request: any, payload: JwtPayload) {
     if (!payload.jti) {
       throw new UnauthorizedException('Invalid token: missing jti');
     }

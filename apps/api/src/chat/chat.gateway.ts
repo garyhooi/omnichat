@@ -390,24 +390,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async handleConnection(client: AuthenticatedSocket) {
     let token = undefined;
 
-    // Check if explicitly connecting as a visitor from the widget
     const isVisitorConnection = !!client.handshake.auth?.visitorId;
 
     if (!isVisitorConnection) {
-      // Check cookie first (most secure)
-      if (client.handshake.headers.cookie) {
-        const match = client.handshake.headers.cookie.match(/omnichat_auth_token=([^;]+)/);
-        if (match) {
-          token = match[1];
-        }
-      }
-
-      // Fallback to auth payload or header
+      token = client.handshake.auth?.token as string;
       if (!token) {
-        const fallbackToken = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-        if (fallbackToken && fallbackToken !== 'cookie-auth') {
-          token = fallbackToken;
-        }
+        token = client.handshake.headers?.authorization?.replace('Bearer ', '');
       }
     }
 
@@ -649,12 +637,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
     if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
 
-    // Read external auth token from cookie (set by embedding site for token-exchange flow)
-    if (client.handshake.headers.cookie) {
-      const match = client.handshake.headers.cookie.match(/omnichat_external_auth_token=([^;]+)/);
-      if (match) {
-        parsedMetadata.externalAuthToken = match[1];
-      }
+    // Read external auth token from socket handshake (sent via data-external-token attribute)
+    if (client.handshake.auth?.externalToken) {
+      parsedMetadata.externalAuthToken = client.handshake.auth.externalToken;
     }
 
     // Extract username from externalAuthToken JWT if present
