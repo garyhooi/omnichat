@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth.store'
+import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
 
 interface AiProvider {
   id: string
@@ -74,8 +75,8 @@ export const useAiStore = defineStore('ai', () => {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> || {}),
     }
-    const accessToken = localStorage.getItem('accessToken')
-    const siteToken = localStorage.getItem('siteToken')
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+    const siteToken = localStorage.getItem(SITE_TOKEN_KEY)
     if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
     if (siteToken) headers['x-external-site-token'] = siteToken
     const res = await fetch(`${authStore.serverUrl}${path}`, {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
-import { useAuthStore } from '../stores/auth.store'
-import { useAiStore } from '../stores/ai.store'
-import { useToast } from '../stores/toast.store'
+  import { useAuthStore } from '../stores/auth.store'
+  import { useAiStore } from '../stores/ai.store'
+  import { useToast } from '../stores/toast.store'
+  import { ACCESS_TOKEN_KEY } from '../../shared/storage-keys'
 import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../../utils/translationCache'
@@ -309,7 +310,7 @@ function closeImage() {
 
 // Socket.io connection & event handlers
 function connect() {
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
   const s = io(authStore.serverUrl, {
     auth: accessToken ? { token: accessToken } : undefined,
     transports: ['websocket', 'polling'],

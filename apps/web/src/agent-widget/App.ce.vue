@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../utils/translationCache'
 import { appVersion } from '../version'
+import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 
 const WIDGET_MARGIN = 12
 const PANEL_MIN_WIDTH = 340
@@ -63,9 +64,9 @@ interface Conversation {
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { ...extra }
-  const t = localStorage.getItem('accessToken')
+  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
   if (t) h['Authorization'] = `Bearer ${t}`
-  const st = localStorage.getItem('siteToken')
+  const st = localStorage.getItem(SITE_TOKEN_KEY)
   if (st) h['x-external-site-token'] = st
   return h
 }
@@ -560,7 +561,7 @@ function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
     auth: {
-      token: localStorage.getItem('accessToken') || undefined,
+      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
     },
   })
 

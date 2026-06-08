@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth.store'
 import { useToast } from './stores/toast.store'
 import { io, type Socket } from 'socket.io-client'
 import { appVersion } from '../version'
+import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
 
 const { toasts, dismiss } = useToast()
 
@@ -88,7 +89,7 @@ function connectPresence() {
 
   if (isBearer) {
     opts.auth = {
-      token: localStorage.getItem('accessToken') || undefined,
+      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
     }
   } else {
     opts.withCredentials = true
