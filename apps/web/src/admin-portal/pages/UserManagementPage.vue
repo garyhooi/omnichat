@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
 import { useToast } from '../stores/toast.store'
+import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -41,8 +42,8 @@ const roleModalValue = ref('')
 
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = {}
-  const t = localStorage.getItem('accessToken')
-  const st = localStorage.getItem('siteToken')
+  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
+  const st = localStorage.getItem(SITE_TOKEN_KEY)
   if (t) h['Authorization'] = `Bearer ${t}`
   if (st) h['x-external-site-token'] = st
   return h

@@ -1,17 +1,18 @@
 import { useAuthStore } from '../admin-portal/stores/auth.store'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from './storage-keys'
 
 let refreshPromise: Promise<boolean> | null = null
 
 function getAccessToken(): string | null {
-  return localStorage.getItem('accessToken')
+  return localStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
 function getSiteToken(): string | null {
-  return localStorage.getItem('siteToken')
+  return localStorage.getItem(SITE_TOKEN_KEY)
 }
 
 function getRefreshToken(): string | null {
-  return localStorage.getItem('refreshToken')
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
 async function refreshTokens(): Promise<boolean> {
@@ -35,9 +36,9 @@ async function refreshTokens(): Promise<boolean> {
       }
 
       const data = await res.json()
-      localStorage.setItem('accessToken', data.accessToken)
-      localStorage.setItem('refreshToken', data.refreshToken)
-      localStorage.setItem('siteToken', data.siteToken)
+      localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken)
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken)
+      localStorage.setItem(SITE_TOKEN_KEY, data.siteToken)
       return true
     } catch {
       return false

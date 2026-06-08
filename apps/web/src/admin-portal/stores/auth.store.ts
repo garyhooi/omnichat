@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
 
 interface User {
   id: string
@@ -48,9 +49,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMe(): Promise<void> {
     try {
       const headers: Record<string, string> = {}
-      const t = localStorage.getItem('accessToken')
+      const t = localStorage.getItem(ACCESS_TOKEN_KEY)
       if (t) headers['Authorization'] = `Bearer ${t}`
-      const st = localStorage.getItem('siteToken')
+      const st = localStorage.getItem(SITE_TOKEN_KEY)
       if (st) headers['x-external-site-token'] = st
 
       const res = await fetch(`${serverUrl.value}/auth/me`, { headers })
@@ -65,9 +66,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout() {
     try {
       const headers: Record<string, string> = {}
-      const t = localStorage.getItem('accessToken')
+      const t = localStorage.getItem(ACCESS_TOKEN_KEY)
       if (t) headers['Authorization'] = `Bearer ${t}`
-      const st = localStorage.getItem('siteToken')
+      const st = localStorage.getItem(SITE_TOKEN_KEY)
       if (st) headers['x-external-site-token'] = st
 
       await fetch(`${serverUrl.value}/auth/logout`, {
@@ -77,9 +78,9 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
     }
     user.value = null
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('siteToken')
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(SITE_TOKEN_KEY)
   }
 
   function setUser(u: User) {
@@ -92,9 +93,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {}
-    const t = localStorage.getItem('accessToken')
+    const t = localStorage.getItem(ACCESS_TOKEN_KEY)
     if (t) headers['Authorization'] = `Bearer ${t}`
-    const st = localStorage.getItem('siteToken')
+    const st = localStorage.getItem(SITE_TOKEN_KEY)
     if (st) headers['x-external-site-token'] = st
     return headers
   }

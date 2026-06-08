@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
+import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 
 
 // Props mapped from HTML attributes (server-url, token)
@@ -85,9 +86,9 @@ const transferableAdmins = computed(() =>
 
 function getAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extra }
-  const t = localStorage.getItem('accessToken')
+  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
   if (t) headers['Authorization'] = `Bearer ${t}`
-  const st = localStorage.getItem('siteToken')
+  const st = localStorage.getItem(SITE_TOKEN_KEY)
   if (st) headers['x-external-site-token'] = st
   return headers
 }
@@ -310,7 +311,7 @@ function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
     auth: {
-      token: localStorage.getItem('accessToken') || undefined,
+      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
     },
   })
 
