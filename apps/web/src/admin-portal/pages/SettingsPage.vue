@@ -158,7 +158,11 @@ async function saveSettings() {
     } else {
       res = await apiFetch('/config', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          siteName: 'default',
+          allowedOrigins: '*',
+          ...body,
+        }),
       })
     }
     if (!res.ok) {

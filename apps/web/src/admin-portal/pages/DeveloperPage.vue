@@ -41,21 +41,30 @@ async function loadConfig() {
 }
 
 async function saveSettings() {
-  if (!siteConfigId.value) {
-    toast.error('Site config must exist before updating security settings')
-    return
-  }
   saving.value = true
   try {
-    const res = await apiFetch(`/config/${siteConfigId.value}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        allowedOrigins: allowedOrigins.value.trim(),
-        adminAllowedIps: adminAllowedIps.value.trim(),
-      }),
-    })
+    let res: Response
+    if (siteConfigId.value) {
+      res = await apiFetch(`/config/${siteConfigId.value}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          allowedOrigins: allowedOrigins.value.trim(),
+          adminAllowedIps: adminAllowedIps.value.trim(),
+        }),
+      })
+    } else {
+      res = await apiFetch('/config', {
+        method: 'POST',
+        body: JSON.stringify({
+          siteName: 'default',
+          allowedOrigins: allowedOrigins.value.trim(),
+          adminAllowedIps: adminAllowedIps.value.trim(),
+        }),
+      })
+    }
     if (!res.ok) throw new Error('Failed to save')
     const data = await res.json()
+    siteConfigId.value = data.id ?? data._id ?? siteConfigId.value
     allowedOrigins.value = data.allowedOrigins ?? allowedOrigins.value.trim()
     adminAllowedIps.value = data.adminAllowedIps ?? adminAllowedIps.value.trim()
     toast.success('Security settings saved')
