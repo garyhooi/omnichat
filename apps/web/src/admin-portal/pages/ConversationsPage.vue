@@ -7,15 +7,11 @@ import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../../utils/translationCache'
+import { authFetch } from '../../shared/api-client'
 
 const authStore = useAuthStore()
 const toast = useToast()
 const aiStore = useAiStore()
-
-/** Build fetch options with auth headers (supports both cookie and token auth) */
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return { ...authStore.getAuthHeaders(), ...extra }
-}
 
 // Interfaces
 interface Message {
@@ -245,7 +241,7 @@ async function toggleTranslation(msg: Message) {
 
   translatingMessageIds.value = new Set([...translatingMessageIds.value, msg.id])
   try {
-    const translated = await fetchTranslation(authStore.serverUrl, text, translateLang.value, authHeaders())
+    const translated = await fetchTranslation(authStore.serverUrl, text, translateLang.value)
     translatedMessages.value = { ...translatedMessages.value, [msg.id]: translated }
   } catch (e: any) {
     toast.error(`Translation failed: ${e.message}`)
@@ -678,9 +674,8 @@ async function processFile(file: File) {
   }
 
   try {
-    const res = await fetch(`${authStore.serverUrl}/upload`, {
+    const res = await authFetch(`${authStore.serverUrl}/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: formData,
     })
 
@@ -880,9 +875,7 @@ function insertQuickReply(content: string) {
 // Data loading
 async function loadAdminList() {
   try {
-    const res = await fetch(`${authStore.serverUrl}/admin/users`, {
-      headers: authHeaders(),
-    })
+    const res = await authFetch(`${authStore.serverUrl}/admin/users`)
     if (res.ok) {
       adminList.value = await res.json()
     }
@@ -893,9 +886,7 @@ async function loadAdminList() {
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${authStore.serverUrl}/config/admin-active`, {
-      headers: authHeaders(),
-    })
+    const res = await authFetch(`${authStore.serverUrl}/config/admin-active`)
     if (res.ok) {
       const config = await res.json()
       if (config) {
@@ -918,9 +909,7 @@ async function loadSettings() {
 
 async function loadQuickReplies() {
   try {
-    const res = await fetch(`${authStore.serverUrl}/quick-replies`, {
-      headers: authHeaders(),
-    })
+    const res = await authFetch(`${authStore.serverUrl}/quick-replies`)
     if (res.ok) {
       quickReplies.value = await res.json()
     }

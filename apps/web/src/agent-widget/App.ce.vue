@@ -4,7 +4,8 @@ import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../utils/translationCache'
 import { appVersion } from '../version'
-import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { initAuthClient, authFetch } from '../shared/api-client'
 
 const WIDGET_MARGIN = 12
 const PANEL_MIN_WIDTH = 340
@@ -59,17 +60,6 @@ interface Conversation {
   unreadCount?: number
 }
 
-
-// Auth headers helper
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const h: Record<string, string> = { ...extra }
-  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (t) h['Authorization'] = `Bearer ${t}`
-  const st = localStorage.getItem(SITE_TOKEN_KEY)
-  if (st) h['x-external-site-token'] = st
-  return h
-}
 
 
 // Viewport & position state
@@ -948,9 +938,8 @@ async function processFile(file: File) {
   }
 
   try {
-    const res = await fetch(`${props.serverUrl}/upload`, {
+    const res = await authFetch(`${props.serverUrl}/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: formData,
     })
 
@@ -1020,9 +1009,7 @@ function cancelTransferConversation() {
 
 async function loadAdminList() {
   try {
-    const res = await fetch(`${props.serverUrl}/admin/users`, {
-      headers: authHeaders(),
-    })
+    const res = await authFetch(`${props.serverUrl}/admin/users`)
     if (res.ok) {
       adminList.value = await res.json()
     }
@@ -1051,7 +1038,7 @@ async function toggleTranslation(msg: Message) {
 
   translatingMessageIds.value = new Set([...translatingMessageIds.value, msg.id])
   try {
-    const translated = await fetchTranslation(props.serverUrl, text, translateLang.value, authHeaders())
+    const translated = await fetchTranslation(props.serverUrl, text, translateLang.value)
     translatedMessages.value = { ...translatedMessages.value, [msg.id]: translated }
   } catch (e: any) {
     console.warn('[OmniChat Admin Widget] Translation failed:', e.message)
@@ -1073,6 +1060,7 @@ function autoTranslateMessage(msg: Message) {
 // Lifecycle
 
 onMounted(() => {
+  initAuthClient(props.serverUrl)
   refreshViewport()
   initializeWidgetPosition()
 

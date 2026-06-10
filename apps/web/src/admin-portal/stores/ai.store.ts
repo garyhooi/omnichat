@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth.store'
-import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
+import { authFetch } from '../../shared/api-client'
 
 interface AiProvider {
   id: string
@@ -71,18 +71,7 @@ export const useAiStore = defineStore('ai', () => {
   const error = ref<string | null>(null)
 
   async function fetchApi(path: string, options: RequestInit = {}) {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> || {}),
-    }
-    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY)
-    const siteToken = localStorage.getItem(SITE_TOKEN_KEY)
-    if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-    if (siteToken) headers['x-external-site-token'] = siteToken
-    const res = await fetch(`${authStore.serverUrl}${path}`, {
-      ...options,
-      headers,
-    })
+    const res = await authFetch(`${authStore.serverUrl}${path}`, options)
     if (!res.ok) {
       const text = await res.text()
       throw new Error(text || `HTTP ${res.status}`)
@@ -162,10 +151,8 @@ export const useAiStore = defineStore('ai', () => {
     formData.append('file', file)
     if (title) formData.append('title', title)
 
-    const uploadHeaders = authStore.getAuthHeaders()
-    const res = await fetch(`${authStore.serverUrl}/ai/knowledge/documents`, {
+    const res = await authFetch(`${authStore.serverUrl}/ai/knowledge/documents`, {
       method: 'POST',
-      headers: uploadHeaders,
       body: formData,
     })
     if (!res.ok) throw new Error('Upload failed')

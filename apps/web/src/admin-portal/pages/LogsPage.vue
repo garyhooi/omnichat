@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
+import { authFetch } from '../../shared/api-client'
 
 const auth = useAuthStore()
 const base = () => auth.serverUrl
@@ -49,14 +50,8 @@ const successFilter = ref('')
 const toolSearch = ref('')
 const toolExpandedId = ref<string | null>(null)
 
-function authHeaders(): Record<string, string> {
-  return auth.getAuthHeaders()
-}
-
 async function apiFetch(path: string) {
-  return fetch(`${base()}${path}`, {
-    headers: { ...authHeaders() },
-  })
+  return authFetch(`${base()}${path}`)
 }
 
 async function loadHttpLogs() {

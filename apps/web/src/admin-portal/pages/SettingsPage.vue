@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
 import { useToast } from '../stores/toast.store'
+import { authFetch } from '../../shared/api-client'
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -66,15 +67,8 @@ function handleQrContentInput(e: Event) {
 const emojiOptions = ['💬', '👋', '🤖', '💡', '❓', '🎉', '⭐', '🔔', '📩', '🛎️']
 
 // --- Fetch helpers ---
-function authHeaders(): Record<string, string> {
-  return auth.getAuthHeaders()
-}
-
 async function apiFetch(path: string, opts: RequestInit = {}) {
-  return fetch(`${base()}${path}`, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
-  })
+  return authFetch(`${base()}${path}`, opts)
 }
 
 // --- Load data ---
@@ -202,9 +196,8 @@ async function uploadCustomIcon(e: Event) {
     if (!blob) throw new Error('Conversion failed')
     const fd = new FormData()
     fd.append('file', blob, 'icon.webp')
-    const res = await fetch(`${base()}/upload`, {
+    const res = await authFetch(`${base()}/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: fd,
     })
     if (!res.ok) throw new Error('Upload failed')
@@ -227,9 +220,8 @@ async function uploadCustomSound(e: Event) {
   try {
     const fd = new FormData()
     fd.append('file', file, file.name)
-    const res = await fetch(`${base()}/upload`, {
+    const res = await authFetch(`${base()}/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: fd,
     })
     if (!res.ok) throw new Error('Upload failed')

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { initAuthClient, authFetch } from '../shared/api-client'
 
 
 // Props mapped from HTML attributes (server-url, token)
@@ -84,20 +85,9 @@ const transferableAdmins = computed(() =>
   adminList.value.filter(u => u.effectiveOnline || u.username === currentUserUsername.value)
 )
 
-function getAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const headers: Record<string, string> = { ...extra }
-  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (t) headers['Authorization'] = `Bearer ${t}`
-  const st = localStorage.getItem(SITE_TOKEN_KEY)
-  if (st) headers['x-external-site-token'] = st
-  return headers
-}
-
 async function loadAdminList() {
   try {
-    const res = await fetch(`${props.serverUrl}/admin/users`, {
-      headers: getAuthHeaders(),
-    })
+    const res = await authFetch(`${props.serverUrl}/admin/users`)
     if (res.ok) {
       adminList.value = await res.json()
     }
@@ -188,8 +178,7 @@ async function uploadCustomSound(event: Event) {
     const formData = new FormData()
     formData.append('file', file) // already handled audio
     
-    const res = await fetch(`${props.serverUrl}/upload`, {
-      headers: getAuthHeaders(),
+    const res = await authFetch(`${props.serverUrl}/upload`, {
       method: 'POST',
       body: formData,
     })
@@ -679,8 +668,7 @@ async function processFile(file: File) {
   }
 
   try {
-    const res = await fetch(`${props.serverUrl}/upload`, {
-      headers: getAuthHeaders(),
+    const res = await authFetch(`${props.serverUrl}/upload`, {
       method: 'POST',
       body: formData,
     })
@@ -864,9 +852,7 @@ function getLastMessage(conv: Conversation) {
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${props.serverUrl}/config/admin-active`, {
-      headers: getAuthHeaders(),
-    })
+    const res = await authFetch(`${props.serverUrl}/config/admin-active`)
     if (res.ok) {
       const config = await res.json()
       if (config) {
@@ -900,9 +886,7 @@ async function loadSettings() {
 
 async function loadQuickReplies() {
   try {
-    const res = await fetch(`${props.serverUrl}/quick-replies`, {
-      headers: getAuthHeaders(),
-    })
+    const res = await authFetch(`${props.serverUrl}/quick-replies`)
     if (res.ok) {
       quickReplies.value = await res.json()
     }
@@ -937,8 +921,7 @@ async function saveQuickReply() {
     const url = isNew ? `${props.serverUrl}/quick-replies` : `${props.serverUrl}/quick-replies/${editingQuickReplyId.value}`
     const method = isNew ? 'POST' : 'PUT'
     
-    const res = await fetch(url, {
-      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    const res = await authFetch(url, {
       method,
       body: JSON.stringify({
         title: qrDraftTitle.value.trim(),
@@ -958,8 +941,7 @@ async function saveQuickReply() {
 async function deleteQuickReply(id: string) {
   if (!confirm('Are you sure you want to delete this quick reply?')) return
   try {
-    const res = await fetch(`${props.serverUrl}/quick-replies/${id}`, {
-      headers: getAuthHeaders(),
+    const res = await authFetch(`${props.serverUrl}/quick-replies/${id}`, {
       method: 'DELETE',
     })
     if (res.ok) {
@@ -1035,8 +1017,7 @@ async function uploadCustomIcon(event: Event) {
     
     formData.append('file', webpBlob, 'icon.webp')
     
-    const res = await fetch(`${props.serverUrl}/upload`, {
-      headers: getAuthHeaders(),
+    const res = await authFetch(`${props.serverUrl}/upload`, {
       method: 'POST',
       body: formData,
     })
@@ -1061,9 +1042,7 @@ async function saveSettings() {
     let res: Response
 
     if (siteConfigId.value) {
-      res = await fetch(`${props.serverUrl}/config/${siteConfigId.value}`, {
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        
+      res = await authFetch(`${props.serverUrl}/config/${siteConfigId.value}`, {
         method: 'PATCH',
         body: JSON.stringify({
           bubbleColor: bubbleColor.value,
@@ -1079,9 +1058,7 @@ async function saveSettings() {
         }),
       })
     } else {
-      res = await fetch(`${props.serverUrl}/config`, {
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        
+      res = await authFetch(`${props.serverUrl}/config`, {
         method: 'POST',
         body: JSON.stringify({
           siteName: 'default',
@@ -1115,10 +1092,7 @@ async function saveSettings() {
 
 async function handleLogout() {
   try {
-    await fetch(`${props.serverUrl}/auth/logout`, {
-      headers: getAuthHeaders(),
-      method: 'POST',
-    })
+    await authFetch(`${props.serverUrl}/auth/logout`, { method: 'POST' })
   } catch (err) {
     console.error('[OmniChat Admin] Failed to call logout endpoint', err)
   }
@@ -1141,6 +1115,9 @@ async function handleLogout() {
 // Lifecycle
 
 onMounted(() => {
+  initAuthClient(props.serverUrl, () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+  })
   connect()
   loadSettings()
   loadQuickReplies()
