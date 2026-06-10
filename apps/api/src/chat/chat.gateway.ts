@@ -54,6 +54,10 @@ interface TransferConversationPayload {
   targetUsername: string;
 }
 
+interface TakeOverConversationPayload {
+  conversationId: string;
+}
+
 interface StartConversationPayload {
   visitorId: string;
   metadata?: string;
@@ -1076,7 +1080,36 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /** List conversations (agents only). */
+  @SubscribeMessage('take_over_conversation')
+  async handleTakeOverConversation(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: TakeOverConversationPayload,
+  ) {
+    const { conversationId } = payload;
+
+    if (client.data.isVisitor || !client.data.user) {
+      client.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const conversation = await this.chatService.updateConversationStatus(conversationId, 'active');
+      await this.chatService.assignAgent(conversationId, client.data.user.id);
+      conversation.agentId = client.data.user.id;
+
+      this.server.to('agents').emit('conversation_updated', { conversation });
+
+      this.logger.log(
+        `Conversation ${conversationId} taken over by ${client.data.user.displayName}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to take over conversation ${conversationId}: ${error.message}`,
+      );
+      client.emit('error', { message: 'Failed to take over conversation' });
+    }
+  }
+
   @SubscribeMessage('list_conversations')
   async handleListConversations(
     @ConnectedSocket() client: AuthenticatedSocket,

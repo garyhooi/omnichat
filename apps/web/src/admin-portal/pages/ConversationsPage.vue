@@ -796,6 +796,13 @@ function cancelTransferConversation() {
   transferTargetUsername.value = ''
 }
 
+function takeOverConversation(conversationId: string) {
+  socket.value?.emit('take_over_conversation', {
+    conversationId,
+  })
+  selectConversation(conversationId)
+}
+
 function scrollToBottom() {
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -1227,8 +1234,30 @@ watch(showLangPopover, (val) => {
           >
             {{ getLastMessage(conv) }}
           </div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 6px">
-            {{ formatTime(conv.updatedAt) }}
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px">
+            <span style="font-size: 11px; color: #94a3b8">{{ formatTime(conv.updatedAt) }}</span>
+            <button
+              v-if="activeTab === 'ai'"
+              style="
+                padding: 2px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                color: white;
+                background: #3b82f6;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                white-space: nowrap;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                transition: background 0.15s;
+              "
+              title="Take over this conversation and move it to Active"
+              @click.stop="takeOverConversation(conv.id)"
+              @mouseenter="(e: any) => e.target.style.background = '#2563eb'"
+              @mouseleave="(e: any) => e.target.style.background = '#3b82f6'"
+            >
+              Human Take Over
+            </button>
           </div>
         </div>
 
