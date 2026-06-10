@@ -36,7 +36,7 @@ const allNavItems = [
   { key: 'conversations', label: 'Conversations', icon: '\u{1F4AC}', adminOnly: false },
   { key: 'ai-setup', label: 'AI Agent', icon: '\u{1F916}', adminOnly: true },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: '\u{1F4DA}', adminOnly: true },
-  { key: 'tools', label: 'Tools', icon: '\u{1F527}', adminOnly: true },
+  { key: 'tools', label: 'Tools', icon: '\u{1F527}', developerOnly: true },
   { key: 'logs', label: 'Logs', icon: '\u{1F4CB}', adminOnly: true },
   { key: 'users', label: 'Users', icon: '\u{1F465}', adminOnly: true },
   { key: 'developer', label: 'Developer', icon: '\u{1F511}', developerOnly: true },
