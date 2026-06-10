@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ToolHandler, ToolContext } from './tool.interface';
-import { ExternalToolAuthService } from './external-tool-auth.service';
+import { ExternalToolAuthService, TokenExchangeError } from './external-tool-auth.service';
 import { ToolLogService } from '../../http-log/tool-log.service';
 import { tool, jsonSchema } from 'ai';
 import { z } from 'zod';
@@ -178,7 +178,7 @@ export class ToolRegistry {
                 } catch (authErr: any) {
                   authError = authErr;
                   const duration = Date.now() - start;
-                  await this.toolLogService.createLog({
+                  const logData: any = {
                     toolName: ext.name,
                     handlerType: 'external',
                     conversationId: context.conversationId,
@@ -188,7 +188,15 @@ export class ToolRegistry {
                     errorMessage: `Auth failed: ${authErr.message}`,
                     duration,
                     success: false,
-                  });
+                  };
+                  if (authErr instanceof TokenExchangeError) {
+                    logData.requestUrl = authErr.requestUrl;
+                    logData.requestHeaders = JSON.stringify(authErr.requestHeaders);
+                    logData.requestBody = authErr.requestBody;
+                    logData.responseStatus = authErr.responseStatus;
+                    logData.responseBody = authErr.responseBody;
+                  }
+                  await this.toolLogService.createLog(logData);
                   return { error: `Authentication failed: ${authErr.message}` };
                 }
               }
@@ -250,9 +258,10 @@ export class ToolRegistry {
       });
 
       const duration = Date.now() - start;
+      let respBody: any;
       let responseBody: string | undefined;
       try {
-        const respBody = await response.json();
+        respBody = await response.json();
         responseBody = truncateBody(respBody);
       } catch {
         responseBody = undefined;
@@ -277,7 +286,7 @@ export class ToolRegistry {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      return respBody;
     } finally {
       clearTimeout(timeout);
     }

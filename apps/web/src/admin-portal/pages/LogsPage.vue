@@ -480,17 +480,31 @@ watch(activeTab, () => {
                 </tr>
                 <tr v-if="toolExpandedId === log.id">
                   <td colspan="6" class="px-4 py-3 bg-gray-50">
-                    <div class="text-xs">
-                      <p class="font-semibold text-gray-700 mb-1">Request Details</p>
-                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestHeaders) }}</pre>
-                      <p class="font-semibold text-gray-700 mb-1 mt-3">Request Body</p>
-                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestBody) || '-' }}</pre>
-                      <p class="font-semibold text-gray-700 mb-1 mt-3">Response Status</p>
-                      <p class="text-gray-600">{{ log.responseStatus != null ? log.responseStatus : '-' }}</p>
-                      <p class="font-semibold text-gray-700 mb-1 mt-3">Response Body</p>
-                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.responseBody) || '-' }}</pre>
-                      <p class="font-semibold text-gray-700 mb-1 mt-3">Error Message</p>
-                      <p class="text-gray-600 whitespace-pre-wrap">{{ log.errorMessage || '-' }}</p>
+                    <div class="text-xs space-y-2">
+                      <p v-if="log.requestUrl" class="text-gray-700">
+                        <span class="font-semibold">Request URL: </span>
+                        <code class="bg-gray-100 px-1 rounded">{{ log.requestMethod || 'POST' }} {{ log.requestUrl }}</code>
+                      </p>
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <p class="font-semibold text-gray-700 mb-1">Request Headers</p>
+                          <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestHeaders) || '-' }}</pre>
+                        </div>
+                        <div>
+                          <p class="font-semibold text-gray-700 mb-1">Request Body</p>
+                          <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestBody) || '-' }}</pre>
+                        </div>
+                        <div>
+                          <p class="font-semibold text-gray-700 mb-1">Response Status</p>
+                          <p class="text-gray-600">{{ log.responseStatus != null ? log.responseStatus : '-' }}</p>
+                        </div>
+                        <div>
+                          <p class="font-semibold text-gray-700 mb-1">Response Body</p>
+                          <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.responseBody) || '-' }}</pre>
+                        </div>
+                      </div>
+                      <p v-if="log.errorMessage" class="font-semibold text-gray-700 mb-1">Error Message</p>
+                      <p v-if="log.errorMessage" class="text-gray-600 whitespace-pre-wrap">{{ log.errorMessage }}</p>
                     </div>
                   </td>
                 </tr>
