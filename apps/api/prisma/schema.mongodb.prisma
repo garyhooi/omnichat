@@ -295,3 +295,24 @@ model HttpLog {
   @@index([method])
   @@index([statusCode])
 }
+
+model ToolLog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  toolName       String
+  handlerType    String   // "builtin" | "external"
+  conversationId String?
+  requestUrl     String?  // full URL (external tools)
+  requestMethod  String?
+  requestHeaders String?  // JSON (sanitized)
+  requestBody    String?  // JSON (args sent to tool)
+  responseStatus Int?    // HTTP status (external tools)
+  responseBody   String?  // JSON (truncated)
+  duration       Int?    // ms
+  success        Boolean  @default(true)
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([toolName])
+  @@index([conversationId])
+}

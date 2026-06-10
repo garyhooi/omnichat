@@ -721,6 +721,9 @@ video {
 .w-32 {
   width: 8rem;
 }
+.w-36 {
+  width: 9rem;
+}
 .w-40 {
   width: 10rem;
 }

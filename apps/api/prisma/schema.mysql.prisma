@@ -295,3 +295,24 @@ model HttpLog {
   @@index([method])
   @@index([statusCode])
 }
+
+model ToolLog {
+  id             String   @id @default(cuid())
+  toolName       String
+  handlerType    String   // "builtin" | "external"
+  conversationId String?
+  requestUrl     String?  @db.Text
+  requestMethod  String?
+  requestHeaders String?  @db.Text
+  requestBody    String?  @db.Text
+  responseStatus Int?
+  responseBody   String?  @db.Text
+  duration       Int?
+  success        Boolean  @default(true)
+  errorMessage   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([toolName])
+  @@index([conversationId])
+}

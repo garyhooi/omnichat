@@ -6,7 +6,7 @@ const auth = useAuthStore()
 const base = () => auth.serverUrl
 
 // --- State ---
-const activeTab = ref<'http' | 'ai'>('http')
+const activeTab = ref<'http' | 'ai' | 'tool'>('http')
 
 // HTTP logs
 const httpLogs = ref<any[]>([])
@@ -33,6 +33,21 @@ const aiEndDate = ref('')
 const aiEventTypeFilter = ref('')
 const aiSearch = ref('')
 const aiExpandedId = ref<string | null>(null)
+
+// Tool logs
+const toolLogs = ref<any[]>([])
+const toolTotal = ref(0)
+const toolPage = ref(1)
+const toolLimit = ref(50)
+const toolTotalPages = ref(0)
+const toolLoading = ref(false)
+const toolStartDate = ref('')
+const toolEndDate = ref('')
+const toolNameFilter = ref('')
+const handlerTypeFilter = ref('')
+const successFilter = ref('')
+const toolSearch = ref('')
+const toolExpandedId = ref<string | null>(null)
 
 function authHeaders(): Record<string, string> {
   return auth.getAuthHeaders()
@@ -86,6 +101,29 @@ async function loadAiLogs() {
   }
 }
 
+async function loadToolLogs() {
+  toolLoading.value = true
+  try {
+    const params = new URLSearchParams()
+    params.set('page', String(toolPage.value))
+    params.set('limit', String(toolLimit.value))
+    if (toolStartDate.value) params.set('startDate', toolStartDate.value)
+    if (toolEndDate.value) params.set('endDate', toolEndDate.value)
+    if (toolNameFilter.value) params.set('toolName', toolNameFilter.value)
+    if (handlerTypeFilter.value) params.set('handlerType', handlerTypeFilter.value)
+    if (successFilter.value) params.set('success', successFilter.value)
+    if (toolSearch.value) params.set('search', toolSearch.value)
+    const res = await apiFetch(`/logs/tool?${params}`)
+    if (!res.ok) return
+    const data = await res.json()
+    toolLogs.value = data.data
+    toolTotal.value = data.total
+    toolTotalPages.value = data.totalPages
+  } catch { /* ignore */ } finally {
+    toolLoading.value = false
+  }
+}
+
 function applyHttpFilters() {
   httpPage.value = 1
   loadHttpLogs()
@@ -114,6 +152,22 @@ function clearAiFilters() {
   loadAiLogs()
 }
 
+function applyToolFilters() {
+  toolPage.value = 1
+  loadToolLogs()
+}
+
+function clearToolFilters() {
+  toolStartDate.value = ''
+  toolEndDate.value = ''
+  toolNameFilter.value = ''
+  handlerTypeFilter.value = ''
+  successFilter.value = ''
+  toolSearch.value = ''
+  toolPage.value = 1
+  loadToolLogs()
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleString()
 }
@@ -133,6 +187,10 @@ function toggleAiExpand(id: string) {
   aiExpandedId.value = aiExpandedId.value === id ? null : id
 }
 
+function toggleToolExpand(id: string) {
+  toolExpandedId.value = toolExpandedId.value === id ? null : id
+}
+
 function tryParseJson(str: string | null | undefined): string {
   if (!str) return ''
   try {
@@ -145,11 +203,13 @@ function tryParseJson(str: string | null | undefined): string {
 onMounted(() => {
   loadHttpLogs()
   loadAiLogs()
+  loadToolLogs()
 })
 
 watch(activeTab, () => {
   if (activeTab.value === 'http') loadHttpLogs()
-  else loadAiLogs()
+  else if (activeTab.value === 'ai') loadAiLogs()
+  else loadToolLogs()
 })
 </script>
 
@@ -169,6 +229,11 @@ watch(activeTab, () => {
           class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
           :class="activeTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
         >AI Logs</button>
+        <button
+          @click="activeTab = 'tool'"
+          class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          :class="activeTab === 'tool' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+        >Tool Calling</button>
       </div>
 
       <div v-if="activeTab === 'http'">
@@ -335,6 +400,109 @@ watch(activeTab, () => {
             <div class="flex gap-2">
               <button @click="aiPage--; loadAiLogs()" :disabled="aiPage <= 1" class="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200">Prev</button>
               <button @click="aiPage++; loadAiLogs()" :disabled="aiPage >= aiTotalPages" class="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="activeTab === 'tool'">
+        <div class="bg-white rounded-lg shadow p-4 mb-4">
+          <div class="flex flex-wrap gap-3 items-end">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Start Date</label>
+              <input type="datetime-local" v-model="toolStartDate" class="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">End Date</label>
+              <input type="datetime-local" v-model="toolEndDate" class="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Tool Name</label>
+              <input type="text" v-model="toolNameFilter" placeholder="e.g. get_order" class="border border-gray-300 rounded px-2 py-1.5 text-sm w-36" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Handler Type</label>
+              <select v-model="handlerTypeFilter" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">All</option>
+                <option value="builtin">Builtin</option>
+                <option value="external">External</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Success</label>
+              <select v-model="successFilter" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="">All</option>
+                <option value="true">Success</option>
+                <option value="false">Failed</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Search</label>
+              <input type="text" v-model="toolSearch" placeholder="Search..." class="border border-gray-300 rounded px-2 py-1.5 text-sm w-40" />
+            </div>
+            <button @click="applyToolFilters" class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700">Filter</button>
+            <button @click="clearToolFilters" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded hover:bg-gray-200">Clear</button>
+            <span class="text-xs text-gray-400 ml-auto">{{ toolTotal }} total records</span>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+          <div v-if="toolLoading" class="p-8 text-center text-gray-400">Loading...</div>
+          <div v-else-if="toolLogs.length === 0" class="p-8 text-center text-gray-400">No tool logs found.</div>
+          <table v-else class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-xs uppercase">
+              <tr>
+                <th class="px-3 py-2 text-left">Time</th>
+                <th class="px-3 py-2 text-left">Tool Name</th>
+                <th class="px-3 py-2 text-left">Type</th>
+                <th class="px-3 py-2 text-left">Conversation</th>
+                <th class="px-3 py-2 text-left">Success</th>
+                <th class="px-3 py-2 text-left">Duration</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template v-for="log in toolLogs" :key="log.id">
+                <tr class="hover:bg-gray-50 cursor-pointer" @click="toggleToolExpand(log.id)">
+                  <td class="px-3 py-2 text-gray-500 whitespace-nowrap">{{ formatDate(log.createdAt) }}</td>
+                  <td class="px-3 py-2 font-mono text-xs">{{ log.toolName }}</td>
+                  <td class="px-3 py-2">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="log.handlerType === 'external' ? 'bg-purple-50 text-purple-700' : 'bg-green-50 text-green-700'">
+                      {{ log.handlerType }}
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 font-mono text-xs text-gray-500">{{ log.conversationId || '-' }}</td>
+                  <td class="px-3 py-2">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="log.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'">
+                      {{ log.success ? 'OK' : 'FAIL' }}
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 text-gray-500 text-xs">{{ log.duration != null ? log.duration + 'ms' : '-' }}</td>
+                </tr>
+                <tr v-if="toolExpandedId === log.id">
+                  <td colspan="6" class="px-4 py-3 bg-gray-50">
+                    <div class="text-xs">
+                      <p class="font-semibold text-gray-700 mb-1">Request Details</p>
+                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestHeaders) }}</pre>
+                      <p class="font-semibold text-gray-700 mb-1 mt-3">Request Body</p>
+                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.requestBody) || '-' }}</pre>
+                      <p class="font-semibold text-gray-700 mb-1 mt-3">Response Status</p>
+                      <p class="text-gray-600">{{ log.responseStatus != null ? log.responseStatus : '-' }}</p>
+                      <p class="font-semibold text-gray-700 mb-1 mt-3">Response Body</p>
+                      <pre class="bg-gray-100 p-2 rounded overflow-auto max-h-40 text-xs">{{ tryParseJson(log.responseBody) || '-' }}</pre>
+                      <p class="font-semibold text-gray-700 mb-1 mt-3">Error Message</p>
+                      <p class="text-gray-600 whitespace-pre-wrap">{{ log.errorMessage || '-' }}</p>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <div v-if="toolTotalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm">
+            <span class="text-gray-500">Page {{ toolPage }} of {{ toolTotalPages }}</span>
+            <div class="flex gap-2">
+              <button @click="toolPage--; loadToolLogs()" :disabled="toolPage <= 1" class="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200">Prev</button>
+              <button @click="toolPage++; loadToolLogs()" :disabled="toolPage >= toolTotalPages" class="px-3 py-1 bg-gray-100 rounded disabled:opacity-40 hover:bg-gray-200">Next</button>
             </div>
           </div>
         </div>

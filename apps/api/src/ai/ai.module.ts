@@ -12,6 +12,7 @@ import { AiTranslateController } from './ai-translate.controller';
 import { AiLogService } from './ai-log.service';
 import { SessionStateModule } from '../session-state/session-state.module';
 import { AppConfigModule } from '../config/config.module';
+import { ToolLogService } from '../http-log/tool-log.service';
 
 @Module({
   imports: [SessionStateModule, AppConfigModule],
@@ -24,6 +25,7 @@ import { AppConfigModule } from '../config/config.module';
     ToolRegistry,
     ExternalToolAuthService,
     AiLogService,
+    ToolLogService,
   ],
   controllers: [AiConfigController, AiChatController, AiTranslateController],
   exports: [
@@ -35,6 +37,7 @@ import { AppConfigModule } from '../config/config.module';
     ToolRegistry,
     ExternalToolAuthService,
     AiLogService,
+    ToolLogService,
   ],
 })
 export class AiModule {}
