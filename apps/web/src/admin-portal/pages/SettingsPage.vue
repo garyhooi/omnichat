@@ -26,6 +26,7 @@ function parseWidgetPosition(value?: string | null) {
 const bubbleColor = ref('#4F46E5')
 const welcomeMessage = ref('')
 const offlineMessage = ref('')
+const greetingMessage = ref('')
 const bubbleSize = ref('medium')
 const bubblePattern = ref('solid')
 const widgetPositionX = ref(20)
@@ -81,6 +82,7 @@ async function loadConfig() {
     bubbleColor.value = data.bubbleColor ?? '#4F46E5'
     welcomeMessage.value = data.welcomeMessage ?? ''
     offlineMessage.value = data.offlineMessage ?? ''
+    greetingMessage.value = data.greetingMessage ?? ''
     bubbleSize.value = data.bubbleSize ?? 'medium'
     bubblePattern.value = data.bubblePattern ?? 'solid'
     const widgetPosition = parseWidgetPosition(data.websitePosition)
@@ -132,6 +134,7 @@ async function saveSettings() {
     bubbleColor: bubbleColor.value,
     welcomeMessage: welcomeMessage.value,
     offlineMessage: offlineMessage.value,
+    greetingMessage: greetingMessage.value,
     bubbleSize: bubbleSize.value,
     bubblePattern: bubblePattern.value,
     websitePosition: `xy:${widgetPositionX.value},${widgetPositionY.value}`,
@@ -365,6 +368,11 @@ async function deleteQuickReply(id: string) {
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Offline Message</label>
           <textarea v-model="offlineMessage" rows="3" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="We're currently offline. Leave a message!" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Greeting Message <span class="text-gray-400 font-normal">- sent as first message when a human handles the conversation</span></label>
+          <textarea v-model="greetingMessage" rows="2" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Hi! An agent will be with you shortly." />
         </div>
 
         <div>

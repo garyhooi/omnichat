@@ -706,7 +706,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.resetInactivityTimer(conversation.id);
 
     // Initialize AI agent if enabled
-    await this.initAiForConversation(conversation.id, client);
+    await this.initAiForConversation(conversation.id, client, config);
 
     this.logger.log(
       `Conversation started: ${conversation.id} by visitor ${visitorId}`,
@@ -716,13 +716,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   /** Initialize AI agent for a new conversation. */
-  private async initAiForConversation(conversationId: string, client: AuthenticatedSocket) {
+  private async initAiForConversation(conversationId: string, client: AuthenticatedSocket, siteConfig?: any) {
     try {
       const aiEnabled = await this.aiService.isEnabled();
-      if (!aiEnabled) return;
+      const agentConfig = aiEnabled ? await this.aiConfigService.getAgentConfig() : null;
 
-      const agentConfig = await this.aiConfigService.getAgentConfig();
-      if (!agentConfig?.enabled) return;
+      if (!agentConfig?.enabled) {
+        // AI not handling — send site-level greeting if configured
+        if (siteConfig?.greetingMessage) {
+          const greetingMsg = await this.chatService.createMessage({
+            conversationId,
+            senderType: 'system',
+            senderId: 'system',
+            content: siteConfig.greetingMessage,
+            messageType: 'text',
+          });
+
+          this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+            message: {
+              ...greetingMsg,
+              senderDisplayName: 'System',
+            },
+          });
+        }
+        return;
+      }
 
       // Initialize AI conversation state
       await this.handoffService.initConversation(conversationId);

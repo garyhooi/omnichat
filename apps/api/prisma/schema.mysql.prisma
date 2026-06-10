@@ -126,6 +126,7 @@ model SiteConfig {
   bubbleColor        String   @default("#4F46E5")
   welcomeMessage     String   @default("Hello! How can we help you today?") @db.Text
   offlineMessage     String   @default("We are currently offline. Please check back later.") @db.Text
+  greetingMessage    String?  @db.Text
   bubbleSize         String   @default("medium")
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")

@@ -25,6 +25,7 @@ export class SiteConfigService {
     bubbleColor?: string;
     welcomeMessage?: string;
     offlineMessage?: string;
+    greetingMessage?: string;
     bubbleSize?: string;
     bubblePattern?: string;
     websitePosition?: string;
@@ -46,6 +47,7 @@ export class SiteConfigService {
       bubbleColor?: string;
       welcomeMessage?: string;
       offlineMessage?: string;
+      greetingMessage?: string;
       bubbleSize?: string;
       bubblePattern?: string;
       websitePosition?: string;
