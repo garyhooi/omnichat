@@ -19,5 +19,11 @@ export interface ToolContext {
   services?: {
     prisma?: any;
     siteConfigService?: any;
+    /** Socket.io Server instance for emitting real-time notifications */
+    io?: any;
+    /** Returns the room name for a conversation (e.g. "conv:abc123") */
+    conversationRoom?: (conversationId: string) => string;
+    /** Returns the room name for all agents */
+    agentsRoom?: () => string;
   };
 }

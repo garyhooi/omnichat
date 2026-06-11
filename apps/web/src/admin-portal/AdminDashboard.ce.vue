@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/auth.store'
 import { useToast } from './stores/toast.store'
 import { io, type Socket } from 'socket.io-client'
 import { appVersion } from '../version'
-import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 
 const { toasts, dismiss } = useToast()
 
@@ -111,6 +111,28 @@ function connectPresence() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval)
       heartbeatInterval = null
+    }
+  })
+
+  presenceSocket.on('error', async (data: { message: string }) => {
+    if (data.message === 'Authentication failed') {
+      try {
+        const res = await fetch(`${authStore.serverUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) }),
+        })
+        if (res.ok) {
+          const d = await res.json()
+          localStorage.setItem(ACCESS_TOKEN_KEY, d.accessToken)
+          localStorage.setItem(REFRESH_TOKEN_KEY, d.refreshToken)
+          localStorage.setItem(SITE_TOKEN_KEY, d.siteToken)
+          presenceSocket.auth = { token: d.accessToken }
+          presenceSocket.connect()
+        }
+      } catch (e) {
+        // refresh failed, socket will keep retrying
+      }
     }
   })
 }

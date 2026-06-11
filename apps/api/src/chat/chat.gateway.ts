@@ -1278,6 +1278,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         services: {
           prisma: this.prisma,
           siteConfigService: this.siteConfigService,
+          io: this.server,
+          conversationRoom: (id: string) => `conv:${id}`,
+          agentsRoom: () => 'agents',
         },
       });
 

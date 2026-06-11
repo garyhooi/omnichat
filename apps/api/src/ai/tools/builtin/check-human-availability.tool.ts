@@ -14,47 +14,46 @@ export class CheckHumanAvailabilityTool implements ToolHandler {
     const siteConfigService = context.services?.siteConfigService;
 
     if (!prisma || !siteConfigService) {
-      return {
-        available: false,
-        reason: 'Unable to check availability at this time.',
-      };
+      return { available: false, reason: 'Unable to check availability at this time.' };
     }
 
-    // Check 1: Is human offline mode enabled?
     const config = await siteConfigService.getActiveConfig();
     if (config?.isOfflineMode) {
+      return { available: false, reason: 'Human agents are currently in offline mode. No human agent is available right now.' };
+    }
+
+    // Check DB first: non-locked, online agents
+    const onlineAgents = await prisma.adminUser.count({
+      where: { isLocked: false, isOnline: true },
+    });
+
+    if (onlineAgents > 0) {
       return {
-        available: false,
-        reason: 'Human agents are currently in offline mode. No human agent is available right now.',
+        available: true,
+        onlineAgentCount: onlineAgents,
+        reason: `${onlineAgents} human agent(s) are currently online and available.`,
       };
     }
 
-    // Check 2: Are there any non-locked agents with at least one valid session?
-    const now = new Date();
-      const agentsWithValidSessions = await prisma.adminUser.count({
-        where: {
-          isLocked: false,
-          isOnline: true,
-          sessions: {
-            some: {
-              revoked: false,
-              expiresAt: { gt: now },
-            },
-          },
-        },
-      });
-
-    if (agentsWithValidSessions === 0) {
-      return {
-        available: false,
-        reason: 'No human agent is online right now. Please try again later.',
-      };
+    // Fallback: check for connected agent sockets (DB isOnline can be stale)
+    const io = context.services?.io;
+    if (io) {
+      try {
+        const agRoom = context.services?.agentsRoom?.() ?? 'agents';
+        const sockets = await io.in(agRoom).fetchSockets();
+        const agentSockets = sockets.filter((s: any) => s.data?.user && !s.data?.isVisitor);
+        if (agentSockets.length > 0) {
+          return {
+            available: true,
+            onlineAgentCount: agentSockets.length,
+            reason: `${agentSockets.length} human agent(s) are currently online and available.`,
+          };
+        }
+      } catch {
+        // Ignore fetchSockets errors (e.g. not connected)
+      }
     }
 
-    return {
-      available: true,
-      onlineAgentCount: agentsWithValidSessions,
-      reason: `${agentsWithValidSessions} human agent(s) are currently online and available.`,
-    };
+    return { available: false, reason: 'No human agent is online right now. Please try again later.' };
   }
 }
