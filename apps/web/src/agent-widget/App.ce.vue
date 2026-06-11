@@ -113,7 +113,7 @@ const activeConversationId = ref<string | null>(null)
 const activeConversationData = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
 const newMessage = ref('')
-const activeTab = ref<'active' | 'specialist'>('active')
+const activeTab = ref<'active' | 'ai' | 'specialist'>('active')
 const isTyping = ref(false)
 const typingUser = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -212,12 +212,21 @@ const panelAnchorStorageKey = computed(
 
 const unreadCount = computed(() => {
   return conversations.value
-    .filter((c) => c.status === 'active' || c.status === 'specialist')
+    .filter((c) => c.status === 'active' || c.status === 'ai' || c.status === 'specialist')
+    .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+})
+
+const aiUnreadCount = computed(() => {
+  return conversations.value
+    .filter((c) => c.status === 'ai')
     .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
 })
 
 const filteredConversations = computed(() => {
   return conversations.value.filter((c) => {
+    if (activeTab.value === 'ai') {
+      return c.status === 'ai'
+    }
     if (activeTab.value === 'specialist') {
       return c.status === 'specialist' && c.specialistUsername === currentUserUsername.value
     }
@@ -767,6 +776,11 @@ function selectConversation(conversationId: string) {
   socket.value?.emit('join_conversation', { conversationId })
 }
 
+function takeOverConversation(conversationId: string) {
+  socket.value?.emit('take_over_conversation', { conversationId })
+  selectConversation(conversationId)
+}
+
 function markUnreadVisitorMessagesAsRead() {
   if (!activeConversationId.value || !socket.value) return
   const unreadVisitorMessages = messages.value.filter((m) => m.senderType === 'visitor' && !m.readAt)
@@ -1205,6 +1219,13 @@ watch(showLangPopover, (val) => {
           </button>
           <button
             type="button"
+            :class="['aw-tab', { active: activeTab === 'ai' }]"
+            @click="activeTab = 'ai'"
+          >
+            AI ({{ conversations.filter(c => c.status === 'ai').length }})
+          </button>
+          <button
+            type="button"
             :class="['aw-tab', { active: activeTab === 'specialist' }]"
             @click="activeTab = 'specialist'"
           >
@@ -1214,7 +1235,7 @@ watch(showLangPopover, (val) => {
 
         <div class="aw-conv-list">
           <div v-if="filteredConversations.length === 0" class="aw-empty">
-            No {{ activeTab === 'specialist' ? 'specialist' : 'active' }} conversations
+            No {{ activeTab === 'ai' ? 'AI' : activeTab === 'specialist' ? 'specialist' : 'active' }} conversations
           </div>
           <button
             v-for="conv in filteredConversations"
@@ -1234,6 +1255,15 @@ watch(showLangPopover, (val) => {
                 class="aw-conv-unread"
               >{{ conv.unreadCount }}</span>
             </div>
+            <button
+              v-if="activeTab === 'ai'"
+              type="button"
+              class="aw-takeover-btn"
+              title="Take over this conversation and move it to Active"
+              @click.stop="takeOverConversation(conv.id)"
+            >
+              Human Take Over
+            </button>
           </button>
         </div>
       </template>
@@ -1424,7 +1454,7 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <div v-else class="aw-input-area">
+        <div v-else-if="isActive" class="aw-input-area">
           <input type="file" ref="fileInput" style="display: none" accept="image/*" @change="handleFileUpload" />
           <button
             type="button"
