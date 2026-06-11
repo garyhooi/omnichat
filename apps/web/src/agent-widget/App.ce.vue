@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../utils/translationCache'
 import { appVersion } from '../version'
-import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 import { initAuthClient, authFetch } from '../shared/api-client'
 
 const WIDGET_MARGIN = 12
@@ -550,9 +550,13 @@ function toggleWidget() {
 function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
-    auth: {
-      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
+    auth: (cb: (data: any) => void) => {
+      cb({ token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined })
     },
+  })
+
+  s.on('reconnect', () => {
+    s.auth = { token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined }
   })
 
   s.on('connect', () => {
@@ -695,8 +699,27 @@ function connect() {
     console.warn('[OmniChat Admin Widget] Message error:', data.error)
   })
 
-  s.on('error', (data: { message: string }) => {
+  s.on('error', async (data: { message: string }) => {
     console.error('[OmniChat Admin Widget] Error:', data.message)
+    if (data.message === 'Authentication failed') {
+      try {
+        const res = await fetch(`${props.serverUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) }),
+        })
+        if (res.ok) {
+          const data2 = await res.json()
+          localStorage.setItem(ACCESS_TOKEN_KEY, data2.accessToken)
+          localStorage.setItem(REFRESH_TOKEN_KEY, data2.refreshToken)
+          localStorage.setItem(SITE_TOKEN_KEY, data2.siteToken)
+          s.auth = { token: data2.accessToken }
+          s.connect()
+        }
+      } catch (e) {
+        console.error('[OmniChat Admin Widget] Token refresh failed:', e)
+      }
+    }
   })
 
   s.on('disconnect', () => {
@@ -1060,7 +1083,11 @@ function autoTranslateMessage(msg: Message) {
 // Lifecycle
 
 onMounted(() => {
-  initAuthClient(props.serverUrl)
+  initAuthClient(props.serverUrl, () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(SITE_TOKEN_KEY)
+  })
   refreshViewport()
   initializeWidgetPosition()
 

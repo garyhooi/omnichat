@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 import { initAuthClient, authFetch } from '../shared/api-client'
 
 
@@ -299,9 +299,13 @@ const isActive = computed(() => activeConversationData.value?.status === 'active
 function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
-    auth: {
-      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
+    auth: (cb: (data: any) => void) => {
+      cb({ token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined })
     },
+  })
+
+  s.on('reconnect', () => {
+    s.auth = { token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined }
   })
 
   s.on('connect', () => {
@@ -485,8 +489,27 @@ function connect() {
   s.on('agent_presence', (data: { agents: any[] }) => {
   })
 
-  s.on('error', (data: { message: string }) => {
+  s.on('error', async (data: { message: string }) => {
     console.error('[OmniChat Admin] Error:', data.message)
+    if (data.message === 'Authentication failed') {
+      try {
+        const res = await fetch(`${props.serverUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) }),
+        })
+        if (res.ok) {
+          const data2 = await res.json()
+          localStorage.setItem(ACCESS_TOKEN_KEY, data2.accessToken)
+          localStorage.setItem(REFRESH_TOKEN_KEY, data2.refreshToken)
+          localStorage.setItem(SITE_TOKEN_KEY, data2.siteToken)
+          s.auth = { token: data2.accessToken }
+          s.connect()
+        }
+      } catch (e) {
+        console.error('[OmniChat Admin] Token refresh failed:', e)
+      }
+    }
   })
 
   s.on('disconnect', () => {
@@ -1117,6 +1140,8 @@ async function handleLogout() {
 onMounted(() => {
   initAuthClient(props.serverUrl, () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(SITE_TOKEN_KEY)
   })
   connect()
   loadSettings()

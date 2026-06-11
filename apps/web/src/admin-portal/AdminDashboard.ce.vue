@@ -88,14 +88,18 @@ function connectPresence() {
   }
 
   if (isBearer) {
-    opts.auth = {
-      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
+    opts.auth = (cb: (data: any) => void) => {
+      cb({ token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined })
     }
   } else {
     opts.withCredentials = true
   }
 
   presenceSocket = io(authStore.serverUrl, opts)
+
+  presenceSocket.on('reconnect', () => {
+    presenceSocket.auth = { token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined }
+  })
 
   presenceSocket.on('connect', () => {
     heartbeatInterval = setInterval(() => {
