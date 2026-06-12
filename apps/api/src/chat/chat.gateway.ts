@@ -1111,9 +1111,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
 
     try {
+      await this.handoffService.executeHandoff(conversationId, 'Manual human takeover');
+
       const conversation = await this.chatService.updateConversationStatus(conversationId, 'active');
       await this.chatService.assignAgent(conversationId, client.data.user.id);
       conversation.agentId = client.data.user.id;
+
+      // Send system message to all participants
+      const systemMsg = await this.chatService.createMessage({
+        conversationId,
+        senderType: 'system',
+        senderId: 'system',
+        content: 'Transferring you to a human agent. Please wait...',
+        messageType: 'text',
+      });
+
+      this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+        message: {
+          ...systemMsg,
+          senderDisplayName: 'System',
+        },
+      });
 
       this.server.to('agents').emit('conversation_updated', { conversation });
 
