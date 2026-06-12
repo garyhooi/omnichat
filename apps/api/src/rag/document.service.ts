@@ -68,6 +68,78 @@ export class DocumentService {
     return this.prisma.knowledgeDocument.delete({ where: { id } });
   }
 
+  /** Update a document: title, content, or replace via file upload. */
+  async updateDocument(id: string, file?: { originalname: string; mimetype: string; buffer: Buffer; size: number }, title?: string, content?: string) {
+    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id } });
+    if (!doc) throw new Error('Document not found');
+
+    if (file) {
+      const fileType = this.getFileType(file.originalname);
+      const text = await this.extractText(file.buffer, fileType);
+
+      // Delete old chunks and re-process with new content
+      await this.vectorStore.deleteByDocumentId(id);
+
+      const updated = await this.prisma.knowledgeDocument.update({
+        where: { id },
+        data: {
+          content: text,
+          fileName: file.originalname,
+          fileType,
+          fileSize: file.size,
+          embeddingStatus: 'processing',
+          errorMessage: null,
+          chunkCount: 0,
+        },
+      });
+
+      if (title) {
+        await this.prisma.knowledgeDocument.update({
+          where: { id },
+          data: { title },
+        });
+      }
+
+      this.processEmbeddings(id, text).catch((err) => {
+        this.logger.error(`Failed to process embeddings for ${id}: ${err.message}`);
+      });
+
+      return updated;
+    } else if (content) {
+      await this.vectorStore.deleteByDocumentId(id);
+
+      const updated = await this.prisma.knowledgeDocument.update({
+        where: { id },
+        data: {
+          content,
+          embeddingStatus: 'processing',
+          errorMessage: null,
+          chunkCount: 0,
+        },
+      });
+
+      if (title) {
+        await this.prisma.knowledgeDocument.update({
+          where: { id },
+          data: { title },
+        });
+      }
+
+      this.processEmbeddings(id, content).catch((err) => {
+        this.logger.error(`Failed to process embeddings for ${id}: ${err.message}`);
+      });
+
+      return updated;
+    } else if (title) {
+      return this.prisma.knowledgeDocument.update({
+        where: { id },
+        data: { title },
+      });
+    }
+
+    return doc;
+  }
+
   /** Get a document by ID with chunk count. */
   async getDocument(id: string) {
     return this.prisma.knowledgeDocument.findUnique({

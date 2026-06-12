@@ -165,6 +165,23 @@ export const useAiStore = defineStore('ai', () => {
     await loadDocuments()
   }
 
+  async function getDocument(id: string) {
+    return fetchApi(`/ai/knowledge/documents/${id}`)
+  }
+
+  async function updateDocument(id: string, file?: File, title?: string, content?: string) {
+    const formData = new FormData()
+    if (file) formData.append('file', file)
+    if (title) formData.append('title', title)
+    if (content) formData.append('content', content)
+    const res = await authFetch(`${authStore.serverUrl}/ai/knowledge/documents/${id}`, {
+      method: 'PATCH', body: formData,
+    })
+    if (!res.ok) throw new Error('Update failed')
+    await loadDocuments()
+    return res.json()
+  }
+
   async function searchKnowledge(query: string, topK?: number) {
     return fetchApi('/ai/knowledge/search', {
       method: 'POST',
@@ -218,7 +235,7 @@ export const useAiStore = defineStore('ai', () => {
     providers, agentConfig, documents, tools, loading, error,
     loadProviders, createProvider, updateProvider, deleteProvider, testProvider,
     loadAgentConfig, saveAgentConfig,
-    loadDocuments, uploadDocument, deleteDocument, searchKnowledge,
+    loadDocuments, uploadDocument, deleteDocument, updateDocument, getDocument, searchKnowledge,
     loadTools, createTool, updateTool, deleteTool,
   }
 })
