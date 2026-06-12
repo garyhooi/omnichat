@@ -46,9 +46,10 @@ model Conversation {
   agent    AdminUser? @relation(fields: [agentId], references: [id])
   messages Message[]
 
-  @@index([status])
+  @@index([status, updatedAt])
   @@index([agentId])
   @@index([visitorId])
+  @@index([updatedAt])
 }
 
 model Message {
@@ -92,6 +93,9 @@ model AdminUser {
   conversations Conversation[]
   sessions      Session[]
   refreshTokens RefreshToken[]
+
+  @@index([isOnline, lastSeenAt])
+  @@index([isLocked, isOnline])
 }
 
 model Session {
@@ -126,6 +130,7 @@ model SiteConfig {
   bubbleColor        String   @default("#4F46E5")
   welcomeMessage     String   @default("Hello! How can we help you today?") @db.Text
   offlineMessage     String   @default("We are currently offline. Please check back later.") @db.Text
+  greetingMessage    String?  @db.Text
   bubbleSize         String   @default("medium")
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")
@@ -140,6 +145,8 @@ model SiteConfig {
   showVisitorWidget Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 model QuickReply {
@@ -148,6 +155,8 @@ model QuickReply {
   content   String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 model UploadToken {
@@ -177,6 +186,9 @@ model AiProvider {
   isActive       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 model AiAgentConfig {
@@ -215,6 +227,8 @@ model KnowledgeDocument {
   updatedAt       DateTime @updatedAt
 
   chunks DocumentChunk[]
+
+  @@index([createdAt])
 }
 
 /// For MySQL 9.0+: embeddings stored via native VECTOR type.
@@ -262,6 +276,9 @@ model ToolRegistration {
   requiredPermission String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([isActive, handlerType])
 }
 
 // AI Logs (stores AI provider failures and important events)
@@ -273,6 +290,10 @@ model AiLog {
   message       String?  @db.Text
   details       String?  @db.Text
   createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([conversationId])
 }
 
 model HttpLog {
@@ -294,4 +315,25 @@ model HttpLog {
   @@index([createdAt])
   @@index([method])
   @@index([statusCode])
+}
+
+model ToolLog {
+  id             String   @id @default(cuid())
+  toolName       String
+  handlerType    String   // "builtin" | "external"
+  conversationId String?
+  requestUrl     String?  @db.Text
+  requestMethod  String?
+  requestHeaders String?  @db.Text
+  requestBody    String?  @db.Text
+  responseStatus Int?
+  responseBody   String?  @db.Text
+  duration       Int?
+  success        Boolean  @default(true)
+  errorMessage   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([toolName])
+  @@index([conversationId])
 }

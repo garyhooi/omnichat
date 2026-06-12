@@ -263,6 +263,25 @@
   flex-shrink: 0;
 }
 
+/* ------ Takeover button ------ */
+.aw-takeover-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: #3b82f6;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.aw-takeover-btn:hover {
+  background: #2563eb;
+}
+
 /* ------ Chat top bar ------ */
 .aw-chat-topbar {
   display: flex;

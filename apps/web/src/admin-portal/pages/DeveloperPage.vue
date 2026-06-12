@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth.store'
 import { useToast } from '../stores/toast.store'
-import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
+import { authFetch } from '../../shared/api-client'
 
 const auth = useAuthStore()
 const toast = useToast()
@@ -13,20 +13,8 @@ const adminAllowedIps = ref('')
 const siteConfigId = ref<string | null>(null)
 const saving = ref(false)
 
-function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = {}
-  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-  const st = localStorage.getItem(SITE_TOKEN_KEY)
-  if (t) h['Authorization'] = `Bearer ${t}`
-  if (st) h['x-external-site-token'] = st
-  return h
-}
-
 async function apiFetch(path: string, opts: RequestInit = {}) {
-  return fetch(`${base()}${path}`, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
-  })
+  return authFetch(`${base()}${path}`, opts)
 }
 
 async function loadConfig() {

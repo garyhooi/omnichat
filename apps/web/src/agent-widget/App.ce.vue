@@ -4,7 +4,8 @@ import { io, Socket } from 'socket.io-client'
 import { renderMarkdown } from '../utils/markdown'
 import { fetchTranslation, getDefaultLang, TRANSLATE_LANGS } from '../utils/translationCache'
 import { appVersion } from '../version'
-import { ACCESS_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
+import { initAuthClient, authFetch } from '../shared/api-client'
 
 const WIDGET_MARGIN = 12
 const PANEL_MIN_WIDTH = 340
@@ -60,17 +61,6 @@ interface Conversation {
 }
 
 
-// Auth headers helper
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const h: Record<string, string> = { ...extra }
-  const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (t) h['Authorization'] = `Bearer ${t}`
-  const st = localStorage.getItem(SITE_TOKEN_KEY)
-  if (st) h['x-external-site-token'] = st
-  return h
-}
-
 
 // Viewport & position state
 
@@ -123,7 +113,7 @@ const activeConversationId = ref<string | null>(null)
 const activeConversationData = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
 const newMessage = ref('')
-const activeTab = ref<'active' | 'specialist'>('active')
+const activeTab = ref<'active' | 'ai' | 'specialist'>('active')
 const isTyping = ref(false)
 const typingUser = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -222,12 +212,21 @@ const panelAnchorStorageKey = computed(
 
 const unreadCount = computed(() => {
   return conversations.value
-    .filter((c) => c.status === 'active' || c.status === 'specialist')
+    .filter((c) => c.status === 'active' || c.status === 'ai' || c.status === 'specialist')
+    .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+})
+
+const aiUnreadCount = computed(() => {
+  return conversations.value
+    .filter((c) => c.status === 'ai')
     .reduce((sum, c) => sum + (c.unreadCount || 0), 0)
 })
 
 const filteredConversations = computed(() => {
   return conversations.value.filter((c) => {
+    if (activeTab.value === 'ai') {
+      return c.status === 'ai'
+    }
     if (activeTab.value === 'specialist') {
       return c.status === 'specialist' && c.specialistUsername === currentUserUsername.value
     }
@@ -560,9 +559,13 @@ function toggleWidget() {
 function connect() {
   const s = io(props.serverUrl, {
     transports: ['websocket', 'polling'],
-    auth: {
-      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
+    auth: (cb: (data: any) => void) => {
+      cb({ token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined })
     },
+  })
+
+  s.on('reconnect', () => {
+    s.auth = { token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined }
   })
 
   s.on('connect', () => {
@@ -705,8 +708,27 @@ function connect() {
     console.warn('[OmniChat Admin Widget] Message error:', data.error)
   })
 
-  s.on('error', (data: { message: string }) => {
+  s.on('error', async (data: { message: string }) => {
     console.error('[OmniChat Admin Widget] Error:', data.message)
+    if (data.message === 'Authentication failed') {
+      try {
+        const res = await fetch(`${props.serverUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) }),
+        })
+        if (res.ok) {
+          const data2 = await res.json()
+          localStorage.setItem(ACCESS_TOKEN_KEY, data2.accessToken)
+          localStorage.setItem(REFRESH_TOKEN_KEY, data2.refreshToken)
+          localStorage.setItem(SITE_TOKEN_KEY, data2.siteToken)
+          s.auth = { token: data2.accessToken }
+          s.connect()
+        }
+      } catch (e) {
+        console.error('[OmniChat Admin Widget] Token refresh failed:', e)
+      }
+    }
   })
 
   s.on('disconnect', () => {
@@ -752,6 +774,11 @@ function selectConversation(conversationId: string) {
   showTransferConfirm.value = false
 
   socket.value?.emit('join_conversation', { conversationId })
+}
+
+function takeOverConversation(conversationId: string) {
+  socket.value?.emit('take_over_conversation', { conversationId })
+  selectConversation(conversationId)
 }
 
 function markUnreadVisitorMessagesAsRead() {
@@ -948,9 +975,8 @@ async function processFile(file: File) {
   }
 
   try {
-    const res = await fetch(`${props.serverUrl}/upload`, {
+    const res = await authFetch(`${props.serverUrl}/upload`, {
       method: 'POST',
-      headers: authHeaders(),
       body: formData,
     })
 
@@ -1020,9 +1046,7 @@ function cancelTransferConversation() {
 
 async function loadAdminList() {
   try {
-    const res = await fetch(`${props.serverUrl}/admin/users`, {
-      headers: authHeaders(),
-    })
+    const res = await authFetch(`${props.serverUrl}/admin/users`)
     if (res.ok) {
       adminList.value = await res.json()
     }
@@ -1051,7 +1075,7 @@ async function toggleTranslation(msg: Message) {
 
   translatingMessageIds.value = new Set([...translatingMessageIds.value, msg.id])
   try {
-    const translated = await fetchTranslation(props.serverUrl, text, translateLang.value, authHeaders())
+    const translated = await fetchTranslation(props.serverUrl, text, translateLang.value)
     translatedMessages.value = { ...translatedMessages.value, [msg.id]: translated }
   } catch (e: any) {
     console.warn('[OmniChat Admin Widget] Translation failed:', e.message)
@@ -1073,6 +1097,11 @@ function autoTranslateMessage(msg: Message) {
 // Lifecycle
 
 onMounted(() => {
+  initAuthClient(props.serverUrl, () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(SITE_TOKEN_KEY)
+  })
   refreshViewport()
   initializeWidgetPosition()
 
@@ -1190,6 +1219,13 @@ watch(showLangPopover, (val) => {
           </button>
           <button
             type="button"
+            :class="['aw-tab', { active: activeTab === 'ai' }]"
+            @click="activeTab = 'ai'"
+          >
+            AI ({{ conversations.filter(c => c.status === 'ai').length }})
+          </button>
+          <button
+            type="button"
             :class="['aw-tab', { active: activeTab === 'specialist' }]"
             @click="activeTab = 'specialist'"
           >
@@ -1199,7 +1235,7 @@ watch(showLangPopover, (val) => {
 
         <div class="aw-conv-list">
           <div v-if="filteredConversations.length === 0" class="aw-empty">
-            No {{ activeTab === 'specialist' ? 'specialist' : 'active' }} conversations
+            No {{ activeTab === 'ai' ? 'AI' : activeTab === 'specialist' ? 'specialist' : 'active' }} conversations
           </div>
           <button
             v-for="conv in filteredConversations"
@@ -1219,6 +1255,15 @@ watch(showLangPopover, (val) => {
                 class="aw-conv-unread"
               >{{ conv.unreadCount }}</span>
             </div>
+            <button
+              v-if="activeTab === 'ai'"
+              type="button"
+              class="aw-takeover-btn"
+              title="Take over this conversation and move it to Active"
+              @click.stop="takeOverConversation(conv.id)"
+            >
+              Human Take Over
+            </button>
           </button>
         </div>
       </template>
@@ -1409,7 +1454,7 @@ watch(showLangPopover, (val) => {
           </div>
         </div>
 
-        <div v-else class="aw-input-area">
+        <div v-else-if="isActive" class="aw-input-area">
           <input type="file" ref="fileInput" style="display: none" accept="image/*" @change="handleFileUpload" />
           <button
             type="button"

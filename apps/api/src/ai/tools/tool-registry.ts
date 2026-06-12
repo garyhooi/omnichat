@@ -1,9 +1,35 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ToolHandler, ToolContext } from './tool.interface';
-import { ExternalToolAuthService } from './external-tool-auth.service';
+import { ExternalToolAuthService, TokenExchangeError } from './external-tool-auth.service';
+import { ToolLogService } from '../../http-log/tool-log.service';
 import { tool, jsonSchema } from 'ai';
 import { z } from 'zod';
+
+const SENSITIVE_HEADERS = new Set([
+  'authorization', 'cookie', 'x-admin-api-key', 'set-cookie',
+]);
+
+function sanitiseHeaders(
+  raw: Record<string, string | string[]> | undefined,
+): string | undefined {
+  if (!raw) return undefined;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    cleaned[k] = SENSITIVE_HEADERS.has(k.toLowerCase()) ? '***' : v;
+  }
+  return JSON.stringify(cleaned);
+}
+
+function truncateBody(body: any): string | undefined {
+  if (body === undefined || body === null) return undefined;
+  try {
+    const str = typeof body === 'string' ? body : JSON.stringify(body);
+    return str.length > 4096 ? str.slice(0, 4096) + '...[truncated]' : str;
+  } catch {
+    return '[unserializable]';
+  }
+}
 
 @Injectable()
 export class ToolRegistry {
@@ -13,6 +39,7 @@ export class ToolRegistry {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: ExternalToolAuthService,
+    private readonly toolLogService: ToolLogService,
   ) {}
 
   /** Register a built-in tool handler. */
@@ -73,11 +100,33 @@ export class ToolRegistry {
         description: handler.description,
         parameters: jsonSchema(cleanSchema),
         execute: async (args) => {
+          const start = Date.now();
           try {
             this.logger.log(`Executing builtin tool: ${name}`);
-            return await handler.execute(args, context);
+            const result = await handler.execute(args, context);
+            const duration = Date.now() - start;
+            await this.toolLogService.createLog({
+              toolName: name,
+              handlerType: 'builtin',
+              conversationId: context.conversationId,
+              requestBody: JSON.stringify(args),
+              responseBody: JSON.stringify(result),
+              duration,
+              success: true,
+            });
+            return result;
           } catch (error: any) {
+            const duration = Date.now() - start;
             this.logger.error(`Tool ${name} failed: ${error.message}`);
+            await this.toolLogService.createLog({
+              toolName: name,
+              handlerType: 'builtin',
+              conversationId: context.conversationId,
+              requestBody: JSON.stringify(args),
+              errorMessage: error.message,
+              duration,
+              success: false,
+            });
             return { error: `Tool execution failed: ${error.message}` };
           }
         },
@@ -117,22 +166,56 @@ export class ToolRegistry {
             ...(required.length > 0 ? { required } : {}),
           }),
           execute: async (args) => {
+            const start = Date.now();
             try {
               this.logger.log(`Executing external tool: ${ext.name} -> ${ext.endpoint}`);
 
               let token: string | null = null;
+              let authError: any = null;
               if (authConfig && ext.authType && ext.authType !== 'none') {
                 try {
                   token = await this.authService.getToken(authConfig, ext.authType, context);
-                } catch (authError: any) {
-                  this.logger.error(`Auth failed for tool ${ext.name}: ${authError.message}`);
-                  return { error: `Authentication failed: ${authError.message}` };
+                } catch (authErr: any) {
+                  authError = authErr;
+                  const duration = Date.now() - start;
+                  const logData: any = {
+                    toolName: ext.name,
+                    handlerType: 'external',
+                    conversationId: context.conversationId,
+                    requestUrl: ext.endpoint,
+                    requestMethod: 'POST',
+                    requestBody: JSON.stringify(args),
+                    errorMessage: `Auth failed: ${authErr.message}`,
+                    duration,
+                    success: false,
+                  };
+                  if (authErr instanceof TokenExchangeError) {
+                    logData.requestUrl = authErr.requestUrl;
+                    logData.requestHeaders = JSON.stringify(authErr.requestHeaders);
+                    logData.requestBody = authErr.requestBody;
+                    logData.responseStatus = authErr.responseStatus;
+                    logData.responseBody = authErr.responseBody;
+                  }
+                  await this.toolLogService.createLog(logData);
+                  return { error: `Authentication failed: ${authErr.message}` };
                 }
               }
 
-              return await this.callExternalTool(ext.endpoint!, token, args);
+              return await this.callExternalTool(ext.name, ext.endpoint!, token, args, context.conversationId);
             } catch (error: any) {
+              const duration = Date.now() - start;
               this.logger.error(`External tool ${ext.name} failed: ${error.message}`);
+              await this.toolLogService.createLog({
+                toolName: ext.name,
+                handlerType: 'external',
+                conversationId: context.conversationId,
+                requestUrl: ext.endpoint,
+                requestMethod: 'POST',
+                requestBody: JSON.stringify(args),
+                errorMessage: error.message,
+                duration,
+                success: false,
+              });
               return { error: `External tool execution failed: ${error.message}` };
             }
           },
@@ -148,9 +231,16 @@ export class ToolRegistry {
   }
 
   /** Call an external tool via HTTP POST. */
-  private async callExternalTool(endpoint: string, token: string | null, args: any): Promise<any> {
+  private async callExternalTool(
+    toolName: string,
+    endpoint: string,
+    token: string | null,
+    args: any,
+    conversationId: string | undefined,
+  ): Promise<any> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
+    const start = Date.now();
 
     try {
       const headers: Record<string, string> = {
@@ -167,11 +257,36 @@ export class ToolRegistry {
         signal: controller.signal,
       });
 
+      const duration = Date.now() - start;
+      let respBody: any;
+      let responseBody: string | undefined;
+      try {
+        respBody = await response.json();
+        responseBody = truncateBody(respBody);
+      } catch {
+        responseBody = undefined;
+      }
+
+      await this.toolLogService.createLog({
+        toolName,
+        handlerType: 'external',
+        conversationId,
+        requestUrl: endpoint,
+        requestMethod: 'POST',
+        requestHeaders: sanitiseHeaders(headers),
+        requestBody: JSON.stringify(args),
+        responseStatus: response.status,
+        responseBody,
+        duration,
+        success: response.ok,
+        errorMessage: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+      });
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      return respBody;
     } finally {
       clearTimeout(timeout);
     }

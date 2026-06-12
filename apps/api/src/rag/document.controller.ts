@@ -3,6 +3,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -70,6 +71,37 @@ export class DocumentController {
       throw new BadRequestException('No file uploaded');
     }
     return this.documentService.uploadDocument(file, title);
+  }
+
+  @Patch('documents/:id')
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (!file) return cb(null, true);
+      const allowedTypes = [
+        'text/plain', 'text/markdown', 'text/csv',
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ];
+      const allowedExts = ['txt', 'md', 'pdf', 'docx', 'csv'];
+      const ext = file.originalname.split('.').pop()?.toLowerCase();
+      if (allowedTypes.includes(file.mimetype) || (ext && allowedExts.includes(ext))) {
+        cb(null, true);
+      } else {
+        cb(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+      }
+    },
+  }))
+  async updateDocument(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('title') title?: string,
+    @Body('content') content?: string,
+  ) {
+    if (!file && !title && !content) {
+      throw new BadRequestException('Either file, title, or content must be provided');
+    }
+    return this.documentService.updateDocument(id, file, title, content);
   }
 
   @Delete('documents/:id')

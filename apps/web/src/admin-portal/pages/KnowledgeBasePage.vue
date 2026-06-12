@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useAiStore } from '../stores/ai.store'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -10,6 +10,25 @@ const isDragging = ref(false)
 const uploading = ref(false)
 const uploadTitle = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+
+// Edit state
+const editingDoc = ref<any>(null)
+const editTitle = ref('')
+const editContent = ref('')
+const editFile = ref<File | null>(null)
+const editFileInput = ref<HTMLInputElement | null>(null)
+const loadingEditContent = ref(false)
+const saving = ref(false)
+
+// View content state
+const viewingDocId = ref<string | null>(null)
+const viewContent = ref('')
+const loadingView = ref(false)
+
+// Polling state
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+const POLL_INTERVAL = 5000
+const POLL_TIMEOUT = 120000
 
 // Search test
 const searchQuery = ref('')
@@ -31,8 +50,113 @@ const statusColors: Record<string, string> = {
 }
 
 onMounted(() => {
-  aiStore.loadDocuments()
+  aiStore.loadDocuments().then(() => {
+    if (aiStore.documents.some((d: any) => d.embeddingStatus === 'processing')) {
+      startPolling()
+    }
+  })
 })
+
+onUnmounted(() => {
+  cancelPolling()
+})
+
+function startPolling() {
+  cancelPolling()
+  const startTime = Date.now()
+  pollingTimer = setInterval(async () => {
+    if (Date.now() - startTime > POLL_TIMEOUT) {
+      cancelPolling()
+      return
+    }
+    await aiStore.loadDocuments()
+    if (!aiStore.documents.some((d: any) => d.embeddingStatus === 'processing')) {
+      cancelPolling()
+    }
+  }, POLL_INTERVAL)
+}
+
+function cancelPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
+async function enterEdit(doc: any) {
+  editingDoc.value = doc
+  editTitle.value = doc.title
+  editFile.value = null
+  editContent.value = ''
+  if (editFileInput.value) editFileInput.value.value = ''
+  loadingEditContent.value = true
+  try {
+    const result = await aiStore.getDocument(doc.id)
+    editContent.value = result.content || ''
+  } catch (e: any) {
+    aiStore.error = e.message
+  } finally {
+    loadingEditContent.value = false
+  }
+}
+
+function cancelEdit() {
+  editingDoc.value = null
+  editTitle.value = ''
+  editContent.value = ''
+  editFile.value = null
+  if (editFileInput.value) editFileInput.value.value = ''
+}
+
+async function saveEdit() {
+  if (!editingDoc.value) return
+  saving.value = true
+  try {
+    if (editFile.value) {
+      await aiStore.updateDocument(editingDoc.value.id, editFile.value, editTitle.value.trim() || undefined)
+    } else {
+      await aiStore.updateDocument(editingDoc.value.id, undefined, editTitle.value.trim() || undefined, editContent.value)
+    }
+    cancelEdit()
+    startPolling()
+  } catch (e: any) {
+    aiStore.error = e.message
+  } finally {
+    saving.value = false
+  }
+}
+
+function closeView() {
+  viewingDocId.value = null
+  viewContent.value = ''
+}
+
+async function viewDocContent(doc: any) {
+  if (viewingDocId.value === doc.id) return closeView()
+  viewingDocId.value = doc.id
+  viewContent.value = ''
+  loadingView.value = true
+  try {
+    const result = await aiStore.getDocument(doc.id)
+    viewContent.value = result.content || '(no content)'
+  } catch (e: any) {
+    aiStore.error = e.message
+    closeView()
+  } finally {
+    loadingView.value = false
+  }
+}
+
+function downloadContent(doc: any) {
+  const ext = doc.fileType === 'md' ? 'md' : 'txt'
+  const blob = new Blob([viewContent.value], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${doc.title}.${ext}`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -48,6 +172,7 @@ async function handleUpload(files: FileList | null) {
       await aiStore.uploadDocument(file, uploadTitle.value || undefined)
     }
     uploadTitle.value = ''
+    startPolling()
   } catch (e: any) {
     aiStore.error = e.message
   } finally {
@@ -151,25 +276,81 @@ function downloadTemplate(filename: string) {
     </div>
 
     <div class="bg-white rounded-lg shadow p-6 mb-6">
-      <h2 class="text-lg font-semibold mb-4">Documents ({{ aiStore.documents.length }})</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Documents ({{ aiStore.documents.length }})</h2>
+        <div v-if="aiStore.documents.some((d: any) => d.embeddingStatus === 'processing')"
+             class="flex items-center gap-2 text-xs text-blue-600">
+          <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          Processing in background...
+        </div>
+      </div>
       <div v-if="aiStore.documents.length === 0" class="text-gray-400 text-center py-8">
         No documents uploaded yet.
       </div>
       <div v-else class="space-y-2">
         <div v-for="doc in aiStore.documents" :key="doc.id"
-             class="flex items-center justify-between p-3 border rounded-lg">
-          <div>
-            <div class="font-medium text-sm">{{ doc.title }}</div>
-            <div class="text-xs text-gray-400">
-              {{ doc.fileName }} &middot; {{ formatFileSize(doc.fileSize) }} &middot; {{ doc.chunkCount }} chunks
+             class="p-3 border rounded-lg">
+          <div v-if="editingDoc?.id !== doc.id" class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">{{ doc.title }}</div>
+              <div class="text-xs text-gray-400">
+                {{ doc.fileName }} &middot; {{ formatFileSize(doc.fileSize) }} &middot; {{ doc.chunkCount }} chunks
+              </div>
+              <div v-if="doc.errorMessage" class="text-xs text-red-500 mt-1">{{ doc.errorMessage }}</div>
             </div>
-            <div v-if="doc.errorMessage" class="text-xs text-red-500 mt-1">{{ doc.errorMessage }}</div>
+            <div class="flex items-center gap-3">
+              <span :class="['text-xs px-2 py-0.5 rounded-full', statusColors[doc.embeddingStatus]]">
+                {{ doc.embeddingStatus }}
+              </span>
+              <button @click="viewDocContent(doc)" class="text-gray-500 hover:text-gray-700 text-xs">{{ viewingDocId === doc.id ? 'Close' : 'View' }}</button>
+              <button @click="enterEdit(doc)" class="text-indigo-500 hover:text-indigo-700 text-xs">✏ Edit</button>
+              <button @click="deleteDoc(doc.id)" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+            </div>
           </div>
-          <div class="flex items-center gap-3">
-            <span :class="['text-xs px-2 py-0.5 rounded-full', statusColors[doc.embeddingStatus]]">
-              {{ doc.embeddingStatus }}
-            </span>
-            <button @click="deleteDoc(doc.id)" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+          <!-- View content -->
+          <div v-if="viewingDocId === doc.id" class="mt-3 pt-3 border-t">
+            <div v-if="loadingView" class="text-xs text-gray-400">Loading content...</div>
+            <template v-else>
+              <div class="flex justify-end mb-2">
+                <button @click="downloadContent(doc)" class="text-xs text-indigo-600 hover:text-indigo-800">⬇ Download</button>
+              </div>
+              <pre class="text-xs text-gray-700 whitespace-pre-wrap max-h-96 overflow-y-auto bg-gray-50 rounded p-3">{{ viewContent }}</pre>
+            </template>
+          </div>
+          <div v-if="editingDoc?.id === doc.id" class="mt-3 pt-3 border-t space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Title</label>
+              <input v-model="editTitle" type="text"
+                     class="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Content</label>
+              <div v-if="loadingEditContent" class="text-xs text-gray-400">Loading content...</div>
+              <textarea v-else v-model="editContent"
+                        class="w-full border rounded px-3 py-2 text-xs font-mono"
+                        rows="12"
+                        placeholder="Document content..."></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Replace via file upload (optional)</label>
+              <input ref="editFileInput" type="file"
+                     accept=".txt,.md,.pdf,.docx,.csv"
+                     @change="editFile = ($event.target as HTMLInputElement).files?.[0] || null"
+                     class="text-xs" />
+            </div>
+            <div class="flex gap-2">
+              <button @click="saveEdit" :disabled="saving"
+                      class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50">
+                {{ saving ? 'Saving...' : 'Save' }}
+              </button>
+              <button @click="cancelEdit" :disabled="saving"
+                      class="px-3 py-1.5 border rounded text-xs hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

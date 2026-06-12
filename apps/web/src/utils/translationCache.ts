@@ -1,3 +1,5 @@
+import { authFetch } from '../shared/api-client'
+
 const DB_NAME = 'omnichat_translations'
 const DB_VERSION = 1
 const STORE_NAME = 'translations'
@@ -119,19 +121,12 @@ export async function fetchTranslation(
   serverUrl: string,
   text: string,
   targetLanguage: string,
-  authHeaders?: Record<string, string>,
 ): Promise<string> {
   const cached = await getCachedTranslation(text, targetLanguage)
   if (cached) return cached
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(authHeaders || {}),
-  }
-
-  const res = await fetch(`${serverUrl}/ai/translate`, {
+  const res = await authFetch(`${serverUrl}/ai/translate`, {
     method: 'POST',
-    headers,
     body: JSON.stringify({ text, targetLanguage }),
   })
 

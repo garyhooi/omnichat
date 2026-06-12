@@ -30,21 +30,28 @@ export class TransferToHumanTool implements ToolHandler {
         };
       }
 
-      const now = new Date();
-      const agentsWithValidSessions = await prisma.adminUser.count({
+      const onlineAgents = await prisma.adminUser.count({
         where: {
           isLocked: false,
           isOnline: true,
-          sessions: {
-            some: {
-              revoked: false,
-              expiresAt: { gt: now },
-            },
-          },
         },
       });
 
-      if (agentsWithValidSessions === 0) {
+      let agentsAvailable = onlineAgents > 0;
+
+      // Fallback: check connected agent sockets if DB isOnline is stale
+      if (!agentsAvailable) {
+        const io = context.services?.io;
+        if (io) {
+          try {
+            const agRoom = context.services?.agentsRoom?.() ?? 'agents';
+            const sockets = await io.in(agRoom).fetchSockets();
+            agentsAvailable = sockets.some((s: any) => s.data?.user && !s.data?.isVisitor);
+          } catch {}
+        }
+      }
+
+      if (!agentsAvailable) {
         return {
           action: 'unavailable',
           reason: 'No human agent is online right now. Cannot transfer at this time.',
@@ -53,10 +60,68 @@ export class TransferToHumanTool implements ToolHandler {
       }
     }
 
+    await this.performHandoff(context, args.reason).catch(() => {});
+
     return {
       action: 'handoff',
       reason: args.reason,
       conversationId: context.conversationId,
     };
+  }
+
+  private async performHandoff(context: ToolContext, reason: string): Promise<void> {
+    const prisma = context.services?.prisma;
+    if (!prisma) return;
+
+    await prisma.conversation.update({
+      where: { id: context.conversationId },
+      data: { status: 'active' },
+    });
+
+    const msg = await prisma.message.create({
+      data: {
+        conversationId: context.conversationId,
+        senderType: 'system',
+        senderId: 'system',
+        content: 'Transferring you to a human agent. Please wait...',
+        messageType: 'text',
+      },
+    });
+
+    const io = context.services?.io;
+    if (io) {
+      const convRoom = context.services?.conversationRoom?.(context.conversationId) ?? `conv:${context.conversationId}`;
+      const agRoom = context.services?.agentsRoom?.() ?? 'agents';
+      io.to(convRoom).to(agRoom).emit('new_message', {
+        message: { ...msg, senderDisplayName: 'System' },
+      });
+      io.to(agRoom).emit('conversation_updated', {
+        conversation: { id: context.conversationId, status: 'active' },
+      });
+      io.to(agRoom).emit('ai_handoff', {
+        conversationId: context.conversationId,
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const existing = await prisma.aiConversationState.findUnique({
+      where: { conversationId: context.conversationId },
+    });
+    if (existing) {
+      await prisma.aiConversationState.update({
+        where: { conversationId: context.conversationId },
+        data: { handoffTriggered: true, handoffReason: reason, isAiHandling: false },
+      });
+    } else {
+      await prisma.aiConversationState.create({
+        data: {
+          conversationId: context.conversationId,
+          handoffTriggered: true,
+          handoffReason: reason,
+          isAiHandling: false,
+        },
+      });
+    }
   }
 }

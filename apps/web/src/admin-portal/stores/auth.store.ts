@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../../shared/storage-keys'
+import { initAuthClient, authFetch } from '../../shared/api-client'
 
 interface User {
   id: string
@@ -25,6 +26,9 @@ export const useAuthStore = defineStore('auth', () => {
     serverUrl.value = meta?.getAttribute('content') || 
       (window as any).__OMNICHAT_SERVER_URL || 
       `${window.location.protocol}//${window.location.hostname}:3001`
+    initAuthClient(serverUrl.value, () => {
+      user.value = null
+    })
   }
 
   async function login(username: string, password: string): Promise<boolean> {
@@ -37,9 +41,9 @@ export const useAuthStore = defineStore('auth', () => {
       if (!res.ok) return false
       const data = await res.json()
       user.value = data.user
-      localStorage.setItem('accessToken', data.accessToken)
-      localStorage.setItem('refreshToken', data.refreshToken)
-      localStorage.setItem('siteToken', data.siteToken)
+      localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken)
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken)
+      localStorage.setItem(SITE_TOKEN_KEY, data.siteToken)
       return true
     } catch {
       return false
@@ -48,13 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchMe(): Promise<void> {
     try {
-      const headers: Record<string, string> = {}
-      const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-      if (t) headers['Authorization'] = `Bearer ${t}`
-      const st = localStorage.getItem(SITE_TOKEN_KEY)
-      if (st) headers['x-external-site-token'] = st
-
-      const res = await fetch(`${serverUrl.value}/auth/me`, { headers })
+      const res = await authFetch(`${serverUrl.value}/auth/me`)
       if (res.ok) {
         const data = await res.json()
         user.value = data.user
@@ -65,16 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
-      const headers: Record<string, string> = {}
-      const t = localStorage.getItem(ACCESS_TOKEN_KEY)
-      if (t) headers['Authorization'] = `Bearer ${t}`
-      const st = localStorage.getItem(SITE_TOKEN_KEY)
-      if (st) headers['x-external-site-token'] = st
-
-      await fetch(`${serverUrl.value}/auth/logout`, {
-        method: 'POST',
-        headers,
-      })
+      await authFetch(`${serverUrl.value}/auth/logout`, { method: 'POST' })
     } catch {
     }
     user.value = null
@@ -89,6 +78,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   function configure(url: string) {
     serverUrl.value = url
+    initAuthClient(url, () => {
+      user.value = null
+    })
   }
 
   function getAuthHeaders(): Record<string, string> {

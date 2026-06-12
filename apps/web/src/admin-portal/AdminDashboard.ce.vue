@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/auth.store'
 import { useToast } from './stores/toast.store'
 import { io, type Socket } from 'socket.io-client'
 import { appVersion } from '../version'
-import { ACCESS_TOKEN_KEY } from '../shared/storage-keys'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, SITE_TOKEN_KEY } from '../shared/storage-keys'
 
 const { toasts, dismiss } = useToast()
 
@@ -36,7 +36,7 @@ const allNavItems = [
   { key: 'conversations', label: 'Conversations', icon: '\u{1F4AC}', adminOnly: false },
   { key: 'ai-setup', label: 'AI Agent', icon: '\u{1F916}', adminOnly: true },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: '\u{1F4DA}', adminOnly: true },
-  { key: 'tools', label: 'Tools', icon: '\u{1F527}', adminOnly: true },
+  { key: 'tools', label: 'Tools', icon: '\u{1F527}', developerOnly: true },
   { key: 'logs', label: 'Logs', icon: '\u{1F4CB}', adminOnly: true },
   { key: 'users', label: 'Users', icon: '\u{1F465}', adminOnly: true },
   { key: 'developer', label: 'Developer', icon: '\u{1F511}', developerOnly: true },
@@ -88,14 +88,18 @@ function connectPresence() {
   }
 
   if (isBearer) {
-    opts.auth = {
-      token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined,
+    opts.auth = (cb: (data: any) => void) => {
+      cb({ token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined })
     }
   } else {
     opts.withCredentials = true
   }
 
   presenceSocket = io(authStore.serverUrl, opts)
+
+  presenceSocket.on('reconnect', () => {
+    presenceSocket.auth = { token: localStorage.getItem(ACCESS_TOKEN_KEY) || undefined }
+  })
 
   presenceSocket.on('connect', () => {
     heartbeatInterval = setInterval(() => {
@@ -107,6 +111,28 @@ function connectPresence() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval)
       heartbeatInterval = null
+    }
+  })
+
+  presenceSocket.on('error', async (data: { message: string }) => {
+    if (data.message === 'Authentication failed') {
+      try {
+        const res = await fetch(`${authStore.serverUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) }),
+        })
+        if (res.ok) {
+          const d = await res.json()
+          localStorage.setItem(ACCESS_TOKEN_KEY, d.accessToken)
+          localStorage.setItem(REFRESH_TOKEN_KEY, d.refreshToken)
+          localStorage.setItem(SITE_TOKEN_KEY, d.siteToken)
+          presenceSocket.auth = { token: d.accessToken }
+          presenceSocket.connect()
+        }
+      } catch (e) {
+        // refresh failed, socket will keep retrying
+      }
     }
   })
 }
