@@ -24,6 +24,7 @@ import { AiLogService } from '../ai/ai-log.service';
 import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-base.tool';
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
+import { IpSpamBlacklistTool } from '../ai/tools/builtin/ip-spam-blacklist.tool';
 import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
 import { join, extname } from 'path';
@@ -183,6 +184,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.toolRegistry.registerBuiltin(new SearchKnowledgeBaseTool(this.ragService));
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
+    this.toolRegistry.registerBuiltin(new IpSpamBlacklistTool(this.securityService));
   }
 
   /** On server boot, reset all users to offline. */
@@ -453,8 +455,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
         // Send conversation list and current user details to the newly connected agent immediately
         const conversations = await this.chatService.listConversations();
+        const conversationsWithBlacklist = await Promise.all(conversations.map(async (c) => ({
+          ...c,
+          isIpBlacklisted: c.visitorIp
+            ? await this.securityService.isIpBlacklisted(c.visitorIp)
+            : false,
+        })));
         client.emit('conversations_list', { 
-          conversations,
+          conversations: conversationsWithBlacklist,
           currentUser: {
             id: user.id,
             username: user.username,
@@ -803,7 +811,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
 
     // Send conversation history to the joining client
-    client.emit('conversation_history', { conversation });
+    const isIpBlacklisted = conversation.visitorIp
+      ? await this.securityService.isIpBlacklisted(conversation.visitorIp)
+      : false;
+    client.emit('conversation_history', { conversation, isIpBlacklisted });
 
     // Provide upload token for visitor if conversation is still active
     if (client.data.isVisitor && conversation.status === 'active') {
@@ -859,6 +870,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       : client.data.user?.id;
 
     // Validate conversation ownership for visitors
+    let visitorIp: string | undefined;
     if (senderType === 'visitor') {
       const conversation = await this.chatService.getConversation(conversationId);
       if (!conversation || conversation.visitorId !== client.data.visitorId) {
@@ -866,6 +878,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           conversationId,
           error: 'Conversation not found.',
         });
+        return;
+      }
+      visitorIp = conversation.visitorIp || undefined;
+    }
+
+    // IP blacklist check — block the message before it enters the DB
+    if (senderType === 'visitor' && visitorIp) {
+      const isBlacklisted = await this.securityService.isIpBlacklisted(visitorIp);
+      if (isBlacklisted) {
+        const reason = 'Too many spam requests from this IP. Please try again later.';
+        client.emit('message_error', {
+          conversationId,
+          error: reason,
+        });
+        const roomName = `conv:${conversationId}`;
+        this.server.to(roomName).to('agents').emit('ip_blacklisted', {
+          conversationId,
+          reason,
+          timestamp: new Date().toISOString(),
+        });
+        const sysMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'system',
+          senderId: 'system',
+          content: `Security alert: ${reason}`,
+          messageType: 'text',
+        }).catch(() => null);
+        if (sysMsg) {
+          this.server.to(roomName).to('agents').emit('new_message', {
+            message: { ...sysMsg, senderDisplayName: 'System' },
+          });
+        }
         return;
       }
     }
@@ -1159,8 +1203,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const conversations = await this.chatService.listConversations(
       payload?.status,
     );
+    const conversationsWithBlacklist = await Promise.all(conversations.map(async (c) => ({
+      ...c,
+      isIpBlacklisted: c.visitorIp
+        ? await this.securityService.isIpBlacklisted(c.visitorIp)
+        : false,
+    })));
     client.emit('conversations_list', { 
-      conversations,
+      conversations: conversationsWithBlacklist,
       currentUser: {
         id: client.data.user.id,
         username: client.data.user.username,
@@ -1210,6 +1260,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
       if (!securityCheck.allowed) {
         this.logger.warn(`AI security check failed for ${conversationId}: ${securityCheck.reason}`);
+        const roomName = `conv:${conversationId}`;
+        this.server.to(roomName).to('agents').emit('ip_blacklisted', {
+          conversationId,
+          reason: securityCheck.reason,
+          timestamp: new Date().toISOString(),
+        });
+        // Persist a system message so the admin can see it in conversation history
+        const sysMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'system',
+          senderId: 'system',
+          content: `Security alert: ${securityCheck.reason}`,
+          messageType: 'text',
+        }).catch(() => null);
+        if (sysMsg) {
+          this.server.to(roomName).to('agents').emit('new_message', {
+            message: { ...sysMsg, senderDisplayName: 'System' },
+          });
+        }
         return; // Silently skip AI response, human can still respond
       }
 
@@ -1292,6 +1361,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId: conversation.visitorId,
+        visitorIp: conversation.visitorIp || undefined,
         metadata: parsedMetadata,
         services: {
           prisma: this.prisma,

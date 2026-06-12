@@ -213,6 +213,15 @@
   border-bottom: none;
 }
 
+.aw-conv-blacklisted {
+  border-left: 3px solid #dc2626;
+  background: #fef2f2;
+}
+
+.aw-conv-blacklisted:hover {
+  background: #fee2e2;
+}
+
 .aw-conv-item-top {
   display: flex;
   justify-content: space-between;

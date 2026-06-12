@@ -51,6 +51,9 @@ const isAiEnabled = ref(false)
 const isTranslationEnabled = ref(true)
 const autoTranslationEnabled = ref(true)
 
+// IP blacklist banner state
+const ipBlacklisted = ref<{ reason: string } | null>(null)
+
 // Throttled scroll for AI streaming
 let _scrollRafId: number | null = null
 let _userScrolledUp = false
@@ -629,6 +632,12 @@ async function connect() {
     }
   })
 
+  s.on('ip_blacklisted', (data: { conversationId: string; reason: string }) => {
+    if (data.conversationId === conversationId.value) {
+      ipBlacklisted.value = { reason: data.reason }
+    }
+  })
+
   s.on('conversation_resolved', (data: { conversationId: string }) => {
     if (data.conversationId === conversationId.value) {
       isResolved.value = true
@@ -1204,6 +1213,12 @@ watch(showLangPopover, (val) => {
     </template>
 
     <template v-else>
+      <div v-if="ipBlacklisted" style="flex-shrink: 0; background: #fef2f2; border-bottom: 1px solid #fecaca; padding: 8px 12px; text-align: center;">
+        <p style="color: #b91c1c; font-weight: 600; margin: 0; font-size: 13px;">
+          &#9888; You have been flagged for spam activity
+        </p>
+        <p style="color: #991b1b; margin: 2px 0 0; font-size: 12px;">{{ ipBlacklisted.reason }}</p>
+      </div>
       <div ref="messagesArea" class="messages-area">
         <div
           v-for="msg in messages"

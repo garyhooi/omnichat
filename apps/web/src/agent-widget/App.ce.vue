@@ -112,6 +112,7 @@ const conversations = ref<Conversation[]>([])
 const activeConversationId = ref<string | null>(null)
 const activeConversationData = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
+const blacklistedConversations = ref<Set<string>>(new Set())
 const newMessage = ref('')
 const activeTab = ref<'active' | 'ai' | 'specialist'>('active')
 const isTyping = ref(false)
@@ -580,10 +581,15 @@ function connect() {
       if (data.currentUser) {
         currentUserUsername.value = data.currentUser.username
       }
-      conversations.value = data.conversations.map((c) => ({
-        ...c,
-        unreadCount: c._count?.messages || 0,
-      }))
+      const blacklisted = new Set<string>()
+      conversations.value = data.conversations.map((c: any) => {
+        if (c.isIpBlacklisted) blacklisted.add(c.id)
+        return {
+          ...c,
+          unreadCount: c._count?.messages || 0,
+        }
+      })
+      blacklistedConversations.value = blacklisted
       if (activeConversationId.value) {
         const found = conversations.value.find((c) => c.id === activeConversationId.value)
         if (found) {
@@ -600,12 +606,16 @@ function connect() {
     capConversations()
   })
 
-  s.on('conversation_history', (data: { conversation: Conversation }) => {
+  s.on('conversation_history', (data: { conversation: Conversation; isIpBlacklisted?: boolean }) => {
     messages.value = data.conversation.messages || []
     activeConversationData.value = data.conversation
     const conv = conversations.value.find((c) => c.id === data.conversation.id)
     if (conv) {
       conv.status = data.conversation.status
+    }
+    if (data.isIpBlacklisted) {
+      blacklistedConversations.value.add(data.conversation.id)
+      blacklistedConversations.value = new Set(blacklistedConversations.value)
     }
     nextTick(() => {
       scrollToBottom()
@@ -658,6 +668,14 @@ function connect() {
     if (data.conversationId === activeConversationId.value) {
       isTyping.value = data.isTyping
       typingUser.value = data.user
+    }
+  })
+
+  s.on('ip_blacklisted', (data: { conversationId: string; reason: string }) => {
+    blacklistedConversations.value.add(data.conversationId)
+    blacklistedConversations.value = new Set(blacklistedConversations.value)
+    if (data.conversationId === activeConversationId.value) {
+      playSound()
     }
   })
 
@@ -1241,7 +1259,7 @@ watch(showLangPopover, (val) => {
             v-for="conv in filteredConversations"
             :key="conv.id"
             type="button"
-            class="aw-conv-item"
+            :class="['aw-conv-item', { 'aw-conv-blacklisted': blacklistedConversations.has(conv.id) }]"
             @click="selectConversation(conv.id)"
           >
             <div class="aw-conv-item-top">
@@ -1254,6 +1272,10 @@ watch(showLangPopover, (val) => {
                 v-if="(conv.unreadCount || 0) > 0"
                 class="aw-conv-unread"
               >{{ conv.unreadCount }}</span>
+              <span
+                v-if="blacklistedConversations.has(conv.id)"
+                style="margin-left: auto; font-size: 10px; color: #dc2626; font-weight: 600;"
+              >&#9888; SPAM</span>
             </div>
             <button
               v-if="activeTab === 'ai'"
@@ -1386,6 +1408,12 @@ watch(showLangPopover, (val) => {
           <button type="button" class="aw-save-details-btn" @click="saveConversationDetails">Save Changes</button>
         </div>
 
+        <div v-if="activeConversationId && blacklistedConversations.has(activeConversationId)" style="flex-shrink: 0; background: #fef2f2; border-bottom: 1px solid #fecaca; padding: 8px 12px; text-align: center;">
+          <p style="color: #b91c1c; font-weight: 600; margin: 0; font-size: 13px;">
+            &#9888; Visitor IP is blacklisted for spam
+          </p>
+          <p style="color: #991b1b; margin: 2px 0 0; font-size: 12px;">Messages from this visitor are being blocked by the spam protection system.</p>
+        </div>
         <div
           ref="messagesContainer"
           class="aw-messages"

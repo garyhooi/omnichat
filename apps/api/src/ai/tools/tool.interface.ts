@@ -14,6 +14,7 @@ export interface ToolHandler {
 export interface ToolContext {
   conversationId: string;
   visitorId?: string;
+  visitorIp?: string;
   metadata?: Record<string, any>;
   /** Injected services — available for built-in tools that need DB access */
   services?: {
