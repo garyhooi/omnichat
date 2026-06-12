@@ -726,7 +726,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         if (siteConfig?.greetingMessage) {
           const greetingMsg = await this.chatService.createMessage({
             conversationId,
-            senderType: 'system',
+            senderType: 'agent',
             senderId: 'system',
             content: siteConfig.greetingMessage,
             messageType: 'text',
@@ -735,7 +735,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
             message: {
               ...greetingMsg,
-              senderDisplayName: 'System',
+              senderDisplayName: siteConfig?.siteName || 'System',
             },
           });
         }
