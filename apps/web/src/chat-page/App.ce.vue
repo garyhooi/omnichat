@@ -457,6 +457,7 @@ async function processFile(file: File) {
 
 function sendMessage() {
   if (!newMessage.value.trim() || !conversationId.value) return
+  if (isAiStreaming.value) return
   const text = newMessage.value.trim()
   if (text.length > 100) {
     wordLimitError.value = `Message too long (${text.length}/100 characters).`
@@ -735,10 +736,10 @@ function handleClose() {
             <span style="transform: rotate(45deg);">&#128206;</span>
           </button>
           <input type="file" ref="fileInput" style="display: none;" accept="image/*" @change="handleFileUpload" />
-          <textarea v-model="newMessage" class="msg-input" rows="1" maxlength="100" :placeholder="isUploading ? 'Uploading...' : 'Type your message...'" :disabled="isUploading" @keydown.enter.exact.prevent="sendMessage" @keydown.enter.shift.exact="() => void 0" @input="handleInput"></textarea>
+          <textarea v-model="newMessage" class="msg-input" rows="1" maxlength="100" :placeholder="isUploading ? 'Uploading...' : (isAiStreaming ? 'AI is responding...' : 'Type your message...')" :disabled="isUploading || isAiStreaming" @keydown.enter.exact.prevent="sendMessage" @keydown.enter.shift.exact="() => void 0" @input="handleInput"></textarea>
           <span :style="msgCounterStyle">{{ newMessage.length }}/100</span>
-          <button type="button" class="send-msg-btn" :style="{ backgroundColor: currentBubbleColor, boxShadow: '0 4px 10px ' + currentBubbleColor + '40' }" :disabled="(!newMessage.trim() && !isUploading)" @click="sendMessage">
-            {{ isUploading ? '...' : 'Send' }}
+          <button type="button" class="send-msg-btn" :style="{ backgroundColor: currentBubbleColor, boxShadow: '0 4px 10px ' + currentBubbleColor + '40' }" :disabled="(!newMessage.trim() && !isUploading) || isAiStreaming" @click="sendMessage">
+            {{ isUploading ? '...' : (isAiStreaming ? '...' : 'Send') }}
           </button>
           <button type="button" class="end-chat-btn" @click="endChat" title="End Chat">&#10006;</button>
         </div>

@@ -899,6 +899,7 @@ async function processFile(file: File) {
 
 function sendMessage() {
   if (!newMessage.value.trim() || !conversationId.value) return
+  if (isAiStreaming.value) return
 
   const text = newMessage.value.trim()
   if (text.length > 100) {
@@ -1337,8 +1338,8 @@ watch(showLangPopover, (val) => {
             class="msg-input"
             rows="1"
             maxlength="100"
-            :placeholder="isUploading ? 'Uploading...' : 'Type your message...'"
-            :disabled="isUploading"
+            :placeholder="isUploading ? 'Uploading...' : (isAiStreaming ? 'AI is responding...' : 'Type your message...')"
+            :disabled="isUploading || isAiStreaming"
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.enter.shift.exact="() => {}"
             @input="handleInput"
@@ -1348,10 +1349,10 @@ watch(showLangPopover, (val) => {
             type="button"
             class="send-msg-btn"
             :style="{ backgroundColor: currentBubbleColor, boxShadow: `0 4px 10px ${currentBubbleColor}40` }"
-            :disabled="(!newMessage.trim() && !isUploading)"
+            :disabled="(!newMessage.trim() && !isUploading) || isAiStreaming"
             @click="sendMessage"
           >
-            {{ isUploading ? '...' : 'Send' }}
+            {{ isUploading ? '...' : (isAiStreaming ? '...' : 'Send') }}
           </button>
           <button
             type="button"
