@@ -49,9 +49,10 @@ model Conversation {
   agent    AdminUser? @relation(fields: [agentId], references: [id])
   messages Message[]
 
-  @@index([status])
+  @@index([status, updatedAt])
   @@index([agentId])
   @@index([visitorId])
+  @@index([updatedAt])
 }
 
 model Message {
@@ -96,6 +97,9 @@ model AdminUser {
   conversations Conversation[]
   sessions      Session[]
   refreshTokens RefreshToken[]
+
+  @@index([isOnline, lastSeenAt])
+  @@index([isLocked, isOnline])
 }
 
 model Session {
@@ -145,6 +149,8 @@ model SiteConfig {
   showVisitorWidget Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 model QuickReply {
@@ -153,6 +159,8 @@ model QuickReply {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 model UploadToken {
@@ -182,6 +190,9 @@ model AiProvider {
   isActive       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 model AiAgentConfig {
@@ -220,6 +231,8 @@ model KnowledgeDocument {
   updatedAt       DateTime @updatedAt
 
   chunks DocumentChunk[]
+
+  @@index([createdAt])
 }
 
 model DocumentChunk {
@@ -264,6 +277,9 @@ model ToolRegistration {
   requiredPermission String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([isActive, handlerType])
 }
 
 model AiLog {
@@ -274,6 +290,10 @@ model AiLog {
   message         String?
   details         String?
   createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([conversationId])
 }
 
 model HttpLog {
