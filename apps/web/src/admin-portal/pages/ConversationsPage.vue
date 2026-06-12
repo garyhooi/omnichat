@@ -106,6 +106,7 @@ const draftAgentRemarks = ref('')
 
 const currentUserUsername = ref(authStore.user?.username || '')
 const currentUserDisplayName = ref(authStore.user?.displayName || '')
+const blacklistedConversations = ref<Set<string>>(new Set())
 
 // Quick Replies
 const quickReplies = ref<QuickReply[]>([])
@@ -326,10 +327,15 @@ function connect() {
         currentUserDisplayName.value = data.currentUser.displayName
       }
 
-      conversations.value = data.conversations.map((c) => ({
-        ...c,
-        unreadCount: c._count?.messages || 0,
-      }))
+      const blacklisted = new Set<string>()
+      conversations.value = data.conversations.map((c: any) => {
+        if (c.isIpBlacklisted) blacklisted.add(c.id)
+        return {
+          ...c,
+          unreadCount: c._count?.messages || 0,
+        }
+      })
+      blacklistedConversations.value = blacklisted
       if (activeConversationId.value) {
         const found = conversations.value.find((c) => c.id === activeConversationId.value)
         if (found) {
@@ -347,12 +353,16 @@ function connect() {
     capConversations()
   })
 
-  s.on('conversation_history', (data: { conversation: Conversation }) => {
+  s.on('conversation_history', (data: { conversation: Conversation; isIpBlacklisted?: boolean }) => {
     messages.value = data.conversation.messages || []
     activeConversationData.value = data.conversation
     const conv = conversations.value.find((c) => c.id === data.conversation.id)
     if (conv) {
       conv.status = data.conversation.status
+    }
+    if (data.isIpBlacklisted) {
+      blacklistedConversations.value.add(data.conversation.id)
+      blacklistedConversations.value = new Set(blacklistedConversations.value)
     }
     nextTick(() => {
       scrollToBottom()
@@ -452,6 +462,14 @@ function connect() {
     }
     if (activeConversationData.value?.id === data.conversationId) {
       activeConversationData.value.status = 'resolved'
+    }
+  })
+
+  s.on('ip_blacklisted', (data: { conversationId: string; reason: string }) => {
+    blacklistedConversations.value.add(data.conversationId)
+    blacklistedConversations.value = new Set(blacklistedConversations.value)
+    if (data.conversationId === activeConversationId.value) {
+      playSound()
     }
   })
 
@@ -1186,6 +1204,11 @@ watch(showLangPopover, (val) => {
               >
                 {{ conv.unreadCount }}
               </span>
+              <span
+                v-if="blacklistedConversations.has(conv.id)"
+                style="font-size: 10px; color: #dc2626; font-weight: 700; margin-left: 4px;"
+                title="IP blacklisted for spam"
+              >&#9888;</span>
             </div>
             <span v-if="conv.agentRemarks" style="color: #f59e0b; font-size: 12px" title="Has remarks">📝</span>
           </div>
@@ -1612,6 +1635,16 @@ watch(showLangPopover, (val) => {
             </div>
           </div>
         </transition>
+
+        <div
+          v-if="activeConversationId && blacklistedConversations.has(activeConversationId)"
+          style="flex-shrink: 0; background: #fef2f2; border-bottom: 1px solid #fecaca; padding: 10px 14px; text-align: center;"
+        >
+          <p style="color: #b91c1c; font-weight: 700; margin: 0; font-size: 13px;">
+            &#9888; Visitor IP is blacklisted for spam
+          </p>
+          <p style="color: #991b1b; margin: 2px 0 0; font-size: 12px;">Messages from this visitor are being blocked by the spam protection system.</p>
+        </div>
 
         <div
           ref="messagesContainer"

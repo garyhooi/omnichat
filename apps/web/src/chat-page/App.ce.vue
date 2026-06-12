@@ -172,6 +172,8 @@ const selectedImage = ref<string | null>(null)
 
 const wordLimitError = ref('')
 
+const ipBlacklisted = ref<{ reason: string } | null>(null)
+
 async function connect() {
   const base = props.serverUrl.replace(/\/$/, '')
 
@@ -282,6 +284,12 @@ async function connect() {
     if (data.conversationId === conversationId.value) {
       isTyping.value = data.isTyping
       typingUser.value = data.user
+    }
+  })
+
+  s.on('ip_blacklisted', (data: { conversationId: string; reason: string }) => {
+    if (data.conversationId === conversationId.value) {
+      ipBlacklisted.value = { reason: data.reason }
     }
   })
 
@@ -660,6 +668,12 @@ function handleClose() {
 
     <!-- Chat area -->
     <template v-else>
+      <div v-if="ipBlacklisted" style="flex-shrink: 0; background: #fef2f2; border-bottom: 1px solid #fecaca; padding: 8px 12px; text-align: center;">
+        <p style="color: #b91c1c; font-weight: 600; margin: 0; font-size: 13px;">
+          &#9888; You have been flagged for spam activity
+        </p>
+        <p style="color: #991b1b; margin: 2px 0 0; font-size: 12px;">{{ ipBlacklisted.reason }}</p>
+      </div>
       <div ref="messagesArea" class="messages-area">
         <div v-for="msg in messages" :key="msg.id" :class="['msg-bubble', msg.senderType]" :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }">
           <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>

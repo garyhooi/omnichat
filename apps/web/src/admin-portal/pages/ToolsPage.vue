@@ -95,6 +95,12 @@ const builtinTools = [
     active: true,
   },
   {
+    name: 'check_human_availability',
+    description: 'Checks if human agents are currently online and available to handle conversations before attempting a transfer.',
+    type: 'builtin',
+    active: true,
+  },
+  {
     name: 'ip_spam_blacklist',
     description: 'Built-in backend protection that temporarily blacklists IPs when the same IP repeatedly spams the AI across conversations.',
     type: 'builtin',

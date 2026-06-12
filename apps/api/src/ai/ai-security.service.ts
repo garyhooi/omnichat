@@ -129,6 +129,13 @@ export class AiSecurityService {
     return `ai_ip_blacklist:${visitorIp}`;
   }
 
+  async isIpBlacklisted(visitorIp: string): Promise<boolean> {
+    if (!visitorIp || visitorIp === 'unknown') return false;
+    const blacklistKey = this.getIpBlacklistKey(visitorIp);
+    const state = await this.stateStore.get(blacklistKey);
+    return state > 0;
+  }
+
   private async blacklistIp(visitorIp: string, blacklistMinutes: number, reason: string): Promise<void> {
     if (!visitorIp || visitorIp === 'unknown') return;
 

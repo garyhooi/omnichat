@@ -132,6 +132,7 @@ export class AiChatController {
       const tools = await this.toolRegistry.getTools({
         conversationId,
         visitorId,
+        visitorIp,
         metadata: parsedMetadata,
         services: {
           prisma: this.prisma,
