@@ -16,8 +16,13 @@ export class MemoryStateStore implements SessionStateStore, OnModuleDestroy {
   private readonly store = new Map<string, MemoryEntry>();
   private cleanupInterval: NodeJS.Timeout;
 
+  private static readonly KEY_PREFIX = 'omnichat:';
   private static readonly MAX_ENTRIES = 10_000;
   private static readonly CLEANUP_INTERVAL_MS = 30_000;
+
+  private prefixKey(key: string): string {
+    return `${MemoryStateStore.KEY_PREFIX}${key}`;
+  }
 
   constructor() {
     // Clean expired entries every 30 seconds
@@ -63,15 +68,16 @@ export class MemoryStateStore implements SessionStateStore, OnModuleDestroy {
   }
 
   async get(key: string): Promise<number> {
-    return this.getEntry(key)?.value ?? 0;
+    return this.getEntry(this.prefixKey(key))?.value ?? 0;
   }
 
   async set(key: string, value: number, ttlSeconds?: number): Promise<void> {
+    const prefixedKey = this.prefixKey(key);
     if (!ttlSeconds) {
-      this.logger.warn(`Entry "${key}" set without TTL — will persist until eviction`);
+      this.logger.warn(`Entry "${prefixedKey}" set without TTL — will persist until eviction`);
     }
     this.evictIfNeeded();
-    this.store.set(key, {
+    this.store.set(prefixedKey, {
       value,
       expiresAt: ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined,
     });
@@ -79,20 +85,21 @@ export class MemoryStateStore implements SessionStateStore, OnModuleDestroy {
 
   async increment(key: string, ttlSeconds?: number): Promise<number> {
     this.evictIfNeeded();
-    const existing = this.getEntry(key);
+    const prefixedKey = this.prefixKey(key);
+    const existing = this.getEntry(prefixedKey);
     const newVal = (existing?.value ?? 0) + 1;
-    this.store.set(key, {
+    this.store.set(prefixedKey, {
       value: newVal,
       expiresAt: existing?.expiresAt ?? (ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined),
     });
     if (existing?.expiresAt === undefined && ttlSeconds === undefined) {
-      this.logger.warn(`Entry "${key}" incremented without TTL — will persist until eviction`);
+      this.logger.warn(`Entry "${prefixedKey}" incremented without TTL — will persist until eviction`);
     }
     return newVal;
   }
 
   async reset(key: string): Promise<void> {
-    this.store.delete(key);
+    this.store.delete(this.prefixKey(key));
   }
 
   onModuleDestroy() {
