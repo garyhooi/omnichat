@@ -33,8 +33,10 @@ export class AuthController {
     @Body() dto: RegisterDto, @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
     @Headers('origin') origin: string,
+    @Headers('x-forwarded-client-ip') forwardedClientIp: string,
   ) {
-    return this.authService.register(dto.username, dto.password, dto.displayName, ip, userAgent, origin);
+    const effectiveIp = forwardedClientIp || ip;
+    return this.authService.register(dto.username, dto.password, dto.displayName, effectiveIp, userAgent, origin);
   }
 
   @Post('login')
@@ -43,8 +45,10 @@ export class AuthController {
     @Body() dto: LoginDto, @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
     @Headers('origin') origin: string,
+    @Headers('x-forwarded-client-ip') forwardedClientIp: string,
   ) {
-    return this.authService.login(dto.username, dto.password, ip, userAgent, origin);
+    const effectiveIp = forwardedClientIp || ip;
+    return this.authService.login(dto.username, dto.password, effectiveIp, userAgent, origin);
   }
 
   @Post('refresh')
