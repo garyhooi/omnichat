@@ -112,6 +112,12 @@ const builtinTools = [
     type: 'builtin',
     active: true,
   },
+  {
+    name: 'get_visitor_info',
+    description: 'Retrieves the visitor\'s name, email, browser, OS, device, screen resolution, current page URL, referrer, timezone, and language for personalized greetings and debugging.',
+    type: 'builtin',
+    active: true,
+  },
 ]
 
 onMounted(() => {
