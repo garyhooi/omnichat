@@ -25,6 +25,7 @@ import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-ba
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { IpSpamBlacklistTool } from '../ai/tools/builtin/ip-spam-blacklist.tool';
+import { GetCurrentTimeTool } from '../ai/tools/builtin/get-current-time.tool';
 import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
 import { join, extname } from 'path';
@@ -185,6 +186,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
     this.toolRegistry.registerBuiltin(new IpSpamBlacklistTool(this.securityService));
+    this.toolRegistry.registerBuiltin(new GetCurrentTimeTool());
   }
 
   /** On server boot, reset all users to offline. */

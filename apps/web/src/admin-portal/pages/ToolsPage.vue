@@ -106,6 +106,12 @@ const builtinTools = [
     type: 'builtin',
     active: true,
   },
+  {
+    name: 'get_current_time',
+    description: 'Returns the current server time (UTC) and the visitor\'s browser timezone',
+    type: 'builtin',
+    active: true,
+  },
 ]
 
 onMounted(() => {
