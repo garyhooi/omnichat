@@ -25,6 +25,8 @@ import { SearchKnowledgeBaseTool } from '../ai/tools/builtin/search-knowledge-ba
 import { TransferToHumanTool } from '../ai/tools/builtin/transfer-to-human.tool';
 import { CheckHumanAvailabilityTool } from '../ai/tools/builtin/check-human-availability.tool';
 import { IpSpamBlacklistTool } from '../ai/tools/builtin/ip-spam-blacklist.tool';
+import { GetCurrentTimeTool } from '../ai/tools/builtin/get-current-time.tool';
+import { GetVisitorInfoTool } from '../ai/tools/builtin/get-visitor-info.tool';
 import { CoreMessage } from 'ai';
 import * as fs from 'fs/promises';
 import { join, extname } from 'path';
@@ -185,6 +187,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.toolRegistry.registerBuiltin(new TransferToHumanTool());
     this.toolRegistry.registerBuiltin(new CheckHumanAvailabilityTool());
     this.toolRegistry.registerBuiltin(new IpSpamBlacklistTool(this.securityService));
+    this.toolRegistry.registerBuiltin(new GetCurrentTimeTool());
+    this.toolRegistry.registerBuiltin(new GetVisitorInfoTool());
   }
 
   /** On server boot, reset all users to offline. */
@@ -1383,7 +1387,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             return `- ${name}${desc}`;
           })
           .join('\n');
-        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.`;
+        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.\n\nCRITICAL: Always call get_visitor_info before your first response in a conversation to learn the visitor's name and environment. Use the visitor's name to greet them personally. The visitor's browser, OS, device, and current page URL are essential for debugging technical issues.`;
       }
 
       // Auto-inject knowledge base context — the AI sees it even if it doesn't call the tool

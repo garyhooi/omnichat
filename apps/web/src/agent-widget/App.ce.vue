@@ -381,35 +381,40 @@ function toggleMute() {
   localStorage.setItem('omnichat_admin_widget_muted', isMuted.value ? 'true' : 'false')
 }
 
+function playFallbackSound() {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioCtx.createOscillator()
+    const gainNode = audioCtx.createGain()
+    oscillator.connect(gainNode)
+    gainNode.connect(audioCtx.destination)
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(600, audioCtx.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1)
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1)
+    oscillator.start(audioCtx.currentTime)
+    oscillator.stop(audioCtx.currentTime + 0.1)
+  } catch (e) {
+    console.warn('Synthesized audio failed:', e)
+  }
+}
+
 function playSound() {
   if (isMuted.value) return
 
   if (notificationSoundUrl.value) {
+    const base = props.serverUrl.replace(/\/$/, '')
     const src = notificationSoundUrl.value.startsWith('http')
       ? notificationSoundUrl.value
-      : props.serverUrl + notificationSoundUrl.value
+      : base + notificationSoundUrl.value
     if (audioPlayer.src !== src) {
       audioPlayer.src = src
     }
     audioPlayer.currentTime = 0
-    audioPlayer.play().catch((e) => console.warn('Audio autoplay blocked or failed:', e))
+    audioPlayer.play().catch(() => playFallbackSound())
   } else {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = audioCtx.createOscillator()
-      const gainNode = audioCtx.createGain()
-      oscillator.connect(gainNode)
-      gainNode.connect(audioCtx.destination)
-      oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(600, audioCtx.currentTime)
-      oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1)
-      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1)
-      oscillator.start(audioCtx.currentTime)
-      oscillator.stop(audioCtx.currentTime + 0.1)
-    } catch (e) {
-      console.warn('Synthesized audio failed:', e)
-    }
+    playFallbackSound()
   }
 }
 

@@ -151,7 +151,7 @@ export class AiChatController {
             return `- ${name}${desc}`;
           })
           .join('\n');
-        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.`;
+        systemPrompt += `\n\nYou have access to the following tools:\n${toolList}\n\nIMPORTANT: You MUST use the tools above to answer user queries when relevant. Never pretend to call a tool or make up information. If a tool exists for what the user asks, call it using the exact tool name and provide the required parameters. If you call a tool, wait for the result and use it in your response. Never simulate tool execution or generate fictional data.\n\nCRITICAL: Always call get_visitor_info before your first response in a conversation to learn the visitor's name and environment. Use the visitor's name to greet them personally. The visitor's browser, OS, device, and current page URL are essential for debugging technical issues.`;
       }
 
       // Create abort controller for client disconnect
