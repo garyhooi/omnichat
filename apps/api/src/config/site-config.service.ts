@@ -30,6 +30,9 @@ export class SiteConfigService {
     bubblePattern?: string;
     websitePosition?: string;
     bubbleIcon?: string;
+    aiAvatar?: string;
+    agentAvatar?: string;
+    visitorAvatar?: string;
     notificationSoundUrl?: string;
     allowedOrigins: string;
     adminAllowedIps?: string;
@@ -52,6 +55,9 @@ export class SiteConfigService {
       bubblePattern?: string;
       websitePosition?: string;
       bubbleIcon?: string;
+      aiAvatar?: string;
+      agentAvatar?: string;
+      visitorAvatar?: string;
       notificationSoundUrl?: string;
       allowedOrigins?: string;
       adminAllowedIps?: string;

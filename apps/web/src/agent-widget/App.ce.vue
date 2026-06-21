@@ -103,6 +103,28 @@ const notificationSoundUrl = ref('')
 const isMuted = ref(localStorage.getItem('omnichat_admin_widget_muted') === 'true')
 const isVisible = ref(true)
 
+// Message avatars (loaded from site config)
+const aiAvatar = ref('🤖')
+const agentAvatar = ref('👨🏻‍💻')
+const visitorAvatar = ref('👤')
+
+function resolveAvatar(senderType: string): { isImage: boolean; value: string } {
+  let raw = ''
+  if (senderType === 'ai') raw = aiAvatar.value
+  else if (senderType === 'agent') raw = agentAvatar.value
+  else if (senderType === 'visitor') raw = visitorAvatar.value
+  else return { isImage: false, value: '' }
+
+  if (raw.startsWith('custom:')) {
+    const url = raw.slice(7)
+    return { isImage: true, value: url.startsWith('http') ? url : props.serverUrl + url }
+  }
+  if (raw.startsWith('/') || raw.startsWith('http')) {
+    return { isImage: true, value: raw.startsWith('http') ? raw : props.serverUrl + raw }
+  }
+  return { isImage: false, value: raw }
+}
+
 
 // Socket & data state
 
@@ -1137,6 +1159,9 @@ onMounted(() => {
       if (config.bubblePattern) siteBubblePattern.value = config.bubblePattern
       if (config.bubbleIcon) siteBubbleIcon.value = config.bubbleIcon
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
+      if (config.aiAvatar) aiAvatar.value = config.aiAvatar
+      if (config.agentAvatar) agentAvatar.value = config.agentAvatar
+      if (config.visitorAvatar) visitorAvatar.value = config.visitorAvatar
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
       if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
       if (config.showAdminWidget !== undefined) isVisible.value = config.showAdminWidget
@@ -1430,33 +1455,44 @@ watch(showLangPopover, (val) => {
           <div
             v-for="msg in messages"
             :key="msg.id"
-            :class="['aw-msg', msg.senderType]"
           >
-            <template v-if="msg.messageType === 'image'">
-              <img
-                :src="msg.attachmentThumbnailUrl || msg.attachmentUrl"
-                alt="Attachment"
-                style="max-width: 100%; max-height: 120px; border-radius: 6px; display: block; cursor: pointer; object-fit: cover;"
-                @click="openImage(msg.attachmentUrl || '')"
-              />
-              <div v-if="msg.content" class="aw-msg-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
-            </template>
-            <template v-else>
+            <div v-if="msg.senderType === 'system'" class="aw-msg system">
               <div class="aw-msg-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
-            </template>
-            <div class="aw-msg-meta">
-              <span class="aw-msg-time">{{ formatTime(msg.createdAt) }}</span>
-              <button
-                v-if="msg.content && msg.messageType !== 'image' && isTranslationEnabled"
-                type="button"
-                class="aw-translate-btn"
-                :disabled="translatingMessageIds.has(msg.id)"
-                :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
-                @click="toggleTranslation(msg)"
-              >
-                {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Orig' : 'A') }}
-              </button>
-              <span v-if="msg.senderType === 'visitor' && msg.readAt" class="aw-msg-read">&#10003;&#10003;</span>
+              <div class="aw-msg-meta"><span class="aw-msg-time">{{ formatTime(msg.createdAt) }}</span></div>
+            </div>
+            <div v-else :class="['aw-msg-row', msg.senderType]">
+              <div class="aw-msg-avatar">
+                <img v-if="resolveAvatar(msg.senderType).isImage" :src="resolveAvatar(msg.senderType).value" alt="" />
+                <span v-else>{{ resolveAvatar(msg.senderType).value }}</span>
+              </div>
+              <div :class="['aw-msg', msg.senderType]">
+                <template v-if="msg.messageType === 'image'">
+                  <img
+                    :src="msg.attachmentThumbnailUrl || msg.attachmentUrl"
+                    alt="Attachment"
+                    style="max-width: 100%; max-height: 120px; border-radius: 6px; display: block; cursor: pointer; object-fit: cover;"
+                    @click="openImage(msg.attachmentUrl || '')"
+                  />
+                  <div v-if="msg.content" class="aw-msg-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
+                </template>
+                <template v-else>
+                  <div class="aw-msg-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
+                </template>
+                <div class="aw-msg-meta">
+                  <span class="aw-msg-time">{{ formatTime(msg.createdAt) }}</span>
+                  <button
+                    v-if="msg.content && msg.messageType !== 'image' && isTranslationEnabled"
+                    type="button"
+                    class="aw-translate-btn"
+                    :disabled="translatingMessageIds.has(msg.id)"
+                    :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
+                    @click="toggleTranslation(msg)"
+                  >
+                    {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Orig' : 'A') }}
+                  </button>
+                  <span v-if="msg.senderType === 'visitor' && msg.readAt" class="aw-msg-read">&#10003;&#10003;</span>
+                </div>
+              </div>
             </div>
           </div>
           <div v-if="isTyping" class="aw-typing-hint">

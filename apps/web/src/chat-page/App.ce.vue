@@ -77,6 +77,28 @@ const isMuted = ref(localStorage.getItem('omnichat_visitor_muted') === 'true')
 const notificationSoundUrl = ref('')
 const isVisible = ref(true)
 
+// Message avatars (loaded from site config)
+const aiAvatar = ref('🤖')
+const agentAvatar = ref('👨🏻‍💻')
+const visitorAvatar = ref('👤')
+
+function resolveAvatar(senderType: string): { isImage: boolean; value: string } {
+  let raw = ''
+  if (senderType === 'ai') raw = aiAvatar.value
+  else if (senderType === 'agent') raw = agentAvatar.value
+  else if (senderType === 'visitor') raw = visitorAvatar.value
+  else return { isImage: false, value: '' }
+
+  if (raw.startsWith('custom:')) {
+    const url = raw.slice(7)
+    return { isImage: true, value: url.startsWith('http') ? url : props.serverUrl + url }
+  }
+  if (raw.startsWith('/') || raw.startsWith('http')) {
+    return { isImage: true, value: raw.startsWith('http') ? raw : props.serverUrl + raw }
+  }
+  return { isImage: false, value: raw }
+}
+
 const translateLang = ref(getDefaultLang('omnichat_visitor_translate_lang'))
 const showLangPopover = ref(false)
 const translatingMessageIds = ref<Set<string>>(new Set())
@@ -570,6 +592,9 @@ onMounted(() => {
       if (config.offlineMessage) siteOfflineMessage.value = config.offlineMessage
       if (config.isOfflineMode !== undefined) siteOfflineMode.value = config.isOfflineMode
       if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
+      if (config.aiAvatar) aiAvatar.value = config.aiAvatar
+      if (config.agentAvatar) agentAvatar.value = config.agentAvatar
+      if (config.visitorAvatar) visitorAvatar.value = config.visitorAvatar
       if (config.aiEnabled !== undefined) isAiEnabled.value = config.aiEnabled
       if (config.translationEnabled !== undefined) isTranslationEnabled.value = config.translationEnabled
       if (config.autoTranslationEnabled !== undefined) autoTranslationEnabled.value = config.autoTranslationEnabled
@@ -680,27 +705,45 @@ function handleClose() {
         <p style="color: #991b1b; margin: 2px 0 0; font-size: 12px;">{{ ipBlacklisted.reason }}</p>
       </div>
       <div ref="messagesArea" class="messages-area">
-        <div v-for="msg in messages" :key="msg.id" :class="['msg-bubble', msg.senderType]" :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }">
-          <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>
-          <template v-if="msg.messageType === 'image'">
-            <img :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" alt="Attachment" style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" @click="openImage(msg.attachmentUrl || '')" />
-            <div v-if="msg.content" class="md-content" style="padding: 8px;" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
-          </template>
-          <template v-else>
+        <div v-for="msg in messages" :key="msg.id">
+          <div v-if="msg.senderType === 'system'" :class="['msg-bubble', msg.senderType]">
             <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
-          </template>
-          <div class="msg-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
-            <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
-            <button v-if="msg.content && msg.messageType !== 'image' && isTranslationEnabled" @click="toggleTranslation(msg)" :disabled="translatingMessageIds.has(msg.id)" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: inherit; padding: 1px 6px; border-radius: 4px; font-size: 10px; cursor: pointer; opacity: 0.7;" :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'">
-              {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
-            </button>
+            <div class="msg-meta"><span class="msg-time">{{ formatTime(msg.createdAt) }}</span></div>
+          </div>
+          <div v-else :class="['msg-row', msg.senderType]">
+            <div class="msg-avatar">
+              <img v-if="resolveAvatar(msg.senderType).isImage" :src="resolveAvatar(msg.senderType).value" alt="" />
+              <span v-else>{{ resolveAvatar(msg.senderType).value }}</span>
+            </div>
+            <div :class="['msg-bubble', msg.senderType]" :style="msg.senderType === 'visitor' ? { backgroundColor: currentBubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }">
+              <div v-if="msg.senderType === 'ai'" class="ai-label">AI Agent</div>
+              <template v-if="msg.messageType === 'image'">
+                <img :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" alt="Attachment" style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" @click="openImage(msg.attachmentUrl || '')" />
+                <div v-if="msg.content" class="md-content" style="padding: 8px;" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
+              </template>
+              <template v-else>
+                <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
+              </template>
+              <div class="msg-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
+                <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+                <button v-if="msg.content && msg.messageType !== 'image' && isTranslationEnabled" @click="toggleTranslation(msg)" :disabled="translatingMessageIds.has(msg.id)" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: inherit; padding: 1px 6px; border-radius: 4px; font-size: 10px; cursor: pointer; opacity: 0.7;" :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'">
+                  {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div v-if="isAiStreaming && aiStreamingText" class="msg-bubble ai ai-streaming" style="align-self: flex-start;">
-        <div class="ai-label">AI Agent</div>
-        <div class="md-content" v-html="renderMarkdown(aiStreamingText)"></div><span class="ai-cursor">|</span>
+      <div v-if="isAiStreaming && aiStreamingText" class="msg-row ai" style="align-self: flex-start;">
+        <div class="msg-avatar">
+          <img v-if="resolveAvatar('ai').isImage" :src="resolveAvatar('ai').value" alt="" />
+          <span v-else>{{ resolveAvatar('ai').value }}</span>
+        </div>
+        <div class="msg-bubble ai ai-streaming">
+          <div class="ai-label">AI Agent</div>
+          <div class="md-content" v-html="renderMarkdown(aiStreamingText)"></div><span class="ai-cursor">|</span>
+        </div>
       </div>
 
       <div v-if="isTyping" class="typing-hint">

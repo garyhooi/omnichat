@@ -57,7 +57,19 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
-  bubbleIcon?: string;
+  bubbleIcon?: string
+
+  @IsString()
+  @IsOptional()
+  aiAvatar?: string;
+
+  @IsString()
+  @IsOptional()
+  agentAvatar?: string;
+
+  @IsString()
+  @IsOptional()
+  visitorAvatar?: string;
 
   @IsString()
   @IsOptional()
@@ -124,6 +136,18 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   bubbleIcon?: string;
+
+  @IsString()
+  @IsOptional()
+  aiAvatar?: string;
+
+  @IsString()
+  @IsOptional()
+  agentAvatar?: string;
+
+  @IsString()
+  @IsOptional()
+  visitorAvatar?: string;
 
   @IsBoolean()
   @IsOptional()
