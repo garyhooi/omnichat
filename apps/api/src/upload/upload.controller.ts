@@ -5,7 +5,7 @@ import { memoryStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { Request } from 'express';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import * as fs from 'fs/promises';
 import { UploadTokenService } from './upload-token.service';
 import { exec } from 'child_process';
