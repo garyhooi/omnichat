@@ -36,6 +36,7 @@ const typingUser = ref('')
 const isResolved = ref(false)
 const visitorId = ref('')
 const messagesArea = ref<HTMLElement | null>(null)
+const panelWrapper = ref<HTMLElement | null>(null)
 
 // AI streaming state
 const aiStreamingText = ref('')
@@ -583,6 +584,34 @@ function langItemStyle(lang: string) {
     : {}
 }
 
+// Mobile keyboard / visual viewport handling
+function syncPanelToVisualViewport() {
+  const el = panelWrapper.value
+  if (!el) return
+  const vv = window.visualViewport
+  if (!vv) return
+
+  // Keyboard open: visual viewport is shorter than the layout viewport
+  if (vv.height < document.documentElement.clientHeight) {
+    el.style.height = `${vv.height}px`
+  } else {
+    el.style.height = ''
+  }
+}
+
+// env(safe-area-inset-*) is 0 unless the host page declares viewport-fit=cover.
+// Inject it at runtime so notched devices get correct insets regardless of host.
+function ensureViewportFitCover() {
+  try {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')
+    if (meta && !meta.content.includes('viewport-fit=cover')) {
+      meta.content = `${meta.content}, viewport-fit=cover`
+    }
+  } catch (e) {
+    // noop — safe-area insets simply resolve to 0
+  }
+}
+
 onMounted(() => {
   fetch(`${props.serverUrl}/config/active`)
     .then((res) => res.json())
@@ -603,9 +632,17 @@ onMounted(() => {
     .catch(() => {})
 
   connect()
+
+  // Mobile keyboard handling
+  ensureViewportFitCover()
+  syncPanelToVisualViewport()
+  window.visualViewport?.addEventListener('resize', syncPanelToVisualViewport)
+  window.visualViewport?.addEventListener('scroll', syncPanelToVisualViewport)
 })
 
 onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', syncPanelToVisualViewport)
+  window.visualViewport?.removeEventListener('scroll', syncPanelToVisualViewport)
   socket.value?.disconnect()
 })
 
@@ -629,8 +666,8 @@ function handleClose() {
 </script>
 
 <template>
-  <div v-if="isVisible" class="panel-wrapper" :style="{
-    left: '0px', top: '0px', width: '100vw', height: '100dvh',
+  <div v-if="isVisible" ref="panelWrapper" class="panel-wrapper" :style="{
+    left: '0px', top: '0px', width: '100%', height: '100dvh',
     borderRadius: '0px', border: 'none',
   }" @dragenter="onPanelDragEnter" @dragover="onPanelDragOver" @dragleave="onPanelDragLeave" @drop="onPanelDrop">
     <!-- Header -->
