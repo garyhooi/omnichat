@@ -5,7 +5,7 @@ import { memoryStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { Request } from 'express';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 import * as fs from 'fs/promises';
 import { UploadTokenService } from './upload-token.service';
 import { exec } from 'child_process';
@@ -30,8 +30,8 @@ export class UploadController {
         fileSize: 5 * 1024 * 1024,
       },
       fileFilter: (req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
-        if (!file.mimetype.match(/\/(webp|heic|heif)$/) && !file.mimetype.startsWith('audio/')) {
-          return callback(new BadRequestException('Only WebP, HEIC, HEIF images and audio files are allowed!'), false);
+        if (!file.mimetype.match(/\/(webp|jpeg|jpg|png|heic|heif)$/) && !file.mimetype.startsWith('audio/')) {
+          return callback(new BadRequestException('Only WebP, JPG, PNG, HEIC, HEIF images and audio files are allowed!'), false);
         }
         callback(null, true);
       },

@@ -109,7 +109,7 @@ export class AuthService {
       boundOrigin: origin || null,
     };
 
-    const accessToken = this.jwtService.sign(accessPayload, { expiresIn: accessTokenExpiry });
+    const accessToken = this.jwtService.sign(accessPayload, { expiresIn: parseDuration(accessTokenExpiry) });
 
     const accessExpiresMs = parseDuration(accessTokenExpiry);
     const expiresAt = new Date(Date.now() + accessExpiresMs);
@@ -136,7 +136,7 @@ export class AuthService {
 
     const siteToken = this.jwtService.sign(
       { sub: user.id, origin: origin || null, type: 'site-token' },
-      { expiresIn: accessTokenExpiry },
+      { expiresIn: parseDuration(accessTokenExpiry) },
     );
 
     return {

@@ -45,6 +45,42 @@ const siteConfigId = ref<string | null>(null)
 const showAdminWidget = ref(true)
 const showVisitorWidget = ref(true)
 
+// Message avatars — each stored as either an emoji char or "custom:url"
+type AvatarField = 'ai' | 'agent' | 'visitor'
+const avatarDefaults: Record<AvatarField, string> = { ai: '🤖', agent: '👨🏻‍💻', visitor: '👤' }
+const avatarType = ref<Record<AvatarField, 'emoji' | 'custom'>>({ ai: 'emoji', agent: 'emoji', visitor: 'emoji' })
+const avatarEmoji = ref<Record<AvatarField, string>>({ ai: '🤖', agent: '👨🏻‍💻', visitor: '👤' })
+const avatarUrl = ref<Record<AvatarField, string>>({ ai: '', agent: '', visitor: '' })
+const isUploadingAvatar = ref<Record<AvatarField, boolean>>({ ai: false, agent: false, visitor: false })
+const avatarFileInputs = ref<Record<AvatarField, HTMLInputElement | null>>({ ai: null, agent: null, visitor: null })
+
+const avatarMeta: Record<AvatarField, { label: string; description: string }> = {
+  ai: { label: 'AI Agent', description: 'Shown next to AI-generated replies' },
+  agent: { label: 'Human Agent', description: 'Shown next to messages from human agents' },
+  visitor: { label: 'Visitor', description: 'Shown next to messages from the visitor' },
+}
+
+function parseAvatar(value: string | undefined | null, field: AvatarField) {
+  const fallback = avatarDefaults[field]
+  const raw = value ?? fallback
+  if (raw.startsWith('custom:')) {
+    avatarType.value[field] = 'custom'
+    avatarUrl.value[field] = raw.slice(7)
+    avatarEmoji.value[field] = fallback
+  } else {
+    avatarType.value[field] = 'emoji'
+    avatarEmoji.value[field] = raw || fallback
+    avatarUrl.value[field] = ''
+  }
+}
+
+function serializeAvatar(field: AvatarField): string {
+  if (avatarType.value[field] === 'custom' && avatarUrl.value[field]) {
+    return `custom:${avatarUrl.value[field]}`
+  }
+  return avatarEmoji.value[field] || avatarDefaults[field]
+}
+
 // Quick replies
 const quickReplies = ref<{ id: string; title: string; content: string }[]>([])
 const editingQuickReplyId = ref<string | null>(null)
@@ -104,6 +140,9 @@ async function loadConfig() {
     notificationSoundUrl.value = data.notificationSoundUrl ?? ''
     showAdminWidget.value = data.showAdminWidget ?? true
     showVisitorWidget.value = data.showVisitorWidget ?? true
+    parseAvatar(data.aiAvatar, 'ai')
+    parseAvatar(data.agentAvatar, 'agent')
+    parseAvatar(data.visitorAvatar, 'visitor')
   } catch {
     // ignore
   }
@@ -144,6 +183,9 @@ async function saveSettings() {
     notificationSoundUrl: notificationSoundUrl.value,
     showAdminWidget: showAdminWidget.value,
     showVisitorWidget: showVisitorWidget.value,
+    aiAvatar: serializeAvatar('ai'),
+    agentAvatar: serializeAvatar('agent'),
+    visitorAvatar: serializeAvatar('visitor'),
   }
   try {
     let res: Response
@@ -236,6 +278,72 @@ async function uploadCustomSound(e: Event) {
     isUploadingSound.value = false
     if (soundFileInput.value) soundFileInput.value.value = ''
   }
+}
+
+// --- Message avatar upload ---
+// Constraints: webp/png/jpg, auto-compress to 80x80 webp before upload, max 500KB.
+async function uploadAvatar(e: Event, field: AvatarField) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const allowed = ['image/webp', 'image/png', 'image/jpeg', 'image/jpg']
+  if (!allowed.includes(file.type)) {
+    toast.error('Only WebP, PNG, or JPG images are allowed')
+    input.value = ''
+    return
+  }
+  if (file.size > 500 * 1024) {
+    toast.error('Image is too large (max 500KB)')
+    input.value = ''
+    return
+  }
+
+  isUploadingAvatar.value[field] = true
+  try {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('Invalid image'))
+      img.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = 80
+    canvas.height = 80
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, 80, 80)
+    ctx.drawImage(img, 0, 0, 80, 80)
+    URL.revokeObjectURL(url)
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/webp', 0.85)
+    )
+    if (!blob) throw new Error('Conversion failed')
+    if (blob.size > 500 * 1024) {
+      toast.error('Compressed image still exceeds 500KB — try a simpler image')
+      return
+    }
+    const fd = new FormData()
+    fd.append('file', blob, `avatar-${field}.webp`)
+    const res = await authFetch(`${base()}/upload`, {
+      method: 'POST',
+      body: fd,
+    })
+    if (!res.ok) throw new Error('Upload failed')
+    const data = await res.json()
+    avatarUrl.value[field] = data.url
+    avatarType.value[field] = 'custom'
+  } catch {
+    toast.error('Avatar upload failed')
+  } finally {
+    isUploadingAvatar.value[field] = false
+    if (avatarFileInputs.value[field]) avatarFileInputs.value[field]!.value = ''
+  }
+}
+
+function resetAvatarToEmoji(field: AvatarField) {
+  avatarType.value[field] = 'emoji'
+  avatarUrl.value[field] = ''
 }
 
 function removeSound() {
@@ -432,6 +540,44 @@ async function deleteQuickReply(id: string) {
               {{ isUploadingIcon ? 'Uploading...' : 'Upload Image' }}
             </button>
             <input ref="iconFileInput" type="file" accept="image/*" class="hidden" @change="uploadCustomIcon" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Message Avatars</label>
+          <p class="text-xs text-gray-400 mb-3">Shown next to each message in all chat widgets. Use an emoji or upload a small 80&times;80 image (WebP, PNG, or JPG; max 500KB).</p>
+          <div class="space-y-4">
+            <div v-for="field in (['ai','agent','visitor'] as AvatarField[])" :key="field" class="border border-gray-200 rounded-md p-3">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <div class="text-sm font-medium text-gray-800">{{ avatarMeta[field].label }}</div>
+                  <div class="text-xs text-gray-400">{{ avatarMeta[field].description }}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="flex items-center gap-1 text-xs cursor-pointer">
+                    <input type="radio" :name="`avatar-${field}-type`" value="emoji" v-model="avatarType[field]" class="accent-indigo-600" />
+                    Emoji
+                  </label>
+                  <label class="flex items-center gap-1 text-xs cursor-pointer">
+                    <input type="radio" :name="`avatar-${field}-type`" value="custom" v-model="avatarType[field]" class="accent-indigo-600" />
+                    Custom Image
+                  </label>
+                </div>
+              </div>
+              <div v-if="avatarType[field] === 'emoji'" class="flex items-center gap-2">
+                <input v-model="avatarEmoji[field]" type="text" maxlength="8" class="w-16 border border-gray-300 rounded-md px-2 py-1.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" :placeholder="avatarDefaults[field]" />
+                <span class="text-xs text-gray-400">Type or paste any emoji.</span>
+              </div>
+              <div v-else class="flex items-center gap-3">
+                <img v-if="avatarUrl[field]" :src="avatarUrl[field].startsWith('http') ? avatarUrl[field] : base() + avatarUrl[field]" class="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                <button @click="avatarFileInputs[field]?.click()" :disabled="isUploadingAvatar[field]" class="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50">
+                  {{ isUploadingAvatar[field] ? 'Uploading...' : 'Upload Image' }}
+                </button>
+                <button v-if="avatarUrl[field]" @click="resetAvatarToEmoji(field)" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md">Remove</button>
+                <span v-else class="text-xs text-gray-400">No image uploaded</span>
+                <input :ref="el => (avatarFileInputs[field] = el as HTMLInputElement | null)" type="file" accept="image/webp,image/png,image/jpeg" class="hidden" @change="(e) => uploadAvatar(e, field)" />
+              </div>
+            </div>
           </div>
         </div>
 

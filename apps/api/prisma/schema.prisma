@@ -139,6 +139,9 @@ model SiteConfig {
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")
   bubbleIcon         String   @default("💬")
+  aiAvatar           String   @default("🤖")
+  agentAvatar        String   @default("👨🏻‍💻")
+  visitorAvatar      String   @default("👤")
   allowedOrigins     String
   adminAllowedIps    String?
   isActive           Boolean  @default(true)

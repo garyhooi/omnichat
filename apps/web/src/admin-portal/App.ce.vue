@@ -131,6 +131,28 @@ const isUploadingSound = ref(false)
 const soundFileInput = ref<HTMLInputElement | null>(null)
 const isMuted = ref(localStorage.getItem('omnichat_admin_muted') === 'true')
 
+// Message avatars (loaded from site config)
+const aiAvatar = ref('🤖')
+const agentAvatar = ref('👨🏻‍💻')
+const visitorAvatar = ref('👤')
+
+function resolveAvatar(senderType: string): { isImage: boolean; value: string } {
+  let raw = ''
+  if (senderType === 'ai') raw = aiAvatar.value
+  else if (senderType === 'agent') raw = agentAvatar.value
+  else if (senderType === 'visitor') raw = visitorAvatar.value
+  else return { isImage: false, value: '' }
+
+  if (raw.startsWith('custom:')) {
+    const url = raw.slice(7)
+    return { isImage: true, value: url.startsWith('http') ? url : props.serverUrl + url }
+  }
+  if (raw.startsWith('/') || raw.startsWith('http')) {
+    return { isImage: true, value: raw.startsWith('http') ? raw : props.serverUrl + raw }
+  }
+  return { isImage: false, value: raw }
+}
+
 function toggleMute() {
   isMuted.value = !isMuted.value
   localStorage.setItem('omnichat_admin_muted', isMuted.value ? 'true' : 'false')
@@ -896,6 +918,9 @@ async function loadSettings() {
           bubbleIconEmoji.value = config.bubbleIcon || '💬'
         }
         if (config.notificationSoundUrl) notificationSoundUrl.value = config.notificationSoundUrl
+        if (config.aiAvatar) aiAvatar.value = config.aiAvatar
+        if (config.agentAvatar) agentAvatar.value = config.agentAvatar
+        if (config.visitorAvatar) visitorAvatar.value = config.visitorAvatar
         if (config.enableReadReceipts !== undefined) {
           enableReadReceipts.value = config.enableReadReceipts
         }
@@ -1458,26 +1483,39 @@ onUnmounted(() => {
           <div
             v-for="msg in messages"
             :key="msg.id"
-            :class="['message-bubble', msg.senderType]"
-            :style="msg.senderType === 'agent' ? { backgroundColor: bubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
           >
-            <template v-if="msg.messageType === 'image'">
-              <img 
-                :src="msg.attachmentThumbnailUrl || msg.attachmentUrl" 
-                alt="Attachment" 
-                style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;" 
-                @click="openImage(msg.attachmentUrl || '')" 
-              />
-              <div v-if="msg.content" style="padding: 8px;">{{ msg.content }}</div>
-            </template>
-            <template v-else>
+            <div v-if="msg.senderType === 'system'" class="message-bubble system">
               <div>{{ msg.content }}</div>
-            </template>
-            <div class="message-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
-              <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
-              <span v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt" style="color: #10b981; font-weight: bold; margin-left: 4px;" title="Read">
-                &#10003;&#10003;
-              </span>
+              <div class="message-meta"><span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span></div>
+            </div>
+            <div v-else :class="['message-row', msg.senderType]">
+              <div class="message-avatar">
+                <img v-if="resolveAvatar(msg.senderType).isImage" :src="resolveAvatar(msg.senderType).value" alt="" />
+                <span v-else>{{ resolveAvatar(msg.senderType).value }}</span>
+              </div>
+              <div
+                :class="['message-bubble', msg.senderType]"
+                :style="msg.senderType === 'agent' ? { backgroundColor: bubbleColor, padding: msg.messageType === 'image' ? '4px' : '' } : { padding: msg.messageType === 'image' ? '4px' : '' }"
+              >
+                <template v-if="msg.messageType === 'image'">
+                  <img
+                    :src="msg.attachmentThumbnailUrl || msg.attachmentUrl"
+                    alt="Attachment"
+                    style="max-width: 100%; max-height: 150px; border-radius: 8px; display: block; cursor: pointer; object-fit: cover;"
+                    @click="openImage(msg.attachmentUrl || '')"
+                  />
+                  <div v-if="msg.content" style="padding: 8px;">{{ msg.content }}</div>
+                </template>
+                <template v-else>
+                  <div>{{ msg.content }}</div>
+                </template>
+                <div class="message-meta" :style="{ padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
+                  <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
+                  <span v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt" style="color: #10b981; font-weight: bold; margin-left: 4px;" title="Read">
+                    &#10003;&#10003;
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

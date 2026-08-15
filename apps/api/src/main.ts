@@ -60,7 +60,7 @@ async function bootstrap() {
   const prisma = app.get(PrismaService);
   
   app.enableCors({
-    origin: async (origin, callback) => {
+    origin: async (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
           if (!origin) {
         return callback(null, true);
       }
@@ -98,7 +98,7 @@ async function bootstrap() {
         });
 
         if (isAllowed) {
-          callback(null, origin);
+          callback(null, true);
         } else {
           callback(new Error('Not allowed by CORS'));
         }

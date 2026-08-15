@@ -95,6 +95,28 @@ const enableReadReceipts = ref(true)
 const isOfflineMode = ref(false)
 const notificationSoundUrl = ref('')
 
+// Message avatars (loaded from site config)
+const aiAvatar = ref('🤖')
+const agentAvatar = ref('👨🏻‍💻')
+const visitorAvatar = ref('👤')
+
+function resolveAvatar(senderType: string): { isImage: boolean; value: string } {
+  let raw = ''
+  if (senderType === 'ai') raw = aiAvatar.value
+  else if (senderType === 'agent') raw = agentAvatar.value
+  else if (senderType === 'visitor') raw = visitorAvatar.value
+  else return { isImage: false, value: '' }
+
+  if (raw.startsWith('custom:')) {
+    const url = raw.slice(7)
+    return { isImage: true, value: url.startsWith('http') ? url : authStore.serverUrl + url }
+  }
+  if (raw.startsWith('/') || raw.startsWith('http')) {
+    return { isImage: true, value: raw.startsWith('http') ? raw : authStore.serverUrl + raw }
+  }
+  return { isImage: false, value: raw }
+}
+
 const isMuted = ref(localStorage.getItem('omnichat_admin_muted') === 'true')
 
 const searchQuery = ref('')
@@ -917,6 +939,9 @@ async function loadSettings() {
       const config = await res.json()
       if (config) {
         bubbleColor.value = config.bubbleColor || '#4F46E5'
+        if (config.aiAvatar) aiAvatar.value = config.aiAvatar
+        if (config.agentAvatar) agentAvatar.value = config.agentAvatar
+        if (config.visitorAvatar) visitorAvatar.value = config.visitorAvatar
         if (config.enableReadReceipts !== undefined) {
           enableReadReceipts.value = config.enableReadReceipts
         }
@@ -1660,66 +1685,79 @@ watch(showLangPopover, (val) => {
           <div
             v-for="msg in messages"
             :key="msg.id"
-            :class="['message-bubble', msg.senderType]"
-            :style="
-              msg.senderType === 'agent'
-                ? { backgroundColor: bubbleColor, padding: msg.messageType === 'image' ? '4px' : '' }
-                : msg.senderType === 'ai'
-                  ? {
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: 'white',
-                      padding: msg.messageType === 'image' ? '4px' : '',
-                    }
-                  : { padding: msg.messageType === 'image' ? '4px' : '' }
-            "
           >
-            <template v-if="msg.messageType === 'image'">
-              <img
-                :src="msg.attachmentThumbnailUrl || msg.attachmentUrl"
-                alt="Attachment"
-                style="
-                  max-width: 100%;
-                  max-height: 150px;
-                  border-radius: 8px;
-                  display: block;
-                  cursor: pointer;
-                  object-fit: cover;
-                "
-                @click="openImage(msg.attachmentUrl || '')"
-              />
-              <div v-if="msg.content" class="md-content" style="padding: 8px" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
-            </template>
-            <template v-else>
+            <div v-if="msg.senderType === 'system'" class="message-bubble system">
               <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
-            </template>
-            <div class="message-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
-              <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <button
-                  v-if="msg.content && msg.messageType !== 'image' && aiStore.agentConfig?.translationEnabled !== false"
-                  @click="toggleTranslation(msg)"
-                  :disabled="translatingMessageIds.has(msg.id)"
-                  style="
-                    background: none;
-                    border: 1px solid rgba(255,255,255,0.3);
-                    color: inherit;
-                    padding: 1px 6px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    cursor: pointer;
-                    opacity: 0.7;
-                  "
-                  :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
-                >
-                  {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
-                </button>
-                <span
-                  v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt"
-                  style="color: #10b981; font-weight: bold;"
-                  title="Read"
-                >
-                  &#10003;&#10003;
-                </span>
+              <div class="message-meta"><span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span></div>
+            </div>
+            <div v-else :class="['message-row', msg.senderType]">
+              <div class="message-avatar">
+                <img v-if="resolveAvatar(msg.senderType).isImage" :src="resolveAvatar(msg.senderType).value" alt="" />
+                <span v-else>{{ resolveAvatar(msg.senderType).value }}</span>
+              </div>
+              <div
+                :class="['message-bubble', msg.senderType]"
+                :style="
+                  msg.senderType === 'agent'
+                    ? { backgroundColor: bubbleColor, padding: msg.messageType === 'image' ? '4px' : '' }
+                    : msg.senderType === 'ai'
+                      ? {
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: 'white',
+                          padding: msg.messageType === 'image' ? '4px' : '',
+                        }
+                      : { padding: msg.messageType === 'image' ? '4px' : '' }
+                "
+              >
+                <template v-if="msg.messageType === 'image'">
+                  <img
+                    :src="msg.attachmentThumbnailUrl || msg.attachmentUrl"
+                    alt="Attachment"
+                    style="
+                      max-width: 100%;
+                      max-height: 150px;
+                      border-radius: 8px;
+                      display: block;
+                      cursor: pointer;
+                      object-fit: cover;
+                    "
+                    @click="openImage(msg.attachmentUrl || '')"
+                  />
+                  <div v-if="msg.content" class="md-content" style="padding: 8px" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content)"></div>
+                </template>
+                <template v-else>
+                  <div class="md-content" v-html="renderMarkdown(translatedMessages[msg.id] || msg.content || '')"></div>
+                </template>
+                <div class="message-meta" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: msg.messageType === 'image' ? '0 8px 8px 8px' : '' }">
+                  <span>{{ msg.senderDisplayName || msg.senderType }} &middot; {{ formatTime(msg.createdAt) }}</span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button
+                      v-if="msg.content && msg.messageType !== 'image' && aiStore.agentConfig?.translationEnabled !== false"
+                      @click="toggleTranslation(msg)"
+                      :disabled="translatingMessageIds.has(msg.id)"
+                      style="
+                        background: none;
+                        border: 1px solid rgba(255,255,255,0.3);
+                        color: inherit;
+                        padding: 1px 6px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        cursor: pointer;
+                        opacity: 0.7;
+                      "
+                      :title="translatedMessages[msg.id] ? 'Show original' : 'Translate'"
+                    >
+                      {{ translatingMessageIds.has(msg.id) ? '...' : (translatedMessages[msg.id] ? 'Original' : 'Translate') }}
+                    </button>
+                    <span
+                      v-if="enableReadReceipts && msg.senderType === 'agent' && msg.readAt"
+                      style="color: #10b981; font-weight: bold;"
+                      title="Read"
+                    >
+                      &#10003;&#10003;
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
