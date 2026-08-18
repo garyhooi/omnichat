@@ -81,6 +81,22 @@ export class AiConfigService {
     return provider;
   }
 
+  /**
+   * Reject API keys that are the masked placeholder (the admin UI masks saved
+   * keys as "••••••••"). If such a value is stored, it decrypts back to the
+   * bullet character which undici rejects when building the provider's HTTP
+   * Authorization header ("Cannot convert argument to a ByteString ..."). Fail
+   * the save so a masked value can never become the active provider's key.
+   */
+  private validateApiKey(apiKey?: string): void {
+    if (!apiKey) return;
+    if (apiKey.includes('\u2022') || /^\u2022+$/.test(apiKey)) {
+      throw new Error(
+        'API key is masked/placeholder ("••••••••"). Enter the real provider API key.',
+      );
+    }
+  }
+
   async createProvider(data: {
     name: string;
     providerType: string;
@@ -88,7 +104,16 @@ export class AiConfigService {
     baseUrl?: string;
     chatModelId: string;
     embeddingModelId?: string;
+    inputPricePerM?: number;
+    outputPricePerM?: number;
+    maxTokensPerDay?: number | null;
+    maxTokensPerWeek?: number | null;
+    maxTokensPerMonth?: number | null;
+    maxTokensPerQuarter?: number | null;
+    maxTokensPerHalfYear?: number | null;
+    maxTokensPerYear?: number | null;
   }) {
+    this.validateApiKey(data.apiKey);
     const encrypted = data.apiKey ? this.encrypt(data.apiKey) : null;
     return this.prisma.aiProvider.create({
       data: {
@@ -98,6 +123,14 @@ export class AiConfigService {
         baseUrl: data.baseUrl || null,
         chatModelId: data.chatModelId,
         embeddingModelId: data.embeddingModelId || null,
+        inputPricePerM: data.inputPricePerM ?? 0,
+        outputPricePerM: data.outputPricePerM ?? 0,
+        maxTokensPerDay: data.maxTokensPerDay ?? null,
+        maxTokensPerWeek: data.maxTokensPerWeek ?? null,
+        maxTokensPerMonth: data.maxTokensPerMonth ?? null,
+        maxTokensPerQuarter: data.maxTokensPerQuarter ?? null,
+        maxTokensPerHalfYear: data.maxTokensPerHalfYear ?? null,
+        maxTokensPerYear: data.maxTokensPerYear ?? null,
         isActive: false,
       },
     });
@@ -111,10 +144,19 @@ export class AiConfigService {
     chatModelId?: string;
     embeddingModelId?: string;
     isActive?: boolean;
+    inputPricePerM?: number;
+    outputPricePerM?: number;
+    maxTokensPerDay?: number | null;
+    maxTokensPerWeek?: number | null;
+    maxTokensPerMonth?: number | null;
+    maxTokensPerQuarter?: number | null;
+    maxTokensPerHalfYear?: number | null;
+    maxTokensPerYear?: number | null;
   }) {
     const updateData: any = { ...data };
 
     if (data.apiKey) {
+      this.validateApiKey(data.apiKey);
       updateData.apiKey = this.encrypt(data.apiKey);
     }
 
@@ -168,6 +210,12 @@ export class AiConfigService {
     translateProviderId?: string | null;
     translationEnabled?: boolean;
     autoTranslationEnabled?: boolean;
+    maxTokensPerDay?: number | null;
+    maxTokensPerWeek?: number | null;
+    maxTokensPerMonth?: number | null;
+    maxTokensPerQuarter?: number | null;
+    maxTokensPerHalfYear?: number | null;
+    maxTokensPerYear?: number | null;
   }) {
     const existing = await this.prisma.aiAgentConfig.findFirst();
 
@@ -192,6 +240,12 @@ export class AiConfigService {
         humanRequestThreshold: data.humanRequestThreshold ?? 2,
         aiRateLimitPerMinute: data.aiRateLimitPerMinute ?? 10,
         spamIpBlacklistMinutes: data.spamIpBlacklistMinutes ?? 15,
+        maxTokensPerDay: data.maxTokensPerDay ?? null,
+        maxTokensPerWeek: data.maxTokensPerWeek ?? null,
+        maxTokensPerMonth: data.maxTokensPerMonth ?? null,
+        maxTokensPerQuarter: data.maxTokensPerQuarter ?? null,
+        maxTokensPerHalfYear: data.maxTokensPerHalfYear ?? null,
+        maxTokensPerYear: data.maxTokensPerYear ?? null,
       },
     });
   }

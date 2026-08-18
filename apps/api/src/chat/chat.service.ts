@@ -78,9 +78,32 @@ export class ChatService {
   }
 
   /** List conversations with optional status filter. */
-  async listConversations(status?: string) {
+  /** Parse a "YYYY-MM-DD" (local-time) string into a Date at that day's start. */
+  private parseDayStart(value: string): Date {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  }
+
+  /** Parse a "YYYY-MM-DD" (local-time) string into the last millisecond of that day. */
+  private parseDayEnd(value: string): Date {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1, 23, 59, 59, 999);
+  }
+
+  async listConversations(status?: string, dateRange?: { start?: string; end?: string }) {
+    const updatedAt: Record<string, Date> | undefined =
+      dateRange?.start || dateRange?.end
+        ? {
+            ...(dateRange.start ? { gte: this.parseDayStart(dateRange.start) } : {}),
+            ...(dateRange.end ? { lte: this.parseDayEnd(dateRange.end) } : {}),
+          }
+        : undefined;
+
     return this.prisma.conversation.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        ...(status ? { status } : {}),
+        ...(updatedAt ? { updatedAt } : {}),
+      },
       include: {
         messages: {
           orderBy: { createdAt: 'desc' },

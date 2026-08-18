@@ -5,7 +5,13 @@ import { memoryStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { Request } from 'express';
-import sharp from 'sharp';
+// esModuleInterop is off in this project, so a default import compiles to
+// `require('sharp').default` — which is undefined for sharp's CJS build and
+// produced "sharp_1.default is not a function" → 400 "Invalid or corrupt
+// image file" on every upload. The namespace import binds the module itself
+// (the callable sharp factory) on both Node and Bun.
+import * as sharpModule from 'sharp';
+const sharp = sharpModule as unknown as typeof import('sharp').default;
 import * as fs from 'fs/promises';
 import { UploadTokenService } from './upload-token.service';
 import { exec } from 'child_process';

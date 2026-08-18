@@ -12,7 +12,10 @@ export interface AiChatOptions {
   maxTokens?: number;
   temperature?: number;
   abortSignal?: AbortSignal;
-  onFinish?: (result: { text: string; usage: { totalTokens: number } }) => void;
+  onFinish?: (result: {
+    text: string;
+    usage: { promptTokens?: number; completionTokens?: number; totalTokens: number };
+  }) => void;
 }
 
 @Injectable()
@@ -63,12 +66,60 @@ export class AiService {
       onFinish: options.onFinish ? (event) => {
         options.onFinish!({
           text: event.text,
-          usage: { totalTokens: event.usage?.totalTokens ?? 0 },
+          usage: {
+            promptTokens: event.usage?.promptTokens,
+            completionTokens: event.usage?.completionTokens,
+            totalTokens: event.usage?.totalTokens ?? 0,
+          },
         });
       } : undefined,
     });
 
     return result;
+  }
+
+  /**
+   * Persist one AI call's token usage for the reports. Snapshots the active
+   * provider's pricing so historical reports stay accurate after price edits.
+   */
+  async recordUsage(
+    conversationId: string,
+    usage: { promptTokens?: number; completionTokens?: number; totalTokens: number },
+  ): Promise<void> {
+    try {
+      let promptTokens = usage.promptTokens ?? 0;
+      let completionTokens = usage.completionTokens ?? 0;
+      if (!usage.promptTokens && !usage.completionTokens) {
+        // Provider only reported a total — treat it as input-side usage
+        // (a conservative estimate until the provider reports a split).
+        promptTokens = usage.totalTokens;
+      }
+      const totalTokens = usage.totalTokens || promptTokens + completionTokens;
+
+      const provider = await this.providerFactory.getActiveProvider();
+      const inputPricePerM = provider?.inputPricePerM ?? 0;
+      const outputPricePerM = provider?.outputPricePerM ?? 0;
+      const cost =
+        (promptTokens / 1_000_000) * inputPricePerM +
+        (completionTokens / 1_000_000) * outputPricePerM;
+
+      await this.prisma.tokenUsage.create({
+        data: {
+          conversationId,
+          providerId: provider?.id ?? null,
+          providerName: provider?.name ?? null,
+          modelId: provider?.chatModelId ?? null,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          inputPricePerM,
+          outputPricePerM,
+          cost,
+        },
+      });
+    } catch (err: any) {
+      this.logger.warn(`Failed to record token usage for ${conversationId}: ${err.message}`);
+    }
   }
 
   /** Check if active provider supports image inputs. */

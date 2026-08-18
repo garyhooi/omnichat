@@ -170,6 +170,7 @@ vite.config.ts.timestamp-*
 [Oo]bj/
 
 !apps/web/dist/
+!apps/web-legacy/dist/
 
 # User Uploads
 uploads/

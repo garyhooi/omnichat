@@ -15,6 +15,8 @@ export interface AiProviderConfig {
   baseUrl: string | null;
   chatModelId: string;
   embeddingModelId: string | null;
+  inputPricePerM: number;
+  outputPricePerM: number;
 }
 
 // Provider metadata — source of truth for defaults
@@ -121,6 +123,30 @@ export class AiProviderFactory {
     return config.baseUrl || meta?.defaultBaseUrl || undefined;
   }
 
+  /**
+   * True when {config} carries a masked/placeholder API key rather than a real one.
+   * The admin UI masks keys as the bullet character "••••••••" (U+2022); if such a
+   * value ever reaches the provider SDK it is put into an HTTP Authorization header,
+   * and undici's ByteString validator throws "Cannot convert argument to a
+   * ByteString ... value of 8226" — failing every AI call. We must never hand a
+   * masked key to the SDK, so detect it here and fail fast with a clear error.
+   */
+  private assertUsableApiKey(config: AiProviderConfig): void {
+    if (config.providerType === 'ollama') return; // local — no key required
+    const key = config.apiKey;
+    if (!key) {
+      throw new Error(
+        `No API key configured for AI provider "${config.name}". Add it in AI Setup -> AI Providers.`,
+      );
+    }
+    // The mask is 8 bullets; also catch any value containing the bullet char.
+    if (key.includes('\u2022') || (/^\u2022+$/.test(key))) {
+      throw new Error(
+        `The API key for AI provider "${config.name}" is masked/placeholder (stored as "••••••••"). Re-enter the real key in AI Setup -> AI Providers.`,
+      );
+    }
+  }
+
   /** Fetch the active AI provider configuration from the database. */
   async getActiveProvider(): Promise<AiProviderConfig | null> {
     const provider = await this.prisma.aiProvider.findFirst({
@@ -139,6 +165,7 @@ export class AiProviderFactory {
 
   /** Create a language model from the provider config. */
   createLanguageModel(config: AiProviderConfig): LanguageModelV1 {
+    this.assertUsableApiKey(config);
     const meta = PROVIDER_META[config.providerType];
     if (!meta) {
       throw new Error(`Unsupported provider type: ${config.providerType}`);
@@ -171,6 +198,7 @@ export class AiProviderFactory {
 
   /** Create an embedding model from the provider config. */
   createEmbeddingModel(config: AiProviderConfig): EmbeddingModel<string> {
+    this.assertUsableApiKey(config);
     const meta = PROVIDER_META[config.providerType];
     if (!meta) {
       throw new Error(`Unsupported provider type for embeddings: ${config.providerType}`);

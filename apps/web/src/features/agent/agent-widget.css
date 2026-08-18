@@ -1,0 +1,843 @@
+/* =============================================================================
+ * Agent widget chrome — bubble, panel, conversation list, chat header.
+ * Complements chat.css (shared bubbles/messages/composer styles).
+ * ============================================================================= */
+
+.aw-root {
+  display: contents;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.aw-root *,
+.aw-root *::before,
+.aw-root *::after {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bubble (same language as the visitor widget, different accent)
+ * --------------------------------------------------------------------------- */
+.aw-bubble-btn {
+  position: fixed;
+  z-index: 2147483000;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: #1e293b;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.24);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.aw-bubble-btn:hover {
+  transform: scale(1.06);
+}
+
+.aw-bubble-btn.aw-attention {
+  animation: aw-attention 0.5s ease 0.4s 3;
+}
+
+@keyframes aw-attention {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.aw-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  animation: aw-badge-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes aw-badge-pop {
+  from {
+    transform: scale(0.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Panel
+ * --------------------------------------------------------------------------- */
+.aw-panel-frame {
+  position: fixed;
+  z-index: 2147482999;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.26), 0 4px 16px rgb(0 0 0 / 0.1);
+  border: 1px solid rgb(0 0 0 / 0.06);
+  animation: aw-panel-in 0.22s cubic-bezier(0.32, 1.25, 0.64, 1);
+}
+
+@keyframes aw-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.aw-panel-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #0f172a;
+  color: #fff;
+  cursor: grab;
+}
+
+.aw-panel-header:active {
+  cursor: grabbing;
+}
+
+.aw-panel-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aw-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.aw-icon-btn:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+
+/* Resize handle */
+.aw-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 5;
+}
+
+.aw-resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #cbd5e1;
+  border-bottom: 2px solid #cbd5e1;
+  border-radius: 0 0 3px 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Conversation list
+ * --------------------------------------------------------------------------- */
+.aw-tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.aw-tab {
+  flex: 1;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.aw-tab:hover {
+  color: #334155;
+}
+
+.aw-tab.aw-active {
+  color: #1e293b;
+  border-bottom-color: var(--oc-accent, #4f46e5);
+}
+
+.aw-conv-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+}
+
+.aw-conv-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.aw-conv-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  font: inherit;
+  color: inherit;
+}
+
+.aw-conv-item:hover {
+  background: #f1f5f9;
+}
+
+.aw-conv-item.aw-conv-blacklisted {
+  background: #fef2f2;
+}
+
+.aw-conv-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.aw-conv-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aw-conv-time {
+  font-size: 11px;
+  color: #94a3b8;
+  flex: none;
+}
+
+.aw-conv-item-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aw-conv-preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aw-conv-unread {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--oc-accent, #4f46e5);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aw-status-chip {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.aw-status-active {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.aw-status-ai {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.aw-status-specialist {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.aw-status-resolved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* ---------------------------------------------------------------------------
+ * Chat view header (conversation) — accent-colored so the room has a frame
+ * --------------------------------------------------------------------------- */
+.aw-chat-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--oc-accent, #1e293b);
+  color: #fff;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.08);
+}
+
+.aw-chat-visitor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.aw-chat-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+}
+
+.aw-chat-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.aw-chat-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Long visitor names (3+ words) wrap to two lines instead of clipping. */
+.aw-chat-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.3;
+}
+
+.aw-chat-sub {
+  display: flex;
+  align-items: center;
+  gap: 2px 5px;
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.78);
+  min-width: 0;
+}
+
+/* Header email — single line with ellipsis when too long (full value in the
+   tooltip, click to copy). Never breaks mid-address like break-all did. */
+.aw-copy-email {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  max-width: 62%;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.aw-copy-email:hover {
+  color: #fff;
+  text-decoration-style: solid;
+}
+
+.aw-chat-sub-browser {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.aw-ticket {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: rgb(255 255 255 / 0.92);
+  background: rgb(255 255 255 / 0.18);
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex: none;
+}
+
+.aw-chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.aw-chat-actions .aw-icon-btn {
+  color: #fff;
+}
+
+.aw-chat-actions .aw-icon-btn:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.aw-chat-actions .aw-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Action buttons (Resolve) on the colored header — white outline style so
+   they stay legible regardless of the accent hue. */
+.aw-chat-header .aw-btn {
+  background: rgb(255 255 255 / 0.16);
+  border-color: rgb(255 255 255 / 0.42);
+  color: #fff;
+}
+
+.aw-chat-header .aw-btn:hover {
+  background: rgb(255 255 255 / 0.28);
+}
+
+.aw-chat-header .aw-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Chat view message area — tinted "room" background with white agent/ai
+ * bubbles so the conversation reads as a framed pane, not empty white space.
+ * --------------------------------------------------------------------------- */
+.aw-chat-view .oc-messages {
+  background: #f2f3f8;
+  scrollbar-color: #dcdfe8 transparent;
+}
+
+.aw-chat-view .oc-from-agent .oc-bubble,
+.aw-chat-view .oc-from-ai .oc-bubble,
+.aw-chat-view .oc-bubble.oc-image-msg {
+  background: #fff;
+  border-color: #e5e7f0;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+}
+
+.aw-chat-view .oc-sys-msg span {
+  background: #fff;
+  border-color: #e5e7f0;
+}
+
+.aw-btn-sm {
+  padding: 4px 9px;
+  font-size: 11.5px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.aw-resolved-banner {
+  flex: none;
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 12px;
+  padding: 7px 14px;
+  text-align: center;
+  border-bottom: 1px solid #a7f3d0;
+}
+
+.aw-ai-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ede9fe;
+  color: #6d28d9;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid #ddd6fe;
+}
+
+.aw-takeover-btn {
+  border: 1px solid #a78bfa;
+  background: #fff;
+  color: #6d28d9;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.aw-takeover-btn:hover {
+  background: #f5f3ff;
+}
+
+/* Details popover — edit fields + full visitor info in a responsive grid. */
+.aw-popover {
+  position: absolute;
+  z-index: 60;
+  right: 10px;
+  top: 52px;
+  width: min(620px, calc(100% - 20px));
+  max-height: calc(100% - 72px);
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.14);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: aw-pop-in 0.12s ease;
+}
+
+.aw-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.aw-details-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aw-details-heading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.aw-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aw-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.aw-info-key {
+  flex: none;
+  width: 64px;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aw-info-val {
+  color: #334155;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.aw-info-link {
+  color: var(--oc-accent, #4f46e5);
+  word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  min-width: 0;
+}
+
+.aw-copy-btn {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.aw-copy-btn:hover {
+  background: #f1f5f9;
+  color: var(--oc-accent, #4f46e5);
+}
+
+@keyframes aw-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.aw-popover label {
+  font-size: 11px;
+  font-weight: 650;
+  color: #64748b;
+}
+
+.aw-popover input {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+}
+
+/* Long agent remarks must stay readable — scrollable, wrapped textarea. */
+.aw-popover textarea {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+  max-height: 200px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.aw-popover input:focus,
+.aw-popover textarea:focus {
+  border-color: color-mix(in srgb, var(--oc-accent, #4f46e5) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--oc-accent, #4f46e5) 14%, transparent);
+}
+
+.aw-popover-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.aw-btn {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #334155;
+}
+
+.aw-btn:hover {
+  background: #f8fafc;
+}
+
+.aw-btn-primary {
+  background: var(--oc-accent, #4f46e5);
+  border-color: var(--oc-accent, #4f46e5);
+  color: #fff;
+}
+
+.aw-btn-primary:hover {
+  background: color-mix(in srgb, var(--oc-accent, #4f46e5) 88%, #000);
+}
+
+.aw-btn-danger {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.aw-btn-danger:hover {
+  background: #dc2626;
+}
+
+.aw-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Confirm overlays */
+.aw-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  background: rgb(255 255 255 / 0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+  animation: aw-fade-in 0.15s ease;
+}
+
+@keyframes aw-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.aw-confirm h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.aw-confirm p {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0;
+}
+
+.aw-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.aw-select {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+  min-width: 180px;
+}
+
+/* Offline / auth-failed state */
+.aw-offline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.aw-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e2e8f0;
+  border-top-color: var(--oc-accent, #4f46e5);
+  border-radius: 50%;
+  animation: aw-spin 0.8s linear infinite;
+}
+
+@keyframes aw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

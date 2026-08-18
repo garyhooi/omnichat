@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AiConfigService } from './ai-config.service';
+import { BudgetService } from './budget.service';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsObject, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsObject, Max, Min } from 'class-validator';
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -25,6 +26,15 @@ class CreateProviderDto {
   @IsString() @IsOptional() baseUrl?: string;
   @IsString() @IsNotEmpty() chatModelId: string;
   @IsString() @IsOptional() embeddingModelId?: string;
+  @IsNumber() @IsOptional() @Min(0) inputPricePerM?: number;
+  @IsNumber() @IsOptional() @Min(0) outputPricePerM?: number;
+  // Token spend budget per period (null = unlimited) — enforced before the AI answers.
+  @IsInt() @IsOptional() @Min(0) maxTokensPerDay?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerWeek?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerMonth?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerQuarter?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerHalfYear?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerYear?: number | null;
 }
 
 class UpdateProviderDto {
@@ -35,6 +45,14 @@ class UpdateProviderDto {
   @IsString() @IsOptional() chatModelId?: string;
   @IsString() @IsOptional() embeddingModelId?: string;
   @IsBoolean() @IsOptional() isActive?: boolean;
+  @IsNumber() @IsOptional() @Min(0) inputPricePerM?: number;
+  @IsNumber() @IsOptional() @Min(0) outputPricePerM?: number;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerDay?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerWeek?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerMonth?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerQuarter?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerHalfYear?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerYear?: number | null;
 }
 
 class UpsertAgentConfigDto {
@@ -54,6 +72,14 @@ class UpsertAgentConfigDto {
   @IsString() @IsOptional() translateProviderId?: string | null;
   @IsBoolean() @IsOptional() translationEnabled?: boolean;
   @IsBoolean() @IsOptional() autoTranslationEnabled?: boolean;
+  // Global token spend budget per period (null = unlimited) — applies across
+  // all providers, in addition to each provider's own limits.
+  @IsInt() @IsOptional() @Min(0) maxTokensPerDay?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerWeek?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerMonth?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerQuarter?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerHalfYear?: number | null;
+  @IsInt() @IsOptional() @Min(0) maxTokensPerYear?: number | null;
 }
 
 class CreateToolDto {
@@ -85,7 +111,10 @@ class UpdateToolDto {
 @UseGuards(AdminIpAllowlistGuard, AuthGuard('jwt'), RolesGuard)
 @Roles('admin', 'developer')
 export class AiConfigController {
-  constructor(private readonly aiConfigService: AiConfigService) {}
+  constructor(
+    private readonly aiConfigService: AiConfigService,
+    private readonly budgetService: BudgetService,
+  ) {}
 
   // --- Providers ---
 
@@ -124,6 +153,13 @@ export class AiConfigController {
   @Post('agent')
   async upsertAgentConfig(@Body() dto: UpsertAgentConfigDto) {
     return this.aiConfigService.upsertAgentConfig(dto);
+  }
+
+  // --- Token spend budget status (used by the 80% warning banner) ---
+
+  @Get('budget-status')
+  async getBudgetStatus() {
+    return this.budgetService.getStatus();
   }
 
   // --- Tool Registration ---

@@ -52,7 +52,8 @@
 This project is structured as a Bun workspace monorepo:
 
 * **Backend (`apps/api`)**: NestJS, Prisma (MongoDB, PostgreSQL, MySQL), Socket.io, Multer, Sharp.
-* **Frontend (`apps/web`)**: Vue 3 (compiled to Custom Web Components via Vite).
+* **Frontend (`apps/web`)**: React 19 (compiled to Custom Web Components via Vite — chat widget, chat page, agent widget, admin portal).
+* **Legacy frontend (`apps/web-legacy`)**: the previous Vue 3 build, archived for reference (not part of the workspace).
 
 ## 🧩 Web Component Usage & Attributes
 
@@ -64,6 +65,12 @@ OmniChat is compiled into native Web Components, meaning you can drop them into 
 - **Admin / Agent components** (embedded in your internal admin or backoffice pages):
   - `<omnichat-admin-portal>`
   - `<omnichat-agent-widget>`
+
+> **Sizing the admin portal**: `<omnichat-admin-portal>` fills whatever box its
+> host page gives it — set a height on the element (e.g. `height: 100vh`,
+> `height: 100%` inside a flex/grid pane, or a fixed `height: 800px`). Without
+> a host height it grows with its content. The widget components size
+> themselves (fixed launcher bubble / full-page chat).
 
 ### Chat Widget (`<omnichat-chat-widget>`)
 A floating bubble that opens a chat panel. Drop it onto any page for instant visitor engagement.

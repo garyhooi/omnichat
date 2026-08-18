@@ -10,6 +10,7 @@ import {
 import { Response, Request } from 'express';
 import { AiService } from './ai.service';
 import { AiConfigService } from './ai-config.service';
+import { BudgetService } from './budget.service';
 import { HandoffService } from './handoff.service';
 import { AiSecurityService } from './ai-security.service';
 import { ToolRegistry } from './tools/tool-registry';
@@ -29,6 +30,7 @@ export class AiChatController {
   constructor(
     private readonly aiService: AiService,
     private readonly aiConfigService: AiConfigService,
+    private readonly budgetService: BudgetService,
     private readonly handoffService: HandoffService,
     private readonly securityService: AiSecurityService,
     private readonly toolRegistry: ToolRegistry,
@@ -52,6 +54,17 @@ export class AiChatController {
     const agentConfig = await this.aiConfigService.getAgentConfig();
     if (!agentConfig?.enabled) {
       throw new HttpException('AI agent is not enabled', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    // Token spend budget — block AI responses once a per-period budget is
+    // exhausted (global agent config or the active provider's model).
+    const budget = await this.budgetService.check();
+    if (budget.exceeded) {
+      await this.handoffService.executeHandoff(conversationId, budget.reason || 'Token spend budget exceeded');
+      throw new HttpException(
+        `AI assistant is paused: ${budget.reason}. A human agent has been notified.`,
+        HttpStatus.GONE,
+      );
     }
 
     // Check if conversation already handed off
@@ -172,7 +185,8 @@ export class AiChatController {
         maxTokens: agentConfig.maxTokensPerResponse,
         temperature: agentConfig.temperature,
         onFinish: async ({ text, usage }) => {
-          // Track token usage
+          // Persist usage for the token reports, then track the session budget.
+          await this.aiService.recordUsage(conversationId, usage);
           if (usage.totalTokens > 0) {
             const tokenCheck = await this.handoffService.recordTokenUsage(
               conversationId,

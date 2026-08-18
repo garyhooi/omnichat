@@ -15,6 +15,7 @@
     "build:admin": "cd apps/web && bun run build:admin",
     "build:client": "cd apps/web && bun run build:client",
     "build:admin-widget": "cd apps/web && bun run build:admin-widget",
+    "test": "cd apps/web && bun run test",
     "prisma:generate": "cd apps/api && bun run prisma:generate",
     "prisma:push": "cd apps/api && bun run prisma:push",
     "use-provider": "./scripts/use-provider.sh"

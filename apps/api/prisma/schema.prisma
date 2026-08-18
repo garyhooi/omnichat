@@ -72,7 +72,6 @@ model Message {
   @@index([conversationId])
   @@index([createdAt])
 }
-
 enum AdminRole {
   agent
   admin
@@ -80,8 +79,8 @@ enum AdminRole {
 }
 
 model AdminUser {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  username     String    @unique
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  username     String   @unique
   passwordHash String
   displayName  String
   role         AdminRole @default(agent)
@@ -135,6 +134,8 @@ model SiteConfig {
   welcomeMessage     String   @default("Hello! How can we help you today?")
   offlineMessage     String   @default("We are currently offline. Please check back later.")
   greetingMessage    String?
+  visitorLanguage    String   @default("en")
+  adminLanguage      String   @default("en")
   bubbleSize         String   @default("medium")
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")
@@ -160,8 +161,8 @@ model QuickReply {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   title     String
   content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([createdAt])
 }
@@ -191,11 +192,44 @@ model AiProvider {
   chatModelId    String   // e.g. "gpt-4o", "claude-sonnet-4-20250514"
   embeddingModelId String? // e.g. "text-embedding-3-small"; null = use chat provider default
   isActive       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  // Pricing in USD per 1M tokens — used by the token-usage reports to
+  // estimate spend per conversation / month. 0 = not configured.
+  inputPricePerM  Float   @default(0)
+  outputPricePerM Float   @default(0)
+  // Token spend budget per period (null = unlimited) — enforced before the
+  // AI answers; the active provider's limits are checked per model.
+  maxTokensPerDay      Int?
+  maxTokensPerWeek     Int?
+  maxTokensPerMonth    Int?
+  maxTokensPerQuarter  Int?
+  maxTokensPerHalfYear Int?
+  maxTokensPerYear     Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
   @@index([createdAt])
+}
+
+model TokenUsage {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId   String
+  providerId       String?
+  providerName     String?  // denormalized for reports
+  modelId          String?
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  // Price snapshot at call time so historical reports stay accurate even
+  // after the admin changes provider pricing.
+  inputPricePerM   Float    @default(0)
+  outputPricePerM  Float    @default(0)
+  cost             Float    @default(0) // estimated USD for this call
+  createdAt        DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@index([providerName])
 }
 
 model AiAgentConfig {
@@ -216,8 +250,16 @@ model AiAgentConfig {
   translateProviderId    String?  // ID of the provider to use for translation (null = use active chat provider)
   translationEnabled     Boolean  @default(true) // toggle translation feature on/off globally
   autoTranslationEnabled Boolean  @default(true) // auto-translate incoming messages
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  // Global token spend budget per period (null = unlimited) — applies across
+  // all providers, in addition to each provider's own per-model limits.
+  maxTokensPerDay      Int?
+  maxTokensPerWeek     Int?
+  maxTokensPerMonth    Int?
+  maxTokensPerQuarter  Int?
+  maxTokensPerHalfYear Int?
+  maxTokensPerYear     Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model KnowledgeDocument {
@@ -285,14 +327,15 @@ model ToolRegistration {
   @@index([isActive, handlerType])
 }
 
+// AI Logs (stores AI provider failures and important events)
 model AiLog {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  conversationId  String?
-  providerId      String?
-  eventType       String
-  message         String?
-  details         String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String?
+  providerId    String?
+  eventType     String   // e.g. authentication_error, stream_error, empty_response, tool_error
+  message       String?
+  details       String?
+  createdAt     DateTime @default(now())
 
   @@index([createdAt])
   @@index([eventType])
@@ -308,11 +351,11 @@ model HttpLog {
   userAgent      String?
   userId         String?
   username       String?
-  requestHeaders String?   // JSON
-  requestBody    String?   // JSON (sanitized)
-  responseBody   String?   // JSON (truncated)
+  requestHeaders String?
+  requestBody    String?
+  responseBody   String?
   contentLength  Int?
-  duration       Int?      // ms
+  duration       Int?
   createdAt      DateTime @default(now())
 
   @@index([createdAt])

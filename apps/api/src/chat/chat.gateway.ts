@@ -16,6 +16,7 @@ import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
 import { AiConfigService } from '../ai/ai-config.service';
+import { BudgetService } from '../ai/budget.service';
 import { HandoffService } from '../ai/handoff.service';
 import { AiSecurityService } from '../ai/ai-security.service';
 import { ToolRegistry } from '../ai/tools/tool-registry';
@@ -176,6 +177,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
     private readonly aiConfigService: AiConfigService,
+    private readonly budgetService: BudgetService,
     private readonly handoffService: HandoffService,
     private readonly securityService: AiSecurityService,
     private readonly toolRegistry: ToolRegistry,
@@ -754,6 +756,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         return;
       }
 
+      // Token spend budget — if a period is already exhausted, don't let the
+      // AI agent start at all; hand the conversation straight to a human.
+      const budget = await this.budgetService.check();
+      if (budget.exceeded) {
+        this.logger.warn(`AI budget already exceeded at conversation start: ${budget.reason}`);
+        await this.triggerHandoff(conversationId, budget.reason || 'Token spend budget exceeded');
+        return;
+      }
+
       // Initialize AI conversation state
       await this.handoffService.initConversation(conversationId);
 
@@ -1197,7 +1208,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   @SubscribeMessage('list_conversations')
   async handleListConversations(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: { status?: string },
+    @MessageBody() payload: { status?: string; startDate?: string; endDate?: string },
   ) {
     if (client.data.isVisitor || !client.data.user) {
       client.emit('error', { message: 'Unauthorized' });
@@ -1206,6 +1217,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     const conversations = await this.chatService.listConversations(
       payload?.status,
+      payload?.startDate || payload?.endDate
+        ? { start: payload.startDate, end: payload.endDate }
+        : undefined,
     );
     const conversationsWithBlacklist = await Promise.all(conversations.map(async (c) => ({
       ...c,
@@ -1243,6 +1257,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       
       const isAiHandling = await this.handoffService.isAiHandling(conversationId);
       if (!isAiHandling) return;
+
+      // Token spend budget — pause AI responses once a per-period budget is
+      // exhausted (global agent config or the active provider's model).
+      const budget = await this.budgetService.check();
+      if (budget.exceeded) {
+        this.logger.warn(`AI budget exceeded, skipping response: ${budget.reason}`);
+        const budgetMsg = await this.chatService.createMessage({
+          conversationId,
+          senderType: 'system',
+          senderId: 'system',
+          content: `AI assistant is paused: ${budget.reason}. A human agent has been notified.`,
+          messageType: 'text',
+        }).catch(() => null);
+        if (budgetMsg) {
+          this.server.to(`conv:${conversationId}`).to('agents').emit('new_message', {
+            message: { ...budgetMsg, senderDisplayName: 'System' },
+          });
+        }
+        await this.triggerHandoff(conversationId, budget.reason || 'Token spend budget exceeded');
+        return;
+      }
 
       // Security check on the last visitor message
       const lastVisitorMsg = conversation.messages
@@ -1420,8 +1455,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
       this.logger.log(`AI response starting for conversation ${conversationId}`);
 
-      const onFinish = async ({ text, usage }: { text: string; usage: { totalTokens: number } }) => {
+      const onFinish = async ({ text, usage }: { text: string; usage: { promptTokens?: number; completionTokens?: number; totalTokens: number } }) => {
         this.logger.log(`[AI:${conversationId}] onFinish called. text length: ${text.length}, totalTokens: ${usage.totalTokens}, text preview: "${text.substring(0, 200)}"`);
+        // Persist usage for the token reports (pricing snapshot + cost).
+        await this.aiService.recordUsage(conversationId, usage);
         if (usage.totalTokens > 0) {
           const tokenCheck = await this.handoffService.recordTokenUsage(
             conversationId,

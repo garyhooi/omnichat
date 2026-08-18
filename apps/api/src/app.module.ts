@@ -14,6 +14,7 @@ import { SessionStateModule } from './session-state/session-state.module';
 import { AiModule } from './ai/ai.module';
 import { RagModule } from './rag/rag.module';
 import { HttpLogModule } from './http-log/http-log.module';
+import { ReportsModule } from './reports/reports.module';
 import { SiteTokenGuard } from './auth/site-token.guard';
 
 @Module({
@@ -40,6 +41,7 @@ import { SiteTokenGuard } from './auth/site-token.guard';
     QuickReplyModule,
     UploadModule,
     HttpLogModule,
+    ReportsModule,
   ],
   providers: [
     {

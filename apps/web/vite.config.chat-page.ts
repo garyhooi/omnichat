@@ -1,44 +1,26 @@
-import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
-import path from 'path'
+import { createBaseConfig } from './vite.base'
+import { resolve } from 'path'
 
 // ---------------------------------------------------------------------------
-// Vite config — Chat Page build
+// Chat Page build — <omnichat-chat-page> full-screen custom element
+// Output: dist/omnichat-chat-page.js (single IIFE file)
 // ---------------------------------------------------------------------------
-// Output: dist/omnichat-chat-page.js
-// Format: IIFE (full-page chat custom element)
-// Custom element: <omnichat-chat-page>
-// ---------------------------------------------------------------------------
-
 export default defineConfig({
-  plugins: [vue()],
-  define: {
-    'process.env.NODE_ENV': JSON.stringify('production'),
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
+  ...createBaseConfig(),
   build: {
-    target: 'es2020',
-    cssCodeSplit: false,
+    ...createBaseConfig().build,
     lib: {
-      entry: path.resolve(__dirname, './src/chat-page/main.ts'),
+      entry: resolve(__dirname, 'src/chat-page/main.tsx'),
       formats: ['iife'],
       name: 'OmniChatChatPage',
       fileName: () => 'omnichat-chat-page.js',
     },
     rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
-      },
+      output: { inlineDynamicImports: true },
     },
-    minify: 'esbuild',
-    cssMinify: false,
+    outDir: 'dist',
     emptyOutDir: false,
-    modulePreload: {
-      polyfill: false,
-    },
+    cssCodeSplit: false,
   },
 })

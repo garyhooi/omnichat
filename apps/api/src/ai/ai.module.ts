@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiProviderFactory } from './ai-provider.factory';
 import { AiService } from './ai.service';
 import { AiConfigService } from './ai-config.service';
+import { BudgetService } from './budget.service';
 import { AiConfigController } from './ai-config.controller';
 import { AiChatController } from './ai-chat.controller';
 import { HandoffService } from './handoff.service';
@@ -20,6 +21,7 @@ import { ToolLogService } from '../http-log/tool-log.service';
     AiProviderFactory,
     AiService,
     AiConfigService,
+    BudgetService,
     HandoffService,
     AiSecurityService,
     ToolRegistry,
@@ -31,6 +33,7 @@ import { ToolLogService } from '../http-log/tool-log.service';
   exports: [
     AiService,
     AiConfigService,
+    BudgetService,
     AiProviderFactory,
     HandoffService,
     AiSecurityService,

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OmniChat — Agent Widget Demo</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f1f5f9;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .box {
+        text-align: center;
+        color: #334155;
+      }
+      .box h1 {
+        font-size: 28px;
+        margin: 0 0 8px;
+      }
+      .box p {
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Agent console</h1>
+      <p>Log in to the admin portal first (same origin shares the token), then open the headset in the corner.</p>
+      <p><a href="/demo/admin.html">Go to admin portal →</a></p>
+    </div>
+    <omnichat-agent-widget server-url="http://localhost:3001" accent-color="#1e293b"></omnichat-agent-widget>
+    <script src="../apps/web/dist/omnichat-agent-widget.js"></script>
+  </body>
+</html>
