@@ -523,7 +523,7 @@ export function AgentChatView({
 
       {/* Visitor review (shown after the visitor rates the conversation) */}
       {conversation?.rating ? (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7f0', background: '#f8fafc', flex: 'none' }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7f0', background: '#f8fafc', flex: 'none', textAlign: 'center' }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>{t('agent.visitorReview')}</div>
           <div style={{ fontSize: 16, lineHeight: 1, letterSpacing: 2 }} aria-label={t('agent.ratingOutOf', { n: conversation.rating })}>
             {'★'.repeat(conversation.rating)}

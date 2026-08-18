@@ -216,6 +216,8 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
             connected={connected}
             onStart={session.startConversation}
             error={null}
+            bubbleIcon={siteConfig?.bubbleIcon}
+            serverUrl={serverUrl}
           />
         )
       ) : isResolved ? (
