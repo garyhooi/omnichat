@@ -7,6 +7,7 @@ import { formatTicketId, timeAgo, truncate } from '../../shared/lib/format'
 import { useAdminData } from '../AdminDataProvider'
 import { useAuth } from '../auth'
 import { useSiteAccent } from '../accent'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import { AgentChatView } from '../../features/agent/AgentChatView'
 
 type StatusTab = 'active' | 'ai' | 'specialist' | 'resolved'
@@ -35,6 +36,7 @@ export function ConversationsPage() {
   const { socket, conversations, loaded, agents } = useAdminData()
   const { serverUrl } = useAuth()
   const accentColor = useSiteAccent(serverUrl)
+  const { config: siteConfig } = useSiteConfig(serverUrl)
   const [tab, setTab] = useState<StatusTab>('active')
   const [searchQuery, setSearchQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -316,7 +318,7 @@ export function ConversationsPage() {
         </div>
 
         {openConversation && (
-          <div style={{ width: 460, flex: 'none', alignSelf: 'stretch' }}>
+          <div style={{ width: 520, flex: 'none', alignSelf: 'stretch' }}>
             <div
               className="adm-card"
               style={{
@@ -335,7 +337,7 @@ export function ConversationsPage() {
                 agents={agents.map((a) => ({ username: a.username, displayName: a.displayName }))}
                 currentUserUsername={socket.currentUser?.username ?? ''}
                 accentColor={accentColor}
-                translationsEnabled
+                translationsEnabled={siteConfig?.translationEnabled !== false}
                 onBack={handleBack}
               />
             </div>
