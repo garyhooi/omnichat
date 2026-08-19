@@ -18,10 +18,14 @@
   --adm-warning: #f59e0b;
 
   display: block;
-  /* Fit any host box: fill the container the embedder provides. Without a
-     host height the element grows with its content (no clipping). */
+  /* Match legacy admin portal — fixed viewport height so the panel never
+     bounces between sizes when switching between pages. */
   width: 100%;
-  height: 100%;
+  height: 80vh;
+  max-height: 80vh;
+  min-height: 600px;
+  border-radius: 16px;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
