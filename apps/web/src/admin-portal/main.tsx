@@ -26,7 +26,7 @@ const STYLES = `<style>${adminCss}</style><style>${chatCss}</style><style>${agen
 
 const OBSERVED_ATTRIBUTES = ['server-url', 'lang']
 
-export class OmniChatAdminPortal extends HTMLElement {
+class OmniChatAdminPortal extends HTMLElement {
   static get observedAttributes() {
     return OBSERVED_ATTRIBUTES
   }

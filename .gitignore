@@ -157,6 +157,7 @@ vite.config.ts.timestamp-*
 .superagent/
 .openclaw/
 .aider.cache/
+.zcode/
 # Chinese AI IDEs / assistants
 .trae/              # Trae IDE (ByteDance)
 .codebuddy/         # CodeBuddy (ByteDance)
@@ -164,6 +165,9 @@ vite.config.ts.timestamp-*
 .lingma/            # Tongyi Lingma (Alibaba)
 .comate/            # Baidu Comate (文心助手)
 .hunyuan/           # Hunyuan (Tencent)
+
+# Mimosa security-scan local state
+.mimosa/
 
 # .NET Build Output
 [Bb]in/

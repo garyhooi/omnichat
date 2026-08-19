@@ -3,12 +3,14 @@
 // All endpoints are JWT-protected (admin/developer roles + IP allowlist).
 // =============================================================================
 
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateText } from 'ai';
+import { AiProviderFactory } from '../ai/ai-provider.factory';
 import { IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
 
 class ReportQueryDto {
@@ -16,6 +18,18 @@ class ReportQueryDto {
   @IsDateString() @IsOptional() to?: string;
   /** Filter conversations by assigned/specialist agent username or visitor name. */
   @IsString() @IsOptional() @MaxLength(200) username?: string;
+}
+
+class AiReviewDto {
+  @IsDateString() @IsOptional() from?: string;
+  @IsDateString() @IsOptional() to?: string;
+  @IsString() @IsOptional() @MaxLength(200) username?: string;
+  /** Optional — a configured AI provider id; defaults to the active provider. */
+  @IsString() @IsOptional() @MaxLength(64) providerId?: string;
+  /** Optional — reply language name; defaults to English. */
+  @IsString() @IsOptional() @MaxLength(20) lang?: string;
+  /** Optional — review feedback for a single agent only; defaults to all agents. */
+  @IsString() @IsOptional() @MaxLength(200) agent?: string;
 }
 
 interface UsageTotals {
@@ -30,7 +44,10 @@ interface UsageTotals {
 @Controller('reports')
 @UseGuards(AuthGuard('jwt'), RolesGuard, AdminIpAllowlistGuard)
 export class ReportsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly providerFactory: AiProviderFactory,
+  ) {}
 
   private range(q: ReportQueryDto): { gte: Date; lte: Date } {
     let to = q.to ? new Date(q.to) : new Date();
@@ -65,6 +82,7 @@ export class ReportsController {
         specialistUsername: true,
         metadata: true,
         updatedAt: true,
+        agent: { select: { username: true } },
       },
     });
     const map = new Map(conversations.map((c) => [c.id, c]));
@@ -131,7 +149,8 @@ export class ReportsController {
           conversationId: g.conversationId,
           visitorName: meta.visitorName ?? 'Visitor',
           ticketId: g.conversationId.slice(-8).toUpperCase(),
-          agent: c.assignedUsername ?? c.specialistUsername ?? '—',
+          agent: c.agent?.username ?? c.specialistUsername ?? '—',
+          assignedUsername: c.assignedUsername ?? null,
           status: c.status,
           calls: g._count,
           promptTokens: prompt,
@@ -299,6 +318,134 @@ export class ReportsController {
       conversationsTotal,
       conversationsByStatus,
       daily,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Agent Performance — visitor satisfaction ratings by agent (AI & human).
+  // -------------------------------------------------------------------------
+  @Get('agent-performance')
+  @Roles('admin', 'developer')
+  async agentPerformance(@Query() q: ReportQueryDto) {
+    const { gte, lte } = this.range(q);
+    const conversations = await this.prisma.conversation.findMany({
+      where: { updatedAt: { gte, lte } },
+      select: { id: true, status: true, rating: true, review: true, assignedUsername: true, specialistUsername: true, resolvedByUsername: true, createdAt: true, updatedAt: true, metadata: true },
+    });
+    const agentMap = new Map<string, { agent: string; agentType: 'AI' | 'Human'; conversations: any[] }>();
+    for (const conv of conversations) {
+      const agentUsername = conv.assignedUsername || conv.specialistUsername || 'Unassigned';
+      const agentType = conv.assignedUsername ? 'Human' : 'AI';
+      if (!agentMap.has(agentUsername)) agentMap.set(agentUsername, { agent: agentUsername, agentType, conversations: [] });
+      agentMap.get(agentUsername)!.conversations.push(conv);
+    }
+    let filteredMap = agentMap;
+    if (q.username) {
+      const qLower = q.username.toLowerCase();
+      filteredMap = new Map();
+      for (const [key, value] of agentMap) { if (key.toLowerCase().includes(qLower)) filteredMap.set(key, value); }
+    }
+    const totals = { totalConversations: 0, totalRated: 0, overallAverageRating: 0, totalPositiveReviews: 0, totalNegativeReviews: 0, reviewRate: 0 };
+    const rows = [...filteredMap.values()].map((item) => {
+      const { agent, agentType, conversations: agentConvs } = item;
+      const totalConversations = agentConvs.length;
+      const ratedConversations = agentConvs.filter(c => c.rating != null).length;
+      const ratings = agentConvs.filter(c => c.rating != null).map(c => c.rating!);
+      const averageRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+      const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      for (const r of ratings) { const rating = r as number; if (rating >= 1 && rating <= 5) { (ratingDistribution as any)[rating]++; } }
+      const positiveReviews = ratings.filter(r => r >= 4).length;
+      const negativeReviews = ratings.filter(r => r <= 2).length;
+      const resolvedCount = agentConvs.filter(c => c.status === 'resolved').length;
+      const resolutionRate = totalConversations > 0 ? resolvedCount / totalConversations : 0;
+      totals.totalConversations += totalConversations; totals.totalRated += ratedConversations; totals.totalPositiveReviews += positiveReviews; totals.totalNegativeReviews += negativeReviews;
+      return { agent, agentType, totalConversations, ratedConversations, averageRating: Math.round(averageRating * 10) / 10, ratingDistribution, positiveReviews, negativeReviews, totalReviews: ratedConversations, resolutionRate: Math.round(resolutionRate * 100) / 100 };
+    }).sort((a, b) => b.averageRating - a.averageRating || b.totalConversations - a.totalConversations);
+    if (totals.totalRated > 0) { const allRatings = [...agentMap.values()].flatMap(item => item.conversations.filter(c => c.rating != null).map(c => c.rating!)); totals.overallAverageRating = Math.round((allRatings.reduce((a, b) => a + b, 0) / allRatings.length) * 10) / 10; }
+    if (totals.totalConversations > 0) totals.reviewRate = Math.round((totals.totalRated / totals.totalConversations) * 100) / 100;
+    return { rows, totals };
+  }
+
+  // -------------------------------------------------------------------------
+  // AI review — summarize visitor feedback within the range via a chosen model.
+  // -------------------------------------------------------------------------
+  @Post('agent-performance/ai-review')
+  @Roles('admin', 'developer')
+  async aiReview(@Body() q: AiReviewDto) {
+    const { gte, lte } = this.range(q);
+    const provider = q.providerId
+      ? await this.providerFactory.getProviderById(q.providerId)
+      : await this.providerFactory.getActiveProvider();
+    if (!provider) {
+      throw new HttpException(
+        'No AI provider configured — add one in AI Setup -> AI Providers.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    const conversations = await this.prisma.conversation.findMany({
+      where: { updatedAt: { gte, lte }, review: { not: null } },
+      select: {
+        rating: true,
+        review: true,
+        assignedUsername: true,
+        specialistUsername: true,
+      },
+    });
+
+    // Group feedback by agent, using the same agent resolution as the report.
+    const byAgent = new Map<string, { agentType: 'AI' | 'Human'; reviews: string[] }>();
+    const allItems: string[] = [];
+    for (const c of conversations) {
+      if (!c.review || !c.review.trim()) continue;
+      const agentName = c.assignedUsername || c.specialistUsername || 'Unassigned';
+      if (q.username && !agentName.toLowerCase().includes(q.username.toLowerCase())) continue;
+      if (q.agent && agentName.toLowerCase() !== q.agent.toLowerCase()) continue;
+      const agentType = c.assignedUsername ? 'Human' : 'AI';
+      if (!byAgent.has(agentName)) byAgent.set(agentName, { agentType, reviews: [] });
+      byAgent.get(agentName)!.reviews.push(`[${c.rating ?? '-'}/5] ${c.review.trim()}`);
+      allItems.push(c.review.trim());
+    }
+    if (allItems.length === 0) {
+      throw new HttpException(
+        q.agent
+          ? `No visitor reviews found for "${q.agent}" in the selected range.`
+          : 'No visitor reviews found in the selected range.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const langName = q.lang || 'English';
+    const grouped = [...byAgent.entries()]
+      .map(([agent, info]) => `AGENT: ${agent} (${info.agentType})\n${info.reviews.map((r) => `- ${r}`).join('\n')}`)
+      .join('\n\n');
+
+    const model = this.providerFactory.createLanguageModel(provider);
+    let generated: string;
+    try {
+      const result = await generateText({
+        model,
+        system: `You are a customer-experience analyst for a live-chat product. Review the visitor feedback below, grouped by agent. Write a concise report in ${langName}: a one-paragraph overall summary, then one section per agent covering what visitors say the agent does well and what to improve (concrete and actionable), then the top 3 improvement recommendations ranked by impact. Quote short example feedback where useful. Only cover agents that appear in the data.`,
+        prompt: grouped,
+        temperature: 0.3,
+        maxTokens: 2200,
+      });
+      generated = result.text.trim();
+    } catch (error: any) {
+      const msg = error?.message ?? '';
+      throw new HttpException(
+        error?.status === 402 || error?.status === 429 || /quota|credit|insufficient/i.test(msg)
+          ? 'AI provider credit/quota exhausted'
+          : 'AI review service error. Please try again.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    return {
+      review: generated,
+      provider: { name: provider.name, model: provider.chatModelId },
+      conversationCount: allItems.length,
+      agentCount: byAgent.size,
     };
   }
 }

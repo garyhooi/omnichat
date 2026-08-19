@@ -68,6 +68,8 @@ model Message {
 
   @@index([conversationId])
   @@index([createdAt])
+  @@index([conversationId, createdAt])
+  @@index([conversationId, senderType, readAt])
 }
 enum AdminRole {
   agent

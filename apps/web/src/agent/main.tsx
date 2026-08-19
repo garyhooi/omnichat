@@ -20,7 +20,7 @@ const STYLES = `<style>${agentCss}</style><style>${chatCss}</style>`
 
 const OBSERVED_ATTRIBUTES = ['server-url', 'accent-color', 'lang']
 
-export class OmniChatAgentWidget extends HTMLElement {
+class OmniChatAgentWidget extends HTMLElement {
   static get observedAttributes() {
     return OBSERVED_ATTRIBUTES
   }

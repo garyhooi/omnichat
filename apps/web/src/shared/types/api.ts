@@ -196,6 +196,23 @@ export interface AiProviderRequest {
 
 export type AiProviderUpdateRequest = Partial<AiProviderRequest> & { isActive?: boolean }
 
+export interface AiReviewRequest {
+  from?: string
+  to?: string
+  username?: string
+  /** A configured AI provider id; defaults to the active provider. */
+  providerId?: string
+  /** Reply language name; defaults to English. */
+  lang?: string
+}
+
+export interface AiReviewResponse {
+  review: string
+  provider: { name: string; model: string } | null
+  conversationCount: number
+  agentCount: number
+}
+
 export interface AiAgentConfig {
   id: string
   enabled: boolean
@@ -416,6 +433,7 @@ export interface ConversationUsageRow {
   visitorName: string
   ticketId: string
   agent: string
+  assignedUsername?: string | null
   status: string
   calls: number
   promptTokens: number

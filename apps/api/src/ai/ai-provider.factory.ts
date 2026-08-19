@@ -163,6 +163,20 @@ export class AiProviderFactory {
     return provider;
   }
 
+  /** Fetch a specific provider config by id, decrypting its API key. */
+  async getProviderById(id: string): Promise<AiProviderConfig | null> {
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (provider?.apiKey) {
+      try {
+        provider.apiKey = this.decryptApiKey(provider.apiKey);
+      } catch {
+        // Key may not be encrypted (legacy), use as-is
+        this.logger.warn('Failed to decrypt API key, using raw value');
+      }
+    }
+    return provider;
+  }
+
   /** Create a language model from the provider config. */
   createLanguageModel(config: AiProviderConfig): LanguageModelV1 {
     this.assertUsableApiKey(config);

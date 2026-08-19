@@ -71,6 +71,10 @@ export function ConversationsPage() {
           setResolvedStart(today)
           setResolvedEnd(today)
           applyResolvedDateRange({ start: today, end: today })
+        } else {
+          // Re-entering the Resolved tab: the shared list was replaced by the
+          // other tab's fetch on the way out — re-fetch with the held window.
+          applyResolvedDateRange({ start: resolvedStart || undefined, end: resolvedEnd || undefined })
         }
       } else {
         // Leaving the Resolved tab → fetch the clicked status list without the
@@ -78,7 +82,7 @@ export function ConversationsPage() {
         socket.listConversations(next)
       }
     },
-    [applyResolvedDateRange, resolvedDefaulted, socket],
+    [applyResolvedDateRange, resolvedDefaulted, resolvedStart, resolvedEnd, socket],
   )
 
   const filtered = useMemo(() => {

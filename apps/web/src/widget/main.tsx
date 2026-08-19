@@ -24,7 +24,7 @@ const STYLES = `<style>${widgetCss}</style><style>${chatCss}</style>`
 
 const OBSERVED_ATTRIBUTES = ['server-url', 'bubble-color', 'external-token', 'lang']
 
-export class OmniChatChatWidget extends HTMLElement {
+class OmniChatChatWidget extends HTMLElement {
   static get observedAttributes() {
     return OBSERVED_ATTRIBUTES
   }
