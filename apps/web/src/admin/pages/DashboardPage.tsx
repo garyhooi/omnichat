@@ -60,7 +60,12 @@ export function DashboardPage() {
         d.getDate() === now.getDate()
       )
     }).length
-    const blacklisted = conversations.filter((c) => c.isIpBlacklisted).length
+    // Count distinct blacklisted IPs, not flagged conversations — many
+    // conversations can share one IP (e.g. a single local dev machine), and the
+    // "Blacklisted IPs" stat should reflect how many unique IPs are blocked.
+    const blacklisted = new Set(
+      conversations.filter((c) => c.isIpBlacklisted && c.visitorIp).map((c) => c.visitorIp!),
+    ).size
     const unread = open.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0)
     const onlineAgents = agents.filter((a) => a.isOnline).length
     return { active, aiHandled, specialist, resolvedToday, blacklisted, unread, onlineAgents }

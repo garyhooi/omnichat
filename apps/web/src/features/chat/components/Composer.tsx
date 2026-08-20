@@ -251,7 +251,7 @@ export function Composer({
           <span />
         )}
         <span className={`oc-char-count ${overLimit ? 'oc-over' : ''}`}>
-          {text.length > maxChars - 20 ? `${text.length}/${maxChars}` : ''}
+          {text.length + '/' + maxChars}
         </span>
       </div>
     </div>
