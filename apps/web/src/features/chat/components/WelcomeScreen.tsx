@@ -68,7 +68,7 @@ export function WelcomeScreen({
     <div className="oc-welcome">
       <div className="oc-welcome-logo" style={{ background: accentColor }}>
         {iconSrc ? (
-          <img src={iconSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+          <img src={iconSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : svgIcon ? (
           <BubbleSvgIcon name={svgIcon} size={26} />
         ) : iconEmoji ? (

@@ -226,11 +226,13 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
           aria-label={t('agent.openConsole')}
         >
           {iconSrc ? (
-            <img
-              src={iconSrc}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', pointerEvents: 'none' }}
-            />
+            <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', overflow: 'hidden' }}>
+              <img
+                src={iconSrc}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+              />
+            </span>
           ) : svgIcon ? (
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
               <BubbleSvgIcon name={svgIcon} size={26} />
