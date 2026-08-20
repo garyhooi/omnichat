@@ -418,7 +418,7 @@ export function AgentChatView({
                 id="aw-assigned"
                 value={draftAssigned}
                 onChange={(e) => setDraftAssigned(e.target.value)}
-                placeholder="agent@example.com"
+                placeholder="visitor@example.com"
               />
               <label htmlFor="aw-remarks">{t('agent.agentRemarks')}</label>
               <textarea
