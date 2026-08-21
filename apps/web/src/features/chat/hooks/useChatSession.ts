@@ -94,7 +94,7 @@ export interface ChatSession {
   visitorId: string
 }
 
-const VISITOR_MAX_CHARS = 100
+const VISITOR_MAX_CHARS = 500
 
 export function useChatSession(options: ChatSessionOptions): ChatSession {
   const { serverUrl, storageKeys, externalToken } = options

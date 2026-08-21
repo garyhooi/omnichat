@@ -81,7 +81,7 @@ export interface AgentSocket {
   disconnect: () => void
 }
 
-const AGENT_MAX_CHARS = 1000
+const AGENT_MAX_CHARS = 2000
 const HEARTBEAT_MS = 25_000
 
 export function useAgentSocket(options: AgentSocketOptions): AgentSocket {

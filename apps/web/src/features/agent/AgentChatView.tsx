@@ -22,7 +22,7 @@ import type { ConversationQueryState } from '../chat/types'
 import { conversationQueryKey, createEmptyConversationState, typingQueryKey } from '../chat/types'
 import { setTranslation, translationKey } from '../chat/chatState'
 
-const AGENT_MAX_CHARS = 1000
+const AGENT_MAX_CHARS = 2000
 
 /** Clipboard fallback for sandboxed iframes where navigator.clipboard is denied. */
 function fallbackCopy(text: string): boolean {

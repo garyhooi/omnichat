@@ -25,7 +25,7 @@ export interface ChatPanelProps {
   onHeaderPointerDown?: (e: React.PointerEvent) => void
 }
 
-const VISITOR_MAX_CHARS = 100
+const VISITOR_MAX_CHARS = 500
 
 function formatCountdown(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60)
