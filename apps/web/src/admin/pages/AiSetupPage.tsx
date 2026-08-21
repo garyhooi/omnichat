@@ -247,7 +247,8 @@ function ProvidersTab({
     try {
       const body: Record<string, unknown> = { ...form }
       // Never send the masked placeholder back — the server would store it.
-      if (editingId && (!body.apiKey || String(body.apiKey).includes('*'))) delete body.apiKey
+      // Backend masks keys as "••••••••" (bullet U+2022), so check for both * and •.
+      if (editingId && (!body.apiKey || String(body.apiKey).includes('*') || String(body.apiKey).includes('\u2022'))) delete body.apiKey
       // Price inputs are strings in the form — send numbers.
       body.inputPricePerM = form.inputPricePerM === '' ? 0 : Number(form.inputPricePerM)
       body.outputPricePerM = form.outputPricePerM === '' ? 0 : Number(form.outputPricePerM)
