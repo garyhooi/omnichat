@@ -152,6 +152,11 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* Reserve the scrollbar gutter even when content fits. Without this, the
+     scrollbar appears/disappears as pages load, rows expand, or forms open,
+     and everything reflows sideways — reads as the width "glitching" when
+     embedded in a backoffice. */
+  scrollbar-gutter: stable;
   padding: 22px 26px;
 }
 
@@ -160,6 +165,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* Wrap instead of overflowing on narrow embeds — horizontal overflow here
+     would toggle a second scrollbar and shift the whole layout. */
+  flex-wrap: wrap;
   margin-bottom: 18px;
 }
 
@@ -368,6 +376,14 @@
   vertical-align: middle;
 }
 
+/* Machine tokens (model IDs, keys, URLs, IPs) may break at any character so
+   the table's minimum width is not dictated by their content — otherwise the
+   table overflows narrow embeds by an amount that changes with the data. */
+.adm-table td.adm-mono,
+.adm-table code.adm-mono {
+  overflow-wrap: anywhere;
+}
+
 .adm-table tr:last-child td {
   border-bottom: none;
 }
@@ -452,6 +468,7 @@
  * --------------------------------------------------------------------------- */
 .adm-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   border-bottom: 1px solid var(--adm-border);
   margin-bottom: 14px;

@@ -482,7 +482,7 @@ function ProvidersTab({
                   <button
                     type="button"
                     className={`adm-badge ${p.isActive ? 'adm-badge-success' : 'adm-badge-neutral'}`}
-                    style={{ border: 'none', cursor: 'pointer' }}
+                    style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     onClick={() => void patch(p.id, { isActive: !p.isActive })}
                     title={t('admin.toggleActive')}
                   >
@@ -490,7 +490,7 @@ function ProvidersTab({
                   </button>
                 </td>
                 <td>
-                  <div className="adm-row" style={{ gap: 4 }}>
+                  <div className="adm-row" style={{ gap: 4, flexWrap: 'wrap' }}>
                     <button className="adm-btn adm-btn-sm" title={t('admin.testConnection')} onClick={() => void test(p.id)}>
                       <TestTube2 size={14} /> {t('admin.test')}
                     </button>
@@ -1004,14 +1004,14 @@ function ToolsTab({
                   <button
                     type="button"
                     className={`adm-badge ${tl.isActive ? 'adm-badge-success' : 'adm-badge-neutral'}`}
-                    style={{ border: 'none', cursor: 'pointer' }}
+                    style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     onClick={() => void toggle(tl.id, !tl.isActive)}
                   >
                     {tl.isActive ? t('admin.active') : t('admin.inactive')}
                   </button>
                 </td>
                 <td>
-                  <div className="adm-row" style={{ gap: 4 }}>
+                  <div className="adm-row" style={{ gap: 4, flexWrap: 'wrap' }}>
                     <button
                       className="adm-btn adm-btn-sm"
                       title={t('common.edit')}
