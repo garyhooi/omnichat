@@ -1,75 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniChat Visitor Widget Demo</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OmniChat — Widget Demo</title>
     <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f9fafb;
-            color: #1f2937;
-        }
-        .container {
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            color: #4f46e5;
-        }
-        p {
-            line-height: 1.6;
-        }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #eef2ff 0%, #fdf4ff 50%, #f0f9ff 100%);
+        min-height: 100vh;
+      }
+      .hero {
+        padding: 64px 32px;
+        text-align: center;
+      }
+      .hero h1 {
+        font-size: 34px;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+      }
+      .hero p {
+        color: #64748b;
+        margin: 0 0 24px;
+      }
+      .links {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .links a {
+        padding: 9px 18px;
+        border-radius: 999px;
+        background: #4f46e5;
+        color: #fff;
+        text-decoration: none;
+        font-size: 13.5px;
+        font-weight: 600;
+        box-shadow: 0 4px 14px rgb(79 70 229 / 0.35);
+      }
+      .card {
+        max-width: 560px;
+        margin: 40px auto;
+        background: #fff;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 12px 40px rgb(0 0 0 / 0.08);
+        text-align: left;
+      }
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .card p {
+        color: #64748b;
+        font-size: 13.5px;
+        margin: 0;
+      }
     </style>
-
-    <!-- Load OmniChat Chat Widget Bundle from jsDelivr CDN -->
-    <!-- <script src="https://cdn.jsdelivr.net/gh/garyhooi/omnichat@main/apps/web/dist/omnichat-chat-widget.js" crossorigin="anonymous"></script> -->
-
-    <!-- Fallback for local testing if the CDN version isn't pushed to GitHub yet -->
-    <script src="../apps/web/dist/omnichat-chat-widget.js"></script>
-    <script>
-        window.addEventListener('error', function(e) {
-            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('jsdelivr')) {
-                console.warn('CDN script failed to load. Falling back to local build...');
-                const localScript = document.createElement('script');
-                localScript.src = '../apps/web/dist/omnichat-chat-widget.js';
-                document.head.appendChild(localScript);
-            }
-        }, true);
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>OmniChat Chat Widget</h1>
-        <p>
-            Welcome to the OmniChat Chat Widget Demo! Look at the bottom-right corner of your screen to interact with the chat bubble.
-        </p>
-        <p>
-            This page demonstrates how easily you can embed the compiled Vue 3 Custom Web Component into any static HTML site using our jsDelivr CDN link.
-        </p>
-
-        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #e5e7eb;">
-
-        <h3>Setup Instructions:</h3>
-        <ol>
-            <li>Include the <code>&lt;script&gt;</code> tag pointing to the CDN in your <code>&lt;head&gt;</code>.</li>
-            <li>Add the <code>&lt;omnichat-chat-widget&gt;</code> element anywhere in your body.</li>
-            <li>Point the <code>server-url</code> attribute to your running OmniChat API backend (e.g., <code>http://localhost:3001</code>).</li>
-            <li>For authenticated visitors: add <code>data-external-token</code> attribute with an HS256-signed JWT (signed with <code>EXTERNAL_SITE_JWT_SECRET</code>).</li>
-        </ol>
+  </head>
+  <body>
+    <div class="hero">
+      <h1>OmniChat Widget</h1>
+      <p>The React 19 rebuild — embedded as a web component with Shadow DOM.</p>
+      <div class="links">
+        <a href="/demo/widget.html">Chat widget</a>
+        <a href="/demo/chat-page.html">Full-page chat</a>
+        <a href="/demo/agent.html">Agent widget</a>
+        <a href="/demo/admin.html">Admin portal</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>💬 The widget is in the bottom-right corner</h2>
+      <p>
+        Click the bubble to start a chat. The conversation persists across reloads
+        (localStorage), plays sounds, auto-translates, and syncs read receipts.
+      </p>
     </div>
 
-    <!-- OmniChat Chat Widget Component -->
-    <omnichat-chat-widget
-        server-url="http://localhost:3001"
-        bubble-color="#4F46E5"
-        welcome-message="Hi there! 👋 How can we help you today?">
-    </omnichat-chat-widget>
-</body>
+    <omnichat-chat-widget server-url="http://localhost:3001" bubble-color="#4f46e5"></omnichat-chat-widget>
+    <script src="../apps/web/dist/omnichat-chat-widget.js"></script>
+  </body>
 </html>

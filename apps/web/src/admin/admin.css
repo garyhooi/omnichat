@@ -1,0 +1,614 @@
+/* =============================================================================
+ * Admin portal styles — Shadow DOM (injected into <omnichat-admin-portal>).
+ * Theme variables live on :host; everything else is scoped by the shadow root.
+ * ============================================================================= */
+
+:host {
+  --adm-bg: #f4f5f9;
+  --adm-surface: #ffffff;
+  --adm-border: #e6e8ef;
+  --adm-text: #1e293b;
+  --adm-muted: #64748b;
+  --adm-accent: #4f46e5;
+  /* Derived shades follow the site-configured accent automatically. */
+  --adm-accent-soft: color-mix(in srgb, var(--adm-accent) 10%, white);
+  --adm-accent-hover: color-mix(in srgb, var(--adm-accent) 88%, #000);
+  --adm-danger: #ef4444;
+  --adm-success: #10b981;
+  --adm-warning: #f59e0b;
+
+  display: block;
+  /* Match legacy admin portal — fixed viewport height so the panel never
+     bounces between sizes when switching between pages. */
+  width: 100%;
+  height: 80vh;
+  max-height: 80vh;
+  min-height: 600px;
+  border-radius: 16px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--adm-text);
+  background: var(--adm-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The React mount point must fill the custom element for the 100% chain. */
+.admp-host {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shell
+ * --------------------------------------------------------------------------- */
+.adm-shell {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.adm-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+  min-width: 210px;
+  background: #111827;
+  color: #fff;
+  overflow: hidden;
+}
+
+.adm-sidebar.collapsed {
+  width: 56px;
+  min-width: 56px;
+}
+
+.adm-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #374151;
+}
+
+.adm-sidebar-brand {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.adm-nav {
+  flex: 1;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.adm-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: none;
+  color: #9ca3af;
+  font: inherit;
+  font-size: 13.5px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.adm-nav-item:hover {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+
+.adm-nav-item.active {
+  background: var(--adm-accent);
+  color: #fff;
+}
+
+.adm-nav-item .badge {
+  margin-left: auto;
+}
+
+.adm-sidebar-foot {
+  padding: 10px 12px;
+  border-top: 1px solid #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adm-sidebar-user {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.adm-sidebar-user strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-sidebar-user span {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.adm-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* Reserve the scrollbar gutter even when content fits. Without this, the
+     scrollbar appears/disappears as pages load, rows expand, or forms open,
+     and everything reflows sideways — reads as the width "glitching" when
+     embedded in a backoffice. */
+  scrollbar-gutter: stable;
+  padding: 22px 26px;
+}
+
+.adm-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* Wrap instead of overflowing on narrow embeds — horizontal overflow here
+     would toggle a second scrollbar and shift the whole layout. */
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.adm-page-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.adm-page-sub {
+  font-size: 12.5px;
+  color: var(--adm-muted);
+  margin-top: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Primitives
+ * --------------------------------------------------------------------------- */
+.adm-card {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.adm-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--adm-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+
+.adm-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.adm-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.adm-grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.adm-input,
+.adm-select,
+.adm-textarea {
+  border: 1px solid var(--adm-border);
+  background: #fff;
+  border-radius: 9px;
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--adm-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.adm-input:focus,
+.adm-select:focus,
+.adm-textarea:focus {
+  border-color: var(--adm-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--adm-accent) 13%, transparent);
+}
+
+.adm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--adm-border);
+  background: #fff;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  color: var(--adm-text);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.adm-btn:hover {
+  background: #f8fafc;
+}
+
+.adm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adm-btn-primary {
+  background: var(--adm-accent);
+  border-color: var(--adm-accent);
+  color: #fff;
+}
+
+.adm-btn-primary:hover {
+  background: var(--adm-accent-hover);
+}
+
+.adm-btn-danger {
+  background: var(--adm-danger);
+  border-color: var(--adm-danger);
+  color: #fff;
+}
+
+.adm-btn-danger:hover {
+  background: #dc2626;
+}
+
+.adm-btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
+.adm-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--adm-muted);
+  margin-bottom: 5px;
+}
+
+.adm-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.adm-badge-active {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.adm-badge-ai {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.adm-badge-specialist {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.adm-badge-resolved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.adm-badge-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.adm-badge-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.adm-badge-neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* ---------------------------------------------------------------------------
+ * Table
+ * --------------------------------------------------------------------------- */
+.adm-table-wrap {
+  overflow-x: auto;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: 14px;
+}
+
+.adm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.adm-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--adm-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--adm-border);
+  background: #fafbfc;
+  white-space: nowrap;
+}
+
+.adm-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f3f7;
+  vertical-align: middle;
+}
+
+/* Machine tokens (model IDs, keys, URLs, IPs) may break at any character so
+   the table's minimum width is not dictated by their content — otherwise the
+   table overflows narrow embeds by an amount that changes with the data. */
+.adm-table td.adm-mono,
+.adm-table code.adm-mono {
+  overflow-wrap: anywhere;
+}
+
+.adm-table tr:last-child td {
+  border-bottom: none;
+}
+
+.adm-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.adm-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.adm-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.adm-table tbody tr.adm-row-active {
+  background: var(--adm-accent-soft);
+}
+
+.adm-table tbody tr.adm-row-active:hover {
+  background: var(--adm-accent-soft);
+}
+
+/* ---------------------------------------------------------------------------
+ * Login
+ * --------------------------------------------------------------------------- */
+.adm-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  background: linear-gradient(160deg, #111827 0%, #1e293b 55%, #312e81 130%);
+  padding: 20px;
+}
+
+.adm-login-card {
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 32px 30px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
+}
+
+.adm-login-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: var(--adm-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.adm-login h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.adm-login p {
+  color: var(--adm-muted);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.adm-login .adm-field {
+  margin-bottom: 12px;
+}
+
+.adm-login-error {
+  color: var(--adm-danger);
+  font-size: 12.5px;
+  margin: 8px 0 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tabs
+ * --------------------------------------------------------------------------- */
+.adm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--adm-border);
+  margin-bottom: 14px;
+}
+
+.adm-tab {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-muted);
+  padding: 9px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.12s ease;
+}
+
+.adm-tab:hover {
+  color: var(--adm-text);
+}
+
+.adm-tab.active {
+  color: var(--adm-accent);
+  border-bottom-color: var(--adm-accent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Misc
+ * --------------------------------------------------------------------------- */
+.adm-empty {
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--adm-muted);
+  font-size: 13px;
+}
+
+.adm-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--adm-border);
+  border-top-color: var(--adm-accent);
+  border-radius: 50%;
+  animation: adm-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes adm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.adm-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.adm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adm-stat-value {
+  font-size: 26px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.adm-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--adm-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adm-stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.adm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.adm-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adm-muted {
+  color: var(--adm-muted);
+}
+
+.adm-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* Conversation drawer */
+.adm-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(480px, 100vw);
+  background: #fff;
+  box-shadow: -16px 0 48px rgb(0 0 0 / 0.18);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  animation: adm-drawer-in 0.2s ease;
+}
+
+@keyframes adm-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.adm-drawer .oc-messages {
+  flex: 1;
+  min-height: 0;
+}

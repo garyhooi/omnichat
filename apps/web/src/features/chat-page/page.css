@@ -1,0 +1,55 @@
+/* =============================================================================
+ * Full-page chat chrome — the panel fills the viewport; a subtle drop overlay
+ * accepts images dragged from the OS onto the chat.
+ * ============================================================================= */
+
+.oc-page-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.oc-page-root .oc-chat-root {
+  height: 100%;
+}
+
+.oc-page-root .oc-chat-panel {
+  border-radius: 0;
+}
+
+/* Drop overlay while dragging an image over the page */
+.oc-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  background: rgb(15 18 28 / 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: oc-fade-in 0.15s ease;
+}
+
+.oc-drop-overlay-inner {
+  border: 2px dashed rgb(255 255 255 / 0.55);
+  border-radius: 20px;
+  padding: 36px 56px;
+  color: #fff;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.oc-drop-overlay-inner small {
+  display: block;
+  margin-top: 6px;
+  font-weight: 400;
+  opacity: 0.7;
+  font-size: 12.5px;
+}

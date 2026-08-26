@@ -45,6 +45,14 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  visitorLanguage?: string;
+
+  @IsString()
+  @IsOptional()
+  adminLanguage?: string;
+
+  @IsString()
+  @IsOptional()
   bubbleSize?: string;
 
   @IsString()
@@ -120,6 +128,14 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   greetingMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  visitorLanguage?: string;
+
+  @IsString()
+  @IsOptional()
+  adminLanguage?: string;
 
   @IsString()
   @IsOptional()

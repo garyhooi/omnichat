@@ -13,6 +13,7 @@ import { Throttle } from '@nestjs/throttler';
 import { generateText } from 'ai';
 import { AiConfigService } from './ai-config.service';
 import { AiProviderFactory } from './ai-provider.factory';
+import { AiService } from './ai.service';
 import { SESSION_STATE_STORE, SessionStateStore } from '../session-state/session-state.interface';
 import { IsNotEmpty, IsString } from 'class-validator';
 
@@ -51,6 +52,7 @@ export class AiTranslateController {
   constructor(
     private readonly aiConfigService: AiConfigService,
     private readonly providerFactory: AiProviderFactory,
+    private readonly aiService: AiService,
     @Inject(SESSION_STATE_STORE)
     private readonly stateStore: SessionStateStore,
   ) {}
@@ -90,22 +92,30 @@ export class AiTranslateController {
       throw new HttpException('Too many translation requests. Please try again later.', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const providerConfig = await this.aiConfigService.getTranslationProvider();
-    if (!providerConfig) {
+    // Ordered chain: translation provider first, then the failover provider.
+    const providerChain = await this.aiConfigService.getTranslationProviderChain();
+    if (!providerChain.length) {
       throw new HttpException('No active AI provider configured', HttpStatus.SERVICE_UNAVAILABLE);
     }
 
-    try {
-      const model = this.providerFactory.createLanguageModel(providerConfig);
-      const langName = this.languageNames[targetLanguage] || targetLanguage;
+    const langName = this.languageNames[targetLanguage] || targetLanguage;
 
-      const result = await generateText({
-        model,
-        system: `You are a professional translator. Translate the following text to ${langName}. Preserve all markdown formatting, code blocks, bullet points, and links. Output the translation only, with no additional text.`,
-        prompt: text,
-        temperature: 0.1,
-        maxTokens: Math.max(256,text.length * 2),
-      });
+    try {
+      // Try the primary provider; on any error automatically retry the backup.
+      const { result } = await this.aiService.executeWithFailover(
+        providerChain,
+        'Translation',
+        async (providerConfig) => {
+          const model = this.providerFactory.createLanguageModel(providerConfig);
+          return generateText({
+            model,
+            system: `You are a professional translator. Translate the following text to ${langName}. Preserve all markdown formatting, code blocks, bullet points, and links. Output the translation only, with no additional text.`,
+            prompt: text,
+            temperature: 0.1,
+            maxTokens: Math.max(256,text.length * 2),
+          });
+        },
+      );
 
       return { translatedText: result.text.trim(), targetLanguage };
     } catch (error: any) {

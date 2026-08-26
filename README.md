@@ -9,10 +9,44 @@
 **OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight Vue 3 chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
 
 <div align="center">
-  <img src="docs/img/ss-admin.png" alt="OmniChat Admin Portal" width="48%" />
-  <img src="docs/img/ss-widget.png" alt="OmniChat Chat Widget" width="48%" />
-  <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent" width="48%" />
-  <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base" width="48%" />
+  <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;max-width:1000px">
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-admin.png" alt="OmniChat Admin Portal" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Admin Portal</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-dashboard.png" alt="OmniChat Dashboard" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Dashboard</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-settings.png" alt="OmniChat Settings &amp; Widget Setup" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Settings &amp; Widget Setup</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-report.png" alt="OmniChat Report" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Report</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-ai.png" alt="OmniChat AI Agent Setup" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">AI Agent</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-rag.png" alt="OmniChat AI Knowledge Base (RAG)" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">AI Knowledge Base (RAG)</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-visitor-widget.png" alt="OmniChat Visitor Chat Widget" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Visitor Chat Widget</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-visitor-chat-page.png" alt="OmniChat Visitor Chat Page" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Visitor Chat Page</figcaption>
+    </figure>
+    <figure style="margin:0;width:300px;text-align:center">
+      <img src="docs/img/ss-admin-widget.png" alt="OmniChat Admin / Agent Widget" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Admin / Agent Widget</figcaption>
+    </figure>
+  </div>
 </div>
 
 ## ✨ Features
@@ -52,11 +86,14 @@
 This project is structured as a Bun workspace monorepo:
 
 * **Backend (`apps/api`)**: NestJS, Prisma (MongoDB, PostgreSQL, MySQL), Socket.io, Multer, Sharp.
-* **Frontend (`apps/web`)**: Vue 3 (compiled to Custom Web Components via Vite).
+* **Frontend (`apps/web`)**: React 19 (compiled to Custom Web Components via Vite — chat widget, chat page, agent widget, admin portal).
+* **Legacy frontend (`apps/web-legacy`)**: the previous Vue 3 build, archived for reference (not part of the workspace).
 
 ## 🧩 Web Component Usage & Attributes
 
 OmniChat is compiled into native Web Components, meaning you can drop them into any framework (React, Angular, Vue, Blazor) or plain HTML.
+> **🌐 UI language (`lang`)**: All four custom elements accept an optional `lang` attribute to set each component's UI language per embed. The values are the same 20 languages used for inline message translation (e.g. `en`, `zh-Hant`, `ja`, `ko`, `fr`, `de`, `es`, `ar`). It overrides the operator-configured default language (stored in the admin portal → Widget Setup) for that specific embed; if omitted, each surface falls back to the configured default, then the browser language, then English (`en`).
+
 
 - **Visitor components** (embedded on your website for customers):
   - `<omnichat-chat-widget>`
@@ -64,6 +101,12 @@ OmniChat is compiled into native Web Components, meaning you can drop them into 
 - **Admin / Agent components** (embedded in your internal admin or backoffice pages):
   - `<omnichat-admin-portal>`
   - `<omnichat-agent-widget>`
+
+> **Sizing the admin portal**: `<omnichat-admin-portal>` fills whatever box its
+> host page gives it — set a height on the element (e.g. `height: 100vh`,
+> `height: 100%` inside a flex/grid pane, or a fixed `height: 800px`). Without
+> a host height it grows with its content. The widget components size
+> themselves (fixed launcher bubble / full-page chat).
 
 ### Chat Widget (`<omnichat-chat-widget>`)
 A floating bubble that opens a chat panel. Drop it onto any page for instant visitor engagement.
@@ -362,43 +405,37 @@ You can easily embed OmniChat via CDN:
 ```
 omnichat/
 ├── apps/
-│   ├── api/                        ← NestJS backend
+│   ├── api/                        ← NestJS backend (Bun)
 │   │   ├── src/
-│   │   │   ├── chat/
-│   │   │   ├── auth/
-│   │   │   └── config/
+│   │   │   ├── ai/                 ← AI providers, agent tools, failover
+│   │   │   ├── auth/               ← JWT + site-token authentication
+│   │   │   ├── chat/               ← conversations & socket.io layer
+│   │   │   ├── config/             ← site config / widget setup
+│   │   │   ├── quick-reply/        ← canned responses
+│   │   │   ├── rag/                ← knowledge base / retrieval (RAG)
+│   │   │   ├── reports/            ← admin reports (e.g. agent performance)
+│   │   │   ├── upload/             ← image uploads + HEIC conversion
+│   │   │   └── ...
 │   │   ├── prisma/
 │   │   │   ├── schema.prisma
 │   │   │   ├── schema.mongodb.prisma
-|   |   |   ├── schema.postgresql.prisma
+│   │   │   ├── schema.postgresql.prisma
 │   │   │   └── schema.mysql.prisma
 │   │   └── .env.example
-│   └── web/                        ← Vue 3 Web Components
-│       ├── src/
-│       │   ├── admin-portal/
-│       │   │   ├── AdminDashboard.ce.vue
-│       │   │   ├── main.ce.ts
-│       │   │   ├── pages/
-│       │   │   │   ├── DeveloperPage.vue
-│       │   │   │   └── ...
-│       │   │   └── stores/
-│       │   ├── agent-widget/
-│       │   │   ├── App.ce.vue
-│       │   │   └── main.ts
-│       │   ├── chat-widget/
-│       │   │   ├── App.ce.vue
-│       │   │   └── main.ts
-│       │   ├── chat-page/
-│       │   │   ├── App.ce.vue
-│       │   │   └── main.ts
-│       │   ├── shared/
-│       │   └── utils/
-│       ├── demo/
-│       │   ├── admin.html
-│       │   ├── widget.html
-│       │   ├── chat-page.html
-│       │   └── chat-app.html
-│       └── vite.config.*.ts
+│   ├── web/                        ← React 19 (compiled to custom web components)
+│   │   ├── src/
+│   │   │   ├── widget/             ← <omnichat-chat-widget> entry (main.tsx)
+│   │   │   ├── chat-page/          ← <omnichat-chat-page> entry (main.tsx)
+│   │   │   ├── agent/              ← <omnichat-agent-widget> entry (main.tsx)
+│   │   │   ├── admin-portal/       ← <omnichat-admin-portal> entry (main.tsx)
+│   │   │   ├── admin/              ← admin app shell + pages
+│   │   │   │   └── pages/          ← Dashboard, Conversations, AiSetup, KnowledgeBase, Report, Settings, Users, Logs
+│   │   │   ├── features/           ← shared component logic per surface (chat, chat-page, agent, widget)
+│   │   │   └── shared/             ← components, hooks, lib (locales/i18n), types
+│   │   ├── vite.config.*.ts        ← one build per component bundle
+│   │   └── dev-*.html / dev-*.tsx  ← in-workspace component playgrounds
+│   └── web-legacy/                 ← archived Vue 3 build (reference only; not in workspace)
+├── demo/                           ← embeddable HTML demos (admin, agent, chat-page, widget)
 ├── docker-compose.yml
 └── scripts/
     └── use-provider.sh
