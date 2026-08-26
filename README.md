@@ -2,11 +2,11 @@
 
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-green)
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white)
-![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?logo=vue.js&logoColor=white)
+![React](https://img.shields.io/badge/React-21354D?logo=react&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)
 ![Socket.io](https://img.shields.io/badge/Socket.io-010101?logo=socket.io&logoColor=white)
 
-**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight Vue 3 chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
+**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight React chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
 
 <div align="center">
   <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;max-width:1000px">
