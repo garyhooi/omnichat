@@ -16,14 +16,14 @@
     </figure>
     <figure style="margin:0;width:300px;text-align:center">
       <img src="docs/img/ss-dashboard.png" alt="OmniChat Dashboard" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
-      <figcaption style="margin-top:8px;font-size:13px;color:#555">Conversations Dashboard</figcaption>
+      <figcaption style="margin-top:8px;font-size:13px;color:#555">Dashboard</figcaption>
     </figure>
     <figure style="margin:0;width:300px;text-align:center">
       <img src="docs/img/ss-settings.png" alt="OmniChat Settings &amp; Widget Setup" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
       <figcaption style="margin-top:8px;font-size:13px;color:#555">Settings &amp; Widget Setup</figcaption>
     </figure>
     <figure style="margin:0;width:300px;text-align:center">
-      <img src="docs/img/ss-report.png" alt="OmniChat Agent Performance Report" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
+      <img src="docs/img/ss-report.png" alt="OmniChat Report" style="width:100%;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12)" />
       <figcaption style="margin-top:8px;font-size:13px;color:#555">Report</figcaption>
     </figure>
     <figure style="margin:0;width:300px;text-align:center">
