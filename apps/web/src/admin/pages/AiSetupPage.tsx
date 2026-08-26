@@ -719,6 +719,49 @@ function AgentTab({
             </label>
           </div>
         </div>
+
+        <div className="adm-card">
+          <h2 className="adm-card-title">{t('admin.failoverProviders')}</h2>
+          <p className="adm-muted" style={{ fontSize: 12, margin: '-4px 0 10px' }}>
+            {t('admin.failoverHelp')}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label className="adm-label">{t('admin.chatFailover')}</label>
+              <select className="adm-select" style={{ width: '100%' }} value={form.chatFailoverProviderId ?? ''} onChange={(e) => set('chatFailoverProviderId', e.target.value || null)}>
+                <option value="">{t('admin.none')}</option>
+                {(providers ?? [])
+                  // The active provider already serves chat — offer everyone else,
+                  // but keep a stale selection visible instead of silently hiding it.
+                  .filter((p) => !p.isActive || p.id === (form.chatFailoverProviderId ?? ''))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.providerType})</option>
+                  ))}
+              </select>
+              <p className="adm-muted" style={{ fontSize: 11, margin: '2px 0 0' }}>
+                {t('admin.chatFailoverDesc')}
+              </p>
+            </div>
+            <div>
+              <label className="adm-label">{t('admin.embeddingFailover')}</label>
+              <select className="adm-select" style={{ width: '100%' }} value={form.embeddingFailoverProviderId ?? ''} onChange={(e) => set('embeddingFailoverProviderId', e.target.value || null)}>
+                <option value="">{t('admin.none')}</option>
+                {(providers ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.providerType})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="adm-label">{t('admin.translateFailover')}</label>
+              <select className="adm-select" style={{ width: '100%' }} value={form.translateFailoverProviderId ?? ''} onChange={(e) => set('translateFailoverProviderId', e.target.value || null)}>
+                <option value="">{t('admin.none')}</option>
+                {(providers ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.providerType})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Save bar — sticky at the bottom of the scroll area so it never reads

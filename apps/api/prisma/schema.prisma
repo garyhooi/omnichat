@@ -250,6 +250,9 @@ model AiAgentConfig {
   spamIpBlacklistMinutes Int      @default(15)
   embeddingProviderId    String?  // ID of the provider to use for embeddings (null = use active chat provider)
   translateProviderId    String?  // ID of the provider to use for translation (null = use active chat provider)
+  chatFailoverProviderId     String? // Failover provider used automatically when the active chat provider errors
+  embeddingFailoverProviderId String? // Failover provider used automatically when the embedding provider errors
+  translateFailoverProviderId String? // Failover provider used automatically when the translation provider errors
   translationEnabled     Boolean  @default(true) // toggle translation feature on/off globally
   autoTranslationEnabled Boolean  @default(true) // auto-translate incoming messages
   // Global token spend budget per period (null = unlimited) — applies across

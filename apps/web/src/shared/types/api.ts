@@ -229,6 +229,10 @@ export interface AiAgentConfig {
   spamIpBlacklistMinutes: number
   embeddingProviderId?: string | null
   translateProviderId?: string | null
+  /** Failover providers — used automatically when the primary provider errors. */
+  chatFailoverProviderId?: string | null
+  embeddingFailoverProviderId?: string | null
+  translateFailoverProviderId?: string | null
   translationEnabled: boolean
   autoTranslationEnabled: boolean
   /** Global token spend budget per period (null = unlimited). */
@@ -257,6 +261,9 @@ export type AiAgentConfigRequest = Partial<{
   spamIpBlacklistMinutes: number
   embeddingProviderId: string | null
   translateProviderId: string | null
+  chatFailoverProviderId?: string | null
+  embeddingFailoverProviderId?: string | null
+  translateFailoverProviderId?: string | null
   translationEnabled: boolean
   autoTranslationEnabled: boolean
   maxTokensPerDay: number | null

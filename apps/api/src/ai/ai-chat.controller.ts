@@ -175,7 +175,8 @@ export class AiChatController {
       };
       req.on('close', onReqClose);
 
-      // Stream AI response
+      // Stream AI response — automatically fails over to the configured
+      // backup provider when the primary one errors before emitting anything.
       const result = await this.aiService.streamChat({
         conversationId,
         messages,
@@ -184,9 +185,10 @@ export class AiChatController {
         tools,
         maxTokens: agentConfig.maxTokensPerResponse,
         temperature: agentConfig.temperature,
-        onFinish: async ({ text, usage }) => {
-          // Persist usage for the token reports, then track the session budget.
-          await this.aiService.recordUsage(conversationId, usage);
+        onFinish: async ({ text, usage, provider }) => {
+          // Persist usage for the token reports (attributed/priced on the
+          // provider that actually served the response), then track session budget.
+          await this.aiService.recordUsage(conversationId, usage, provider);
           if (usage.totalTokens > 0) {
             const tokenCheck = await this.handoffService.recordTokenUsage(
               conversationId,
@@ -201,28 +203,37 @@ export class AiChatController {
         },
       });
 
-      // Pipe the stream as SSE using Vercel AI SDK data stream protocol
-      const stream = result.toDataStream();
-      
+      // Pipe the stream as SSE using Vercel AI SDK data stream protocol.
+      // Written manually over the failover-aware fullStream so a failing
+      // primary provider is transparently retried on the backup before any
+      // bytes reach the client.
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Vercel-AI-Data-Stream', 'v1');
-      
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
-      
+
+      let wroteAnything = false;
       try {
-        while (true) {
-          if (abortController.signal.aborted) {
-            reader.cancel();
-            break;
+        for await (const part of result.fullStream) {
+          if (abortController.signal.aborted) break;
+          if (part.type === 'text-delta') {
+            wroteAnything = true;
+            res.write(`0:${JSON.stringify(part.textDelta)}\n`);
+          } else if (part.type === 'error') {
+            const message = part.error?.message ?? 'AI service error';
+            // Nothing streamed yet → surface as a real HTTP error so callers
+            // see a failure instead of an empty 200 stream.
+            if (!wroteAnything) throw new Error(message);
+            res.write(`3:${JSON.stringify(message)}\n`);
           }
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
         }
-      } finally {
+        if (!abortController.signal.aborted) {
+          res.write(`d:${JSON.stringify({ finishReason: 'stop', usage: { promptTokens: 0, completionTokens: 0 } })}\n`);
+        }
+        res.end();
+      } catch (streamError: any) {
+        if (!wroteAnything) throw streamError; // outer catch maps to HTTP status
+        res.write(`3:${JSON.stringify(streamError.message ?? 'AI service error')}\n`);
         res.end();
       }
     } catch (error: any) {

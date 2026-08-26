@@ -1455,10 +1455,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
       this.logger.log(`AI response starting for conversation ${conversationId}`);
 
-      const onFinish = async ({ text, usage }: { text: string; usage: { promptTokens?: number; completionTokens?: number; totalTokens: number } }) => {
+      const onFinish = async ({ text, usage, provider }: { text: string; usage: { promptTokens?: number; completionTokens?: number; totalTokens: number }; provider?: any }) => {
         this.logger.log(`[AI:${conversationId}] onFinish called. text length: ${text.length}, totalTokens: ${usage.totalTokens}, text preview: "${text.substring(0, 200)}"`);
-        // Persist usage for the token reports (pricing snapshot + cost).
-        await this.aiService.recordUsage(conversationId, usage);
+        // Persist usage for the token reports (attributed to the provider that
+        // actually served the response — may differ from active after failover).
+        await this.aiService.recordUsage(conversationId, usage, provider);
         if (usage.totalTokens > 0) {
           const tokenCheck = await this.handoffService.recordTokenUsage(
             conversationId,
@@ -1471,6 +1472,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           }
         }
         this.securityService.resetGlobalFailure();
+      };
+
+      // Auto-failover audit trail — records each primary→backup switch.
+      const onFailover = async ({ from, to, error }: { from: { id: string; name: string }; to: { id: string; name: string }; error: string }) => {
+        await this.aiLogService.createLog({
+          conversationId,
+          providerId: from.id || null,
+          eventType: 'provider_failover',
+          message: `Provider "${from.name}" failed (${error}) — failing over to "${to.name}"`,
+          details: { from: from.name, to: to.name, error },
+        });
       };
 
       // Create abort controller for this stream
@@ -1491,6 +1503,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
           temperature: agentConfig.temperature,
           abortSignal: abortController.signal,
           onFinish,
+          onFailover,
         });
 
         // Consume stream: emit text deltas to visitor; on errors record to DB
@@ -1537,6 +1550,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             maxTokens: agentConfig.maxTokensPerResponse,
             temperature: agentConfig.temperature,
             onFinish,
+            onFailover,
           });
 
           // Consume retry stream and emit text deltas

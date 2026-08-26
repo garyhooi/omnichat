@@ -208,6 +208,9 @@ export class AiConfigService {
     spamIpBlacklistMinutes?: number;
     embeddingProviderId?: string | null;
     translateProviderId?: string | null;
+    chatFailoverProviderId?: string | null;
+    embeddingFailoverProviderId?: string | null;
+    translateFailoverProviderId?: string | null;
     translationEnabled?: boolean;
     autoTranslationEnabled?: boolean;
     maxTokensPerDay?: number | null;
@@ -307,43 +310,98 @@ export class AiConfigService {
     return this.prisma.toolRegistration.delete({ where: { id } });
   }
 
+  /** Load one provider by id with its API key decrypted (null when missing). */
+  private async loadProvider(id?: string | null) {
+    if (!id) return null;
+    const provider = await this.prisma.aiProvider.findUnique({ where: { id } });
+    if (!provider) {
+      this.logger.warn(`AI provider ${id} not found — skipping it in the failover chain`);
+      return null;
+    }
+    if (provider.apiKey) {
+      try {
+        provider.apiKey = this.decrypt(provider.apiKey);
+      } catch {
+        // Key may not be encrypted (legacy), use as-is
+      }
+    }
+    return provider;
+  }
+
+  /**
+   * Build an ordered failover chain: [primary, ...backups]. Duplicates and
+   * missing providers are dropped so callers can simply try the entries in
+   * order until one succeeds.
+   */
+  private buildChain(
+    primary: Awaited<ReturnType<AiConfigService['loadProvider']>>,
+    failovers: Array<Awaited<ReturnType<AiConfigService['loadProvider']>>>,
+  ) {
+    const chain: NonNullable<Awaited<ReturnType<AiConfigService['loadProvider']>>>[] = [];
+    for (const p of [primary, ...failovers]) {
+      if (!p) continue;
+      if (chain.some((c) => c.id === p.id)) continue;
+      chain.push(p);
+    }
+    return chain;
+  }
+
+  /**
+   * Ordered chat providers: the active provider first, then the configured
+   * chat failover provider. The AI agent tries them in order on errors.
+   */
+  async getChatProviderChain() {
+    const agentConfig = await this.prisma.aiAgentConfig.findFirst();
+    const primary = await this.getActiveProvider();
+    const backup = await this.loadProvider(agentConfig?.chatFailoverProviderId);
+    return this.buildChain(primary, [backup]);
+  }
+
   /** Get embedding provider — falls back to active chat provider if not configured. */
   async getEmbeddingProvider() {
+    const chain = await this.getEmbeddingProviderChain();
+    return chain[0] ?? null;
+  }
+
+  /**
+   * Ordered embedding providers: the configured embedding provider (or the
+   * active chat provider), then the configured embedding failover provider.
+   * Note: the backup should produce vectors with the same dimensions as the
+   * primary, otherwise similarity search over mixed embeddings degrades.
+   */
+  async getEmbeddingProviderChain() {
     const agentConfig = await this.prisma.aiAgentConfig.findFirst();
-    if (agentConfig?.embeddingProviderId) {
-      const provider = await this.prisma.aiProvider.findUnique({
-        where: { id: agentConfig.embeddingProviderId },
-      });
-      if (provider?.apiKey) {
-        try {
-          provider.apiKey = this.decrypt(provider.apiKey);
-        } catch {
-          // Key may not be encrypted (legacy), use as-is
-        }
-      }
-      if (provider) return provider;
+    let primary = agentConfig?.embeddingProviderId
+      ? await this.loadProvider(agentConfig.embeddingProviderId)
+      : null;
+    if (!primary && agentConfig?.embeddingProviderId) {
       this.logger.warn(`Embedding provider ${agentConfig.embeddingProviderId} not found, falling back to active provider`);
     }
-    return this.getActiveProvider();
+    primary = primary ?? (await this.getActiveProvider());
+    const backup = await this.loadProvider(agentConfig?.embeddingFailoverProviderId);
+    return this.buildChain(primary, [backup]);
   }
 
   /** Get translation provider — falls back to active chat provider if not configured. */
   async getTranslationProvider() {
+    const chain = await this.getTranslationProviderChain();
+    return chain[0] ?? null;
+  }
+
+  /**
+   * Ordered translation providers: the configured translation provider (or the
+   * active chat provider), then the configured translation failover provider.
+   */
+  async getTranslationProviderChain() {
     const agentConfig = await this.prisma.aiAgentConfig.findFirst();
-    if (agentConfig?.translateProviderId) {
-      const provider = await this.prisma.aiProvider.findUnique({
-        where: { id: agentConfig.translateProviderId },
-      });
-      if (provider?.apiKey) {
-        try {
-          provider.apiKey = this.decrypt(provider.apiKey);
-        } catch {
-          // Key may not be encrypted (legacy), use as-is
-        }
-      }
-      if (provider) return provider;
+    let primary = agentConfig?.translateProviderId
+      ? await this.loadProvider(agentConfig.translateProviderId)
+      : null;
+    if (!primary && agentConfig?.translateProviderId) {
       this.logger.warn(`Translation provider ${agentConfig.translateProviderId} not found, falling back to active provider`);
     }
-    return this.getActiveProvider();
+    primary = primary ?? (await this.getActiveProvider());
+    const backup = await this.loadProvider(agentConfig?.translateFailoverProviderId);
+    return this.buildChain(primary, [backup]);
   }
 }

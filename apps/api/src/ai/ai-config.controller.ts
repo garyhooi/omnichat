@@ -70,6 +70,10 @@ class UpsertAgentConfigDto {
   @IsNumber() @IsOptional() @Min(1) @Max(1440) spamIpBlacklistMinutes?: number;
   @IsString() @IsOptional() embeddingProviderId?: string | null;
   @IsString() @IsOptional() translateProviderId?: string | null;
+  // Failover providers — used automatically when the primary provider errors.
+  @IsString() @IsOptional() chatFailoverProviderId?: string | null;
+  @IsString() @IsOptional() embeddingFailoverProviderId?: string | null;
+  @IsString() @IsOptional() translateFailoverProviderId?: string | null;
   @IsBoolean() @IsOptional() translationEnabled?: boolean;
   @IsBoolean() @IsOptional() autoTranslationEnabled?: boolean;
   // Global token spend budget per period (null = unlimited) — applies across
