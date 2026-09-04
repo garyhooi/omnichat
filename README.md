@@ -1,12 +1,12 @@
 # 💬 OmniChat
 
-![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-green)
+![License](https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-blue)
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-21354D?logo=react&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)
 ![Socket.io](https://img.shields.io/badge/Socket.io-010101?logo=socket.io&logoColor=white)
 
-**OmniChat** is a high-performance, self-hosted, and open-source communication suite. It features a lightweight React chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
+**OmniChat** is a high-performance, self-hosted, source-available communication suite. It features a lightweight React chat widget for instant visitor engagement, a full-page chat mode for deep-link conversations, and a RAG-ready AI agent that answers questions using your own data. Built for extensibility, developers can effortlessly embed the chat interface into any website, open dedicated chat pages for visitors, and integrate the powerful admin portal directly into their existing backoffice.
 
 <div align="center">
   <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;max-width:1000px">
@@ -465,4 +465,4 @@ If you find OmniChat useful, consider supporting its development:
 
 ## 📄 License
 
-This project is open-source and available under the [MIT License](LICENSE).
+This project is source-available and licensed under the [Apache License 2.0 with the Commons Clause](LICENSE). You may freely use, modify, and redistribute the code for your own projects, but you may not **sell** OmniChat itself — or offer it as a hosted service whose value derives substantially from OmniChat's functionality — without a separate commercial license from the author. For commercial licensing, contact Gary Hooi.
