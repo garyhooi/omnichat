@@ -3,7 +3,7 @@
   "version": "1.0.2",
   "private": true,
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "AGPL-3.0-only",
   "description": "OmniChat Vue 3 Web Components (Admin Portal, Chat Widget & Visitor Page)",
   "scripts": {
     "dev": "bun vite",
