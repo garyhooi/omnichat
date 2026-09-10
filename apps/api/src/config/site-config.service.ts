@@ -35,7 +35,8 @@ export class SiteConfigService {
     aiAvatar?: string;
     agentAvatar?: string;
     visitorAvatar?: string;
-    notificationSoundUrl?: string;
+    visitorNotificationSoundUrl?: string;
+    agentNotificationSoundUrl?: string;
     allowedOrigins: string;
     adminAllowedIps?: string;
     enableReadReceipts?: boolean;
@@ -62,7 +63,8 @@ export class SiteConfigService {
       aiAvatar?: string;
       agentAvatar?: string;
       visitorAvatar?: string;
-      notificationSoundUrl?: string;
+      visitorNotificationSoundUrl?: string;
+      agentNotificationSoundUrl?: string;
       allowedOrigins?: string;
       adminAllowedIps?: string;
       isActive?: boolean;

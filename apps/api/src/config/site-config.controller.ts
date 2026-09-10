@@ -81,7 +81,11 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
-  notificationSoundUrl?: string;
+  visitorNotificationSoundUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  agentNotificationSoundUrl?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -175,7 +179,11 @@ class UpdateSiteConfigDto {
 
   @IsString()
   @IsOptional()
-  notificationSoundUrl?: string;
+  visitorNotificationSoundUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  agentNotificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()

@@ -178,3 +178,5 @@ vite.config.ts.timestamp-*
 
 # User Uploads
 uploads/
+
+.playwright-mcp/

@@ -22,6 +22,21 @@ const AVATAR_META: Record<AvatarField, { labelKey: string; descKey: string }> = 
   visitor: { labelKey: 'admin.avatarVisitor', descKey: 'admin.avatarVisitorDesc' },
 }
 
+// ---------------------------------------------------------------------------
+// Notification sounds — split per side: the visitor widget/chat page hears the
+// visitor sound when an agent/AI replies; the agent console/widget hears the
+// agent sound on incoming messages (falls back to the visitor sound when the
+// agent sound is unset, so existing single-sound setups keep working).
+// ---------------------------------------------------------------------------
+type SoundField = 'visitor' | 'agent'
+
+const SOUND_META: Record<SoundField, { cfgKey: 'visitorNotificationSoundUrl' | 'agentNotificationSoundUrl'; labelKey: string; placeholder: string }> = {
+  visitor: { cfgKey: 'visitorNotificationSoundUrl', labelKey: 'admin.notificationSoundVisitor', placeholder: '/uploads/visitor-notification.mp3' },
+  agent: { cfgKey: 'agentNotificationSoundUrl', labelKey: 'admin.notificationSoundAgent', placeholder: '/uploads/agent-notification.mp3' },
+}
+
+const SOUND_FIELDS: SoundField[] = ['agent', 'visitor']
+
 function parseXy(value: string | undefined | null): { x: number; y: number } | null {
   if (!value?.startsWith('xy:')) return null
   const [xRaw, yRaw] = value.slice(3).split(',')
@@ -111,9 +126,9 @@ export function SettingsPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState<Record<AvatarField, boolean>>({ ai: false, agent: false, visitor: false })
   const avatarFileRefs = useRef<Record<AvatarField, HTMLInputElement | null>>({ ai: null, agent: null, visitor: null })
 
-  // Notification sound
-  const [uploadingSound, setUploadingSound] = useState(false)
-  const soundFileRef = useRef<HTMLInputElement | null>(null)
+  // Notification sounds (per side — visitor vs agent/operator)
+  const [uploadingSound, setUploadingSound] = useState<Record<SoundField, boolean>>({ visitor: false, agent: false })
+  const soundFileRefs = useRef<Record<SoundField, HTMLInputElement | null>>({ visitor: null, agent: null })
 
   const { data: config } = useQuery<SiteConfig | null>({
     queryKey: configKey(serverUrl),
@@ -129,6 +144,13 @@ export function SettingsPage() {
   useEffect(() => {
     if (config && !form) {
       setForm(config)
+      // Legacy single-sound continuity: until a distinct agent sound is
+      // uploaded, show the configured visitor sound in the agent row too
+      // (the agent console falls back to it at runtime). They become fully
+      // independent once either side is changed and saved.
+      if (!config.agentNotificationSoundUrl && config.visitorNotificationSoundUrl) {
+        setForm((f) => (f ? { ...f, agentNotificationSoundUrl: config.visitorNotificationSoundUrl } : f))
+      }
       const xy = parseXy(config.websitePosition)
       setPosX(xy?.x ?? 20)
       setPosY(xy?.y ?? 20)
@@ -252,32 +274,35 @@ export function SettingsPage() {
   )
 
   const handleSoundUpload = useCallback(
-    async (file: File) => {
+    async (field: SoundField, file: File) => {
       if (!file.type.startsWith('audio/')) return
-      setUploadingSound(true)
+      setUploadingSound((u) => ({ ...u, [field]: true }))
       try {
         const url = await uploadBlob(serverUrl, file, file.name)
-        set('notificationSoundUrl', url)
+        set(SOUND_META[field].cfgKey, url)
       } catch {
         setError(t('admin.soundUploadFailed'))
       } finally {
-        setUploadingSound(false)
-        if (soundFileRef.current) soundFileRef.current.value = ''
+        setUploadingSound((u) => ({ ...u, [field]: false }))
+        if (soundFileRefs.current[field]) soundFileRefs.current[field]!.value = ''
       }
     },
     [serverUrl, set, t],
   )
 
-  const playSound = useCallback(() => {
-    const raw = form?.notificationSoundUrl
-    if (!raw) return
-    const src = raw.startsWith('http') ? raw : `${serverUrl.replace(/\/$/, '')}${raw}`
-    const audio = new Audio(src)
-    audio.currentTime = 0
-    audio.play().catch(() => {
-      /* playback blocked or file missing */
-    })
-  }, [form?.notificationSoundUrl, serverUrl])
+  const playSound = useCallback(
+    (field: SoundField) => {
+      const raw = form?.[SOUND_META[field].cfgKey]
+      if (!raw) return
+      const src = raw.startsWith('http') ? raw : `${serverUrl.replace(/\/$/, '')}${raw}`
+      const audio = new Audio(src)
+      audio.currentTime = 0
+      audio.play().catch(() => {
+        /* playback blocked or file missing */
+      })
+    },
+    [form, serverUrl],
+  )
 
   // -------------------------------------------------------------------------
   // Quick replies
@@ -761,41 +786,54 @@ export function SettingsPage() {
                   onChange={(e) => set('greetingMessage', e.target.value)}
                 />
               </div>
-              <div>
-                <label className="adm-label">{t('admin.notificationSound')}</label>
-                <div className="adm-row" style={{ gap: 8, marginBottom: 8 }}>
-                  <button type="button" className="adm-btn" onClick={() => soundFileRef.current?.click()} disabled={uploadingSound}>
-                    {uploadingSound ? t('admin.uploading') : t('admin.uploadSound')}
-                  </button>
-                  {form.notificationSoundUrl && (
-                    <>
-                      <button type="button" className="adm-btn" onClick={playSound}>
-                        <Play size={13} /> {t('admin.play')}
+              {SOUND_FIELDS.map((field) => {
+                const meta = SOUND_META[field]
+                const url = form?.[meta.cfgKey]
+                return (
+                  <div key={field}>
+                    <label className="adm-label">{t(meta.labelKey)}</label>
+                    <div className="adm-row" style={{ gap: 8, marginBottom: 8 }}>
+                      <button
+                        type="button"
+                        className="adm-btn"
+                        onClick={() => soundFileRefs.current[field]?.click()}
+                        disabled={uploadingSound[field]}
+                      >
+                        {uploadingSound[field] ? t('admin.uploading') : t('admin.uploadSound')}
                       </button>
-                      <button type="button" className="adm-btn" onClick={() => set('notificationSoundUrl', '')}>
-                        <X size={13} /> {t('admin.remove')}
-                      </button>
-                    </>
-                  )}
-                  <input
-                    ref={soundFileRef}
-                    type="file"
-                    accept="audio/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) void handleSoundUpload(f)
-                    }}
-                  />
-                </div>
-                <input
-                  className="adm-input adm-mono"
-                  style={{ width: '100%' }}
-                  value={form.notificationSoundUrl ?? ''}
-                  onChange={(e) => set('notificationSoundUrl', e.target.value)}
-                  placeholder="/uploads/notification.mp3"
-                />
-              </div>
+                      {url && (
+                        <>
+                          <button type="button" className="adm-btn" onClick={() => playSound(field)}>
+                            <Play size={13} /> {t('admin.play')}
+                          </button>
+                          <button type="button" className="adm-btn" onClick={() => set(meta.cfgKey, '')}>
+                            <X size={13} /> {t('admin.remove')}
+                          </button>
+                        </>
+                      )}
+                      <input
+                        ref={(el) => {
+                          soundFileRefs.current[field] = el
+                        }}
+                        type="file"
+                        accept="audio/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) void handleSoundUpload(field, f)
+                        }}
+                      />
+                    </div>
+                    <input
+                      className="adm-input adm-mono"
+                      style={{ width: '100%' }}
+                      value={url ?? ''}
+                      onChange={(e) => set(meta.cfgKey, e.target.value)}
+                      placeholder={meta.placeholder}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </div>
 
