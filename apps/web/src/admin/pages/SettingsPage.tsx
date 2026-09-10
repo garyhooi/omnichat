@@ -222,7 +222,7 @@ export function SettingsPage() {
     } finally {
       setSaving(false)
     }
-  }, [avatarEmoji, avatarType, avatarUrl, config, form, iconEmoji, iconType, iconUrl, posX, posY, queryClient, serverUrl])
+  }, [avatarEmoji, avatarType, avatarUrl, config, form, iconEmoji, iconName, iconType, iconUrl, posX, posY, queryClient, serverUrl])
 
   const handleIconUpload = useCallback(
     async (file: File) => {
