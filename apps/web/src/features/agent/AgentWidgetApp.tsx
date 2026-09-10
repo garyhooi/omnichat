@@ -18,9 +18,9 @@ import {
   type AgentConversationsState,
 } from './useAgentSocket'
 import { useSiteConfig } from '../chat/hooks/useSiteConfig'
-import { useSound } from '../chat/hooks/useSound'
 import { AgentConversationList, type AgentTab } from './AgentConversationList'
 import { AgentChatView } from './AgentChatView'
+import { useAgentIncomingSound } from './useAgentIncomingSound'
 import {
   MOBILE_PANEL_MARGIN,
   WIDGET_MARGIN,
@@ -75,12 +75,6 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
   }
   const iconEmoji = iconIsImage || svgIcon ? null : bubbleIcon
 
-  const { muted, toggleMuted, playSound } = useSound(
-    serverUrl,
-    AGENT_WIDGET_MUTED_KEY,
-    siteConfig?.notificationSoundUrl,
-  )
-
   const socket = useAgentSocket({
     serverUrl,
     getToken: () => storageGet(ACCESS_TOKEN_KEY),
@@ -88,7 +82,6 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
       if (event === 'new_message' && !openRef.current) {
         setAttention(true)
         setTimeout(() => setAttention(false), 2200)
-        playSound()
       }
     },
   })
@@ -101,6 +94,21 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
   })
   const conversations = convsState?.conversations ?? []
   const currentUser = socket.currentUser ?? convsState?.currentUser ?? null
+
+  // Incoming-message notification sound — beeps while the panel is closed or
+  // the operator is viewing a different conversation (see hook for the rules).
+  // When an admin portal is embedded on the same page it already alerts, so the
+  // widget stays silent there and the operator hears a single ding.
+  const { muted, toggleMuted } = useAgentIncomingSound({
+    serverUrl,
+    mutedKey: AGENT_WIDGET_MUTED_KEY,
+    soundUrl: siteConfig?.agentNotificationSoundUrl || siteConfig?.visitorNotificationSoundUrl || null,
+    socket,
+    conversations,
+    openConversationId: socket.openConversationId,
+    shouldAlert: () =>
+      typeof document === 'undefined' || !document.querySelector('omnichat-admin-portal'),
+  })
 
   const { data: agents } = useQuery<AgentPresenceEntry[]>({
     queryKey: agentPresenceQueryKey(serverUrl),

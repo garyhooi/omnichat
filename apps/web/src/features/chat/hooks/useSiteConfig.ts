@@ -17,7 +17,10 @@ export interface SiteConfig {
   greetingMessage?: string | null
   visitorLanguage?: string
   adminLanguage?: string
-  notificationSoundUrl?: string
+  /** Sound played on the visitor surfaces when an agent/AI replies. */
+  visitorNotificationSoundUrl?: string
+  /** Sound played on the agent console/widget on incoming messages. */
+  agentNotificationSoundUrl?: string
   enableReadReceipts?: boolean
   isOfflineMode?: boolean
   showVisitorWidget?: boolean

@@ -127,7 +127,7 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
   const { muted, toggleMuted, playSound } = useSound(
     serverUrl,
     storageKeys.mutedKey,
-    siteConfig?.notificationSoundUrl,
+    siteConfig?.visitorNotificationSoundUrl,
   )
 
   const socket = useChatSocket({

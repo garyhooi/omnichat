@@ -58,6 +58,12 @@ export interface AgentSocketOptions {
   onEvent?: (event: keyof ServerEventMap, payload: ServerEventMap[keyof ServerEventMap]) => void
 }
 
+/** Live server-event listener (new_message, new_conversation, …). */
+export type AgentServerEventListener = (
+  event: keyof ServerEventMap,
+  payload: ServerEventMap[keyof ServerEventMap],
+) => void
+
 export interface AgentSocket {
   connected: boolean
   currentUser: CurrentUser | null
@@ -65,6 +71,8 @@ export interface AgentSocket {
   openConversationId: string | null
   openConversation: (id: string) => void
   closeConversation: () => void
+  /** Subscribe to live server events (after cache writes). Returns unsubscribe. */
+  subscribeEvents: (fn: AgentServerEventListener) => () => void
   listConversations: (status?: ConversationStatusFilter, dateRange?: { start?: string; end?: string }) => void
   sendText: (conversationId: string, content: string) => void
   sendImage: (conversationId: string, attachmentUrl: string, thumbnailUrl?: string) => void
@@ -94,6 +102,8 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   const [openConversationId, setOpenConversationIdState] = useState<string | null>(null)
   const openConversationIdRef = useRef<string | null>(null)
   const optionsRef = useRef(options)
+  /** Live event listeners registered via subscribeEvents(). */
+  const listenersRef = useRef<AgentServerEventListener[]>([])
   /** Last list_conversations request — re-emitted after a reconnect so date
    *  filters (Resolved tab) never silently drop while the socket is down. */
   const pendingListRef = useRef<{ status?: ConversationStatusFilter; startDate?: string; endDate?: string } | null>(null)
@@ -104,6 +114,14 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   // ---------------------------------------------------------------------------
   // Cache helpers
   // ---------------------------------------------------------------------------
+  /** Register a live server-event listener; returns an unsubscribe function. */
+  const subscribeEvents = useCallback((fn: AgentServerEventListener) => {
+    listenersRef.current.push(fn)
+    return () => {
+      listenersRef.current = listenersRef.current.filter((f) => f !== fn)
+    }
+  }, [])
+
   const setConversations = useCallback(
     (updater: (s: AgentConversationsState) => AgentConversationsState) => {
       const qk = agentConversationsQueryKey(serverUrl)
@@ -367,6 +385,9 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
         default:
           optionsRef.current.onEvent?.(event, payload)
       }
+      // Notify live subscribers after the cache writes above, so listeners
+      // (notification sounds, etc.) observe consistent list/cache state.
+      for (const listener of listenersRef.current) listener(event, payload)
     },
     [currentUser?.displayName, queryClient, serverUrl, setConversationState, setConversations, updateTyping],
   )
@@ -587,6 +608,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     openConversationId,
     openConversation,
     closeConversation,
+    subscribeEvents,
     listConversations,
     sendText,
     sendImage,

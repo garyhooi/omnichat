@@ -62,7 +62,10 @@ export interface SiteConfig {
   isActive: boolean
   isOfflineMode: boolean
   enableReadReceipts: boolean
-  notificationSoundUrl?: string | null
+  /** Sound played on the visitor widget/chat page when an agent/AI replies. */
+  visitorNotificationSoundUrl?: string | null
+  /** Sound played on the agent console/widget when a new message arrives. Falls back to visitorNotificationSoundUrl when unset. */
+  agentNotificationSoundUrl?: string | null
   showAdminWidget: boolean
   showVisitorWidget: boolean
   createdAt: string
@@ -93,7 +96,8 @@ export interface CreateSiteConfigRequest {
   aiAvatar?: string
   agentAvatar?: string
   visitorAvatar?: string
-  notificationSoundUrl?: string
+  visitorNotificationSoundUrl?: string
+  agentNotificationSoundUrl?: string
   showAdminWidget?: boolean
   showVisitorWidget?: boolean
   adminAllowedIps?: string

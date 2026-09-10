@@ -7,17 +7,17 @@
 import { useCallback, useRef } from 'react'
 import { useLocalStorageBoolean } from '../../../shared/hooks/useLocalStorage'
 
-export function useSound(serverUrl: string, mutedKey: string, notificationSoundUrl?: string | null) {
+export function useSound(serverUrl: string, mutedKey: string, soundUrl?: string | null) {
   const [muted, setMuted] = useLocalStorageBoolean(mutedKey, false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const play = useCallback(() => {
     if (muted) return
-    if (notificationSoundUrl) {
+    if (soundUrl) {
       const base = serverUrl.replace(/\/$/, '')
-      const src = notificationSoundUrl.startsWith('http')
-        ? notificationSoundUrl
-        : base + notificationSoundUrl
+      const src = soundUrl.startsWith('http')
+        ? soundUrl
+        : base + soundUrl
       try {
         if (!audioRef.current) audioRef.current = new Audio()
         const player = audioRef.current
@@ -30,7 +30,7 @@ export function useSound(serverUrl: string, mutedKey: string, notificationSoundU
       }
     }
     playFallback()
-  }, [muted, notificationSoundUrl, serverUrl])
+  }, [muted, soundUrl, serverUrl])
 
   return { muted, toggleMuted: () => setMuted(!muted), playSound: play }
 }

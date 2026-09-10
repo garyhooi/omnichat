@@ -1076,3 +1076,18 @@
 .oc-btn-danger:hover {
   background: color-mix(in srgb, var(--oc-accent) 88%, #000);
 }
+
+/* ---------------------------------------------------------------------------
+   iOS auto-zoom guard — Safari zooms the page into an <input>/<textarea>
+   whose font-size is under 16px when it receives focus, which is very
+   annoying on the visitor widget and chat page. On touch (coarse pointer)
+   devices keep every editable field at >=16px so no zoom happens; desktop
+   keeps the compact sizes because this media query does not match.
+--------------------------------------------------------------------------- */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

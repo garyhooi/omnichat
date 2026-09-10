@@ -147,7 +147,8 @@ model SiteConfig {
   isActive           Boolean  @default(true)
   isOfflineMode      Boolean  @default(false)
   enableReadReceipts Boolean  @default(true)
-  notificationSoundUrl String?
+  visitorNotificationSoundUrl String?
+  agentNotificationSoundUrl String?
   showAdminWidget   Boolean  @default(true)
   showVisitorWidget Boolean  @default(true)
   createdAt          DateTime @default(now())

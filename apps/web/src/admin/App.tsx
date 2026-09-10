@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { useApplyUiLang } from '../shared/hooks/useUiLang'
 import { useSiteConfig } from '../features/chat/hooks/useSiteConfig'
+import { useAgentIncomingSound } from '../features/agent/useAgentIncomingSound'
+import { ADMIN_MUTED_KEY } from '../shared/lib/storage'
 import { useAuth } from './auth'
 import { AdminDataProvider, useAdminData } from './AdminDataProvider'
 import { LoginPage } from './pages/LoginPage'
@@ -67,9 +69,22 @@ function Shell({ lang }: { lang?: string }) {
   // Admin-controlled operator UI language (site config → Widget Setup).
   // The element's [lang] attribute still overrides it per embed.
   useApplyUiLang(lang, siteConfig?.adminLanguage)
-  const { conversations } = useAdminData()
+  const { conversations, socket } = useAdminData()
   const [page, setPage] = useState<PageKey>('conversations')
   const [collapsed, setCollapsed] = useState(false)
+
+  // Incoming-message notification sound — mounted here in the shell (not in the
+  // Conversations page) so alerts keep ringing while the operator is on any
+  // page (Settings, Users, Logs…). Mute toggle lives in the sidebar footer
+  // (persisted under the legacy omnichat_admin_muted key).
+  const { muted, toggleMuted } = useAgentIncomingSound({
+    serverUrl,
+    mutedKey: ADMIN_MUTED_KEY,
+    soundUrl: siteConfig?.agentNotificationSoundUrl || siteConfig?.visitorNotificationSoundUrl || null,
+    socket,
+    conversations,
+    openConversationId: socket.openConversationId,
+  })
 
   const user = currentUser!
   const totalUnread = useMemo(
@@ -142,6 +157,16 @@ function Shell({ lang }: { lang?: string }) {
               <span>{user.role}</span>
             </div>
           )}
+          <button
+            type="button"
+            className="adm-btn adm-btn-sm"
+            style={{ background: 'none', border: 'none', color: '#9ca3af' }}
+            onClick={toggleMuted}
+            title={muted ? t('common.unmute') : t('common.mute')}
+            aria-label={muted ? t('common.unmute') : t('common.mute')}
+          >
+            {muted ? '🔕' : '🔔'}
+          </button>
           <button
             className="adm-btn adm-btn-sm"
             style={{ background: 'none', border: 'none', color: '#9ca3af' }}

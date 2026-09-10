@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldAlert, Search } from 'lucide-react'
 import type { Conversation } from '../../shared/types/models'
@@ -40,6 +40,16 @@ export function ConversationsPage() {
   const [tab, setTab] = useState<StatusTab>('active')
   const [searchQuery, setSearchQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
+
+  // The shell-level notification sound + read receipts key off the socket's
+  // open conversation. Leaving this page must release it, otherwise alerts for
+  // that conversation would stay suppressed while the operator is elsewhere and
+  // its unread badge would stop counting.
+  const socketRef = useRef(socket)
+  useEffect(() => {
+    socketRef.current = socket
+  })
+  useEffect(() => () => socketRef.current.closeConversation(), [])
 
   // Resolved-tab date-range filter (legacy parity). Applied both server-side
   // (re-fetch through list_conversations with the window) and client-side as a
