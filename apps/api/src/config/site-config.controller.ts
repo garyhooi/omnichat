@@ -12,7 +12,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 
 type AuthenticatedRequest = {
@@ -81,10 +81,12 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'visitorNotificationSoundUrl must be a /uploads/ path or https URL' })
   visitorNotificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'agentNotificationSoundUrl must be a /uploads/ path or https URL' })
   agentNotificationSoundUrl?: string;
 
   @IsBoolean()
@@ -179,10 +181,12 @@ class UpdateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'visitorNotificationSoundUrl must be a /uploads/ path or https URL' })
   visitorNotificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'agentNotificationSoundUrl must be a /uploads/ path or https URL' })
   agentNotificationSoundUrl?: string;
 
   @IsString()

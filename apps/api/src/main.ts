@@ -36,7 +36,9 @@ async function bootstrap() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        // 'unsafe-inline' removed: the API serves no inline-script HTML (only JSON
+        // + static uploads/rag-templates), so inline scripts are never legitimate.
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", "https:", "wss:"],
@@ -54,7 +56,16 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 
-  expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  // Non-image uploads are served as attachments (never inlined as a document),
+  // so a masquerading file under /uploads cannot execute as HTML/SVG. Raster
+  // images keep inline rendering for the chat lightbox/thumbnails.
+  expressApp.use('/uploads', express.static(join(process.cwd(), 'uploads'), {
+    setHeaders: (res, filePath) => {
+      if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(filePath)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  }));
   expressApp.use('/rag-templates', express.static(join(process.cwd(), '..', '..', 'rag_templates')));
 
   const prisma = app.get(PrismaService);
@@ -65,10 +76,13 @@ async function bootstrap() {
         return callback(null, true);
       }
 
-      // Allow localhost
-      if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-        return callback(null, true);
-      }
+      // Allow localhost (hostname-precise — startsWith matched "http://localhost.attacker.com")
+      try {
+        const host = new URL(origin).hostname;
+        if (host === 'localhost' || host === '127.0.0.1') {
+          return callback(null, true);
+        }
+      } catch { /* not a URL origin — fall through to the DB allowlist */ }
 
       try {
         const config = await prisma.siteConfig.findFirst({

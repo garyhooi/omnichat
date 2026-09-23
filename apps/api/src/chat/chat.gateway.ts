@@ -31,10 +31,10 @@ import { GetVisitorInfoTool } from '../ai/tools/builtin/get-visitor-info.tool';
 import { CoreMessage } from 'ai';
 import {
   VISITOR_EMAIL_MAX, VISITOR_NAME_MAX, VISITOR_SHORT_MAX,
-  clampVisitorMetadata, clampVisitorText, parseVisitorMetadata, sanitizeVisitorUrl,
+  clampVisitorMetadata, clampVisitorText, parseVisitorMetadata, sanitizeAttachmentUrl, sanitizeVisitorUrl,
 } from './visitor-input';
 import * as fs from 'fs/promises';
-import { join, extname } from 'path';
+import { extname, resolve, sep } from 'path';
 
 // Types for inbound/outbound events
 interface JoinConversationPayload {
@@ -528,9 +528,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       throw new ForbiddenException('Origin header required for visitor connections');
     }
 
-    // Allow localhost for development
-    if ((origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) ||
-        (referer && (referer.startsWith('http://localhost') || referer.startsWith('http://127.0.0.1')))) {
+    // Allow localhost for development (hostname-precise — startsWith matched
+    // "http://localhost.attacker.com", a real origin an attacker controls).
+    const isLocalhost = (s?: string): boolean => {
+      if (!s) return false;
+      try { return ['localhost', '127.0.0.1'].includes(new URL(s).hostname); } catch { return false; }
+    };
+    if (isLocalhost(origin) || isLocalhost(referer)) {
       return;
     }
 
@@ -684,16 +688,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       parsedMetadata.externalAuthToken = client.handshake.auth.externalToken;
     }
 
-    // Extract username from externalAuthToken JWT if present
-    let assignedUsername = payload.visitorName || '';
-    if (parsedMetadata.externalAuthToken && !assignedUsername) {
-      try {
-        const token = parsedMetadata.externalAuthToken as string;
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-         assignedUsername = payload.username || '';
-        this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
-      } catch {
-        this.logger.warn('Failed to decode externalAuthToken JWT payload');
+    // Extract username from externalAuthToken JWT — VERIFY the signature with
+    // EXTERNAL_SITE_JWT_SECRET. The old code base64-decoded the payload without
+    // verification, which let a visitor forge any assignedUsername by crafting an
+    // unsigned JWT. assignedUsername is NEVER seeded from visitorName (that was a
+    // separate forgery: setting visitorName to an agent's username).
+    let assignedUsername = '';
+    if (parsedMetadata.externalAuthToken) {
+      const verified = this.authService.verifyExternalSiteJwt(
+        parsedMetadata.externalAuthToken as string,
+      );
+      if (verified?.username) {
+        assignedUsername = verified.username;
+        this.logger.log(`Extracted username from verified external JWT: ${assignedUsername}`);
+      } else {
+        this.logger.warn('externalAuthToken failed signature verification — ignoring');
       }
     }
 
@@ -1003,8 +1012,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         senderId,
         content: content || '',
         messageType,
-        attachmentUrl,
-        attachmentThumbnailUrl,
+        attachmentUrl: sanitizeAttachmentUrl(attachmentUrl),
+        attachmentThumbnailUrl: sanitizeAttachmentUrl(attachmentThumbnailUrl),
       });
 
       // Emit to all clients in the conversation room AND all agents for dashboard preview updates
@@ -1821,17 +1830,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /** Read an uploaded image from disk and return a base64 data URL. */
+  /**
+   * Read an uploaded image from disk and return a base64 data URL.
+   *
+   * Security: the attachment URL is visitor-controlled, so it is confined to a
+   * local "/uploads/..." path that resolves INSIDE the uploads directory. The
+   * old code passed absolute http(s) URLs straight to the AI provider (SSRF to
+   * internal hosts / cloud metadata) and joined "../.." paths against cwd
+   * (arbitrary file read — e.g. .env with JWT_SECRET and provider keys). Both are
+   * rejected now; only verified local uploads are read.
+   */
   private async readImageAsDataUrl(attachmentUrl: string): Promise<string | null> {
     try {
-      // HTTP/HTTPS URLs can be passed directly to the AI SDK
-      if (attachmentUrl.startsWith('http://') || attachmentUrl.startsWith('https://')) {
-        return attachmentUrl;
+      const safe = sanitizeAttachmentUrl(attachmentUrl);
+      if (!safe) {
+        this.logger.warn(`Rejected attachment URL for AI input: ${attachmentUrl}`);
+        return null;
       }
-      // Local file path — read from disk
-      const filePath = join(process.cwd(), attachmentUrl);
-      const buffer = await fs.readFile(filePath);
-      const ext = extname(attachmentUrl).toLowerCase();
+      const uploadsRoot = resolve(process.cwd(), 'uploads');
+      const filePath = resolve(uploadsRoot, safe.slice('/uploads/'.length));
+      // Confine to the uploads directory — realpath defeats symlink/.. escapes.
+      const real = await fs.realpath(filePath);
+      if (!real.startsWith(uploadsRoot + sep) && real !== uploadsRoot) {
+        this.logger.warn(`Attachment path escapes uploads dir: ${attachmentUrl}`);
+        return null;
+      }
+      const buffer = await fs.readFile(real);
+      const ext = extname(real).toLowerCase();
       const mime =
         ext === '.png' ? 'image/png' :
         ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :

@@ -56,6 +56,28 @@ export function sanitizeVisitorUrl(value: unknown, max = VISITOR_URL_MAX): strin
   }
 }
 
+/**
+ * Keep only local upload paths ("/uploads/...") produced by this server's own
+ * upload endpoint.
+ *
+ * Message attachment URLs are visitor-controlled in `send_message` and are later
+ * rendered as <img src> / opened in a lightbox AND read from disk by
+ * readImageAsDataUrl to feed the AI. Trusting an arbitrary string there enabled
+ * (a) stored content pointing at attacker hosts (SSRF/tracking from the agent's
+ * browser), and (b) path traversal ("../../.env") via readImageAsDataUrl. Only a
+ * relative path that starts with "/uploads/", contains no "..", no NUL, and no
+ * query/fragment is accepted — everything else is dropped.
+ */
+export function sanitizeAttachmentUrl(value: unknown, max = VISITOR_URL_MAX): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > max) return undefined;
+  if (!trimmed.startsWith('/uploads/')) return undefined;
+  if (trimmed.includes('..') || trimmed.includes('\0')) return undefined;
+  if (/[?#]/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
 /** Metadata keys the console renders (and that are capped on the way in). */
 const METADATA_TEXT_LIMITS: Record<string, number> = {
   visitorName: VISITOR_NAME_MAX,
@@ -72,6 +94,11 @@ const METADATA_TEXT_LIMITS: Record<string, number> = {
  * payload is decoded into `assignedUsername` — i.e. claim any agent as the
  * assignee of their own conversation.
  */
+/** Metadata keys the server recognises and the console renders. Anything else a
+ * client plants is dropped — the blob ships in EVERY conversations_list response,
+ * so an unrecognised key was a free-form storage/amplification surface. */
+const VISITOR_METADATA_KEYS = new Set(['visitorName', 'visitorEmail', 'userAgent']);
+
 export function parseVisitorMetadata(raw: unknown): Record<string, unknown> {
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > VISITOR_METADATA_MAX) return {};
 
@@ -85,7 +112,9 @@ export function parseVisitorMetadata(raw: unknown): Record<string, unknown> {
 
   const parsed: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(candidate as Record<string, unknown>)) {
-    if (key === 'externalAuthToken') continue;
+    // externalAuthToken is ALWAYS stripped (the caller re-adds a verified copy);
+    // any other unrecognised key is dropped rather than stored/relayed.
+    if (key === 'externalAuthToken' || !VISITOR_METADATA_KEYS.has(key)) continue;
     parsed[key] = value;
   }
   return parsed;
