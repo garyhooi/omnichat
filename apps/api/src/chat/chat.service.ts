@@ -78,6 +78,71 @@ export class ChatService {
   }
 
   /** List conversations with optional status filter. */
+  /**
+   * How much transcript a conversation open returns. Older messages are fetched
+   * on demand with getMessagePage(), so opening a long-running conversation
+   * costs one bounded query instead of its entire history.
+   */
+  static readonly HISTORY_PAGE_SIZE = 200;
+
+  /**
+   * A conversation plus its MOST RECENT messages (returned oldest-first, ready
+   * to render) and whether older messages exist. Used when a console opens a
+   * conversation; the AI pipeline keeps using getConversation() for full context.
+   */
+  async getConversationPage(conversationId: string, limit = ChatService.HISTORY_PAGE_SIZE) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        agent: { select: { id: true, displayName: true, username: true, isOnline: true } },
+      },
+    });
+    if (!conversation) return null;
+
+    const page = await this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+    });
+    const hasMoreMessages = page.length > limit;
+    return {
+      ...conversation,
+      messages: (hasMoreMessages ? page.slice(0, limit) : page).reverse(),
+      hasMoreMessages,
+    };
+  }
+
+  /**
+   * One page of transcript OLDER than `before` (exclusive), oldest-first.
+   * Backed by the [conversationId, createdAt] index.
+   */
+  async getMessagePage(conversationId: string, before: string, limit = ChatService.HISTORY_PAGE_SIZE) {
+    const beforeDate = new Date(before);
+    if (Number.isNaN(beforeDate.getTime())) return { messages: [], hasMoreMessages: false };
+
+    const page = await this.prisma.message.findMany({
+      where: { conversationId, createdAt: { lt: beforeDate } },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+    });
+    const hasMoreMessages = page.length > limit;
+    return {
+      messages: (hasMoreMessages ? page.slice(0, limit) : page).reverse(),
+      hasMoreMessages,
+    };
+  }
+
+  /**
+   * Ownership probe for send-path validation — loads just the two fields the
+   * caller needs instead of the whole transcript.
+   */
+  async getConversationOwnership(conversationId: string) {
+    return this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { visitorId: true, visitorIp: true },
+    });
+  }
+
   /** Parse a "YYYY-MM-DD" (local-time) string into a Date at that day's start. */
   private parseDayStart(value: string): Date {
     const [y, m, d] = value.split('-').map(Number);
@@ -90,6 +155,20 @@ export class ChatService {
     return new Date(y, (m || 1) - 1, d || 1, 23, 59, 59, 999);
   }
 
+  /**
+   * Upper bound on a single conversation-list response. The query costs two
+   * index lookups PER ROW (latest message + unread count), so an unbounded
+   * window made the Resolved tab slower and slower as history accumulated.
+   * Active/AI/specialist conversations are the most recently updated, so they
+   * are never the rows this cuts.
+   */
+  static readonly MAX_CONVERSATIONS = 300;
+
+  /**
+   * Newest-first conversation list. One extra row is fetched purely to detect
+   * truncation, so callers can tell the operator the list is capped instead of
+   * silently presenting the cap as the whole set.
+   */
   async listConversations(status?: string, dateRange?: { start?: string; end?: string }) {
     const updatedAt: Record<string, Date> | undefined =
       dateRange?.start || dateRange?.end
@@ -99,7 +178,7 @@ export class ChatService {
           }
         : undefined;
 
-    return this.prisma.conversation.findMany({
+    const rows = await this.prisma.conversation.findMany({
       where: {
         ...(status ? { status } : {}),
         ...(updatedAt ? { updatedAt } : {}),
@@ -124,7 +203,14 @@ export class ChatService {
         },
       },
       orderBy: { updatedAt: 'desc' },
+      take: ChatService.MAX_CONVERSATIONS + 1,
     });
+
+    const truncated = rows.length > ChatService.MAX_CONVERSATIONS;
+    return {
+      conversations: truncated ? rows.slice(0, ChatService.MAX_CONVERSATIONS) : rows,
+      truncated,
+    };
   }
 
   /** Persist a new message. Gateway MUST call this before emitting to the room. */

@@ -11,7 +11,8 @@
     "start:prod": "bun dist/main",
     "prisma:generate": "bun prisma generate",
     "prisma:push": "bun prisma db push",
-    "prisma:studio": "bun prisma studio"
+    "prisma:studio": "bun prisma studio",
+    "check:visitor-input": "bun scripts/check-visitor-input.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.0",

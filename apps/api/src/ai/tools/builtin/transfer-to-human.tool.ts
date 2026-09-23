@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { ToolHandler, ToolContext } from '../tool.interface';
 
+/** Static text — see performHandoff before making this dynamic. */
+const HANDOFF_NOTICE = 'Transferring you to a human agent. Please wait...';
+
 export class TransferToHumanTool implements ToolHandler {
   name = 'transfer_to_human';
   description =
@@ -71,6 +74,7 @@ export class TransferToHumanTool implements ToolHandler {
 
   private async performHandoff(context: ToolContext, reason: string): Promise<void> {
     const prisma = context.services?.prisma;
+    const chatService = context.services?.chatService;
     if (!prisma) return;
 
     await prisma.conversation.update({
@@ -78,15 +82,31 @@ export class TransferToHumanTool implements ToolHandler {
       data: { status: 'active' },
     });
 
-    const msg = await prisma.message.create({
-      data: {
-        conversationId: context.conversationId,
-        senderType: 'system',
-        senderId: 'system',
-        content: 'Transferring you to a human agent. Please wait...',
-        messageType: 'text',
-      },
-    });
+    // Route through ChatService so this message passes the same sanitizer as
+    // every other message; a raw prisma.message.create here bypassed it (and
+    // skipped the conversation.updatedAt touch that keeps list ordering right).
+    //
+    // The fallback exists only for callers without ChatService wired up (the
+    // HTTP AI controller). HANDOFF_NOTICE is a compile-time constant, so it is
+    // safe as-is — if this text ever becomes dynamic it MUST go through
+    // ChatService.createMessage.
+    const msg = chatService
+      ? await chatService.createMessage({
+          conversationId: context.conversationId,
+          senderType: 'system',
+          senderId: 'system',
+          content: HANDOFF_NOTICE,
+          messageType: 'text',
+        })
+      : await prisma.message.create({
+          data: {
+            conversationId: context.conversationId,
+            senderType: 'system',
+            senderId: 'system',
+            content: HANDOFF_NOTICE,
+            messageType: 'text',
+          },
+        });
 
     const io = context.services?.io;
     if (io) {
