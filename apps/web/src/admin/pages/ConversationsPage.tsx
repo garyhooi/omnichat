@@ -33,7 +33,7 @@ function visitorEmail(c: Conversation): string | null {
  */
 export function ConversationsPage() {
   const { t } = useTranslation()
-  const { socket, conversations, loaded, agents } = useAdminData()
+  const { socket, conversations, loaded, truncated, agents } = useAdminData()
   const { serverUrl } = useAuth()
   const accentColor = useSiteAccent(serverUrl)
   const { config: siteConfig } = useSiteConfig(serverUrl)
@@ -169,7 +169,9 @@ export function ConversationsPage() {
         <div>
           <h1 className="adm-page-title">{t('admin.conversations')}</h1>
           <p className="adm-page-sub">
-            {loaded ? `${conversations.length} total · ${filtered.length} shown` : t('common.connecting')}
+            {loaded
+              ? `${conversations.length}${truncated ? '+' : ''} total · ${filtered.length} shown`
+              : t('common.connecting')}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

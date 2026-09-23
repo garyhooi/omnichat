@@ -85,6 +85,9 @@ export interface ChatSession {
   startNewChat: () => void
   readMessage: (messageId: string) => void
   markAllAsRead: () => void
+  /** Older transcript exists on the server and can be paged in. */
+  hasMoreMessages: boolean
+  loadOlderMessages: () => void
   typingStart: () => void
   typingStop: () => void
   clearError: () => void
@@ -366,6 +369,8 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     startNewChat,
     readMessage: socket.readMessage,
     markAllAsRead: socket.markAllAsRead,
+    hasMoreMessages: state?.hasMoreMessages ?? false,
+    loadOlderMessages: socket.loadOlderMessages,
     typingStart: socket.typingStart,
     typingStop: socket.typingStop,
     clearError,

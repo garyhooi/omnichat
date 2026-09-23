@@ -504,6 +504,7 @@ export const nl: Record<string, string> = {
   'admin.visitorUiLangHint': 'Taal van de chatwidget en de chatpagina.',
   'admin.operatorUiLang': 'Taal van de admin-/agentinterface',
   'admin.operatorUiLangHint': 'Taal van het adminportaal en de agentconsole.',
+  'common.loadEarlierMessages': 'Eerdere berichten laden',
 }
 export const pl: Record<string, string> = {
   'admin.reportAgentPerformance': 'Wydajność agentów',
@@ -1011,6 +1012,7 @@ export const pl: Record<string, string> = {
   'admin.visitorUiLangHint': 'Język widżetu czatu i strony czatu.',
   'admin.operatorUiLang': 'Język interfejsu admina / agenta',
   'admin.operatorUiLangHint': 'Język portalu administracyjnego i konsoli agenta.',
+  'common.loadEarlierMessages': 'Wczytaj wcześniejsze wiadomości',
 }
 export const tr: Record<string, string> = {
   'admin.reportAgentPerformance': 'Temsilci performansı',
@@ -1518,6 +1520,7 @@ export const tr: Record<string, string> = {
   'admin.visitorUiLangHint': 'Sohbet widget\'ının ve sohbet sayfasının dili.',
   'admin.operatorUiLang': 'Yönetici / ajan arayüz dili',
   'admin.operatorUiLangHint': 'Yönetici portalının ve ajan konsolunun dili.',
+  'common.loadEarlierMessages': 'Önceki mesajları yükle',
 }
 export const ru: Record<string, string> = {
   'admin.reportAgentPerformance': 'Эффективность агентов',
@@ -2025,4 +2028,5 @@ export const ru: Record<string, string> = {
   'admin.visitorUiLangHint': 'Язык виджета чата и страницы чата.',
   'admin.operatorUiLang': 'Язык интерфейса администратора / агента',
   'admin.operatorUiLangHint': 'Язык портала администратора и консоли агента.',
+  'common.loadEarlierMessages': 'Загрузить предыдущие сообщения',
 }

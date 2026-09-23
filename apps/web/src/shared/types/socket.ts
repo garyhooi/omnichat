@@ -70,16 +70,35 @@ export type ConversationStatusFilter = 'active' | 'ai' | 'specialist' | 'resolve
 // ---------------------------------------------------------------------------
 export interface ErrorPayload {
   message: string
+  /** Machine-readable reason. 'auth' = the credential was rejected; the client
+   *  should refresh its token and reconnect instead of waiting for a reload. */
+  code?: 'auth'
 }
 
 export interface ConversationsListPayload {
   conversations: Conversation[]
   currentUser: CurrentUser
+  /** The server caps the list (it fans out per row) — true when it was cut. */
+  truncated?: boolean
 }
 
 export interface ConversationHistoryPayload {
   conversation: Conversation & { messages: Message[] }
   isIpBlacklisted: boolean
+  /** Older messages exist and can be paged in with load_messages. */
+  hasMoreMessages?: boolean
+}
+
+export interface LoadMessagesPayload {
+  conversationId: string
+  /** createdAt of the oldest loaded message — the page returned is older. */
+  before: string
+}
+
+export interface MessagesPagePayload {
+  conversationId: string
+  messages: Message[]
+  hasMoreMessages: boolean
 }
 
 /** The gateway always wraps the message: new_message → { message }. */
@@ -166,6 +185,7 @@ export const CLIENT_EVENTS = {
   resolveConversation: 'resolve_conversation',
   takeOverConversation: 'take_over_conversation',
   listConversations: 'list_conversations',
+  loadMessages: 'load_messages',
   heartbeat: 'heartbeat',
 } as const
 
@@ -177,6 +197,7 @@ export const SERVER_EVENTS = {
   conversationStarted: 'conversation_started',
   uploadToken: 'upload_token',
   conversationHistory: 'conversation_history',
+  messagesPage: 'messages_page',
   conversationsList: 'conversations_list',
   newMessage: 'new_message',
   messageRead: 'message_read',
@@ -200,6 +221,7 @@ export type ServerEventMap = {
   conversation_started: { conversation: Conversation }
   upload_token: UploadTokenPayload
   conversation_history: ConversationHistoryPayload
+  messages_page: MessagesPagePayload
   conversations_list: ConversationsListPayload
   new_message: NewMessagePayload
   message_read: MessageReadPayload

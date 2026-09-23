@@ -42,6 +42,8 @@ export interface ConversationQueryState {
   lastError: string | null
   /** True once conversation_history (or conversation_started) has arrived. */
   loaded: boolean
+  /** Older messages exist on the server and can be paged in. */
+  hasMoreMessages: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -71,5 +73,6 @@ export function createEmptyConversationState(): ConversationQueryState {
     inactivityWarning: null,
     lastError: null,
     loaded: false,
+    hasMoreMessages: false,
   }
 }

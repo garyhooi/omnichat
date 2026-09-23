@@ -518,5 +518,6 @@ export const en: Record<string, string> = {
   'admin.visitorUiLangHint': 'Language of the chat widget and chat page.',
   'admin.operatorUiLang': 'Admin / agent UI language',
   'admin.operatorUiLangHint': 'Language of the admin portal and agent console.',
+  'common.loadEarlierMessages': 'Load earlier messages',
 }
 

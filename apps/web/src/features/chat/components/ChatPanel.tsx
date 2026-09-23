@@ -242,6 +242,8 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
             onTranslate={session.translateMessage}
             onOpenLightbox={setLightboxUrl}
             scrollKey={scrollResetKey}
+            hasMoreMessages={session.hasMoreMessages}
+            onLoadEarlier={session.loadOlderMessages}
           />
           <Composer
             maxChars={VISITOR_MAX_CHARS}

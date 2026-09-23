@@ -504,6 +504,7 @@ export const ja: Record<string, string> = {
   'admin.visitorUiLangHint': 'チャットウィジェットとチャットページの言語。',
   'admin.operatorUiLang': '管理者 / エージェントUI言語',
   'admin.operatorUiLangHint': '管理ポータルとエージェントコンソールの言語。',
+  'common.loadEarlierMessages': '以前のメッセージを読み込む',
 }
 export const ko: Record<string, string> = {
   'admin.reportAgentPerformance': '상담원 성과',
@@ -1011,4 +1012,5 @@ export const ko: Record<string, string> = {
   'admin.visitorUiLangHint': '채팅 위젯 및 채팅 페이지의 언어입니다.',
   'admin.operatorUiLang': '관리자 / 에이전트 UI 언어',
   'admin.operatorUiLangHint': '관리자 포털 및 에이전트 콘솔의 언어입니다.',
+  'common.loadEarlierMessages': '이전 메시지 불러오기',
 }

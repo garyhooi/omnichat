@@ -504,6 +504,7 @@ export const fr: Record<string, string> = {
   'admin.visitorUiLangHint': 'Langue du widget de chat et de la page de chat.',
   'admin.operatorUiLang': 'Langue de l\'interface admin / agent',
   'admin.operatorUiLangHint': 'Langue du portail admin et de la console agent.',
+  'common.loadEarlierMessages': 'Charger les messages précédents',
 }
 export const de: Record<string, string> = {
   'admin.reportAgentPerformance': 'Agenten-Performance',
@@ -1011,6 +1012,7 @@ export const de: Record<string, string> = {
   'admin.visitorUiLangHint': 'Sprache des Chat-Widgets und der Chat-Seite.',
   'admin.operatorUiLang': 'Sprache der Admin-/Agent-Oberfläche',
   'admin.operatorUiLangHint': 'Sprache des Admin-Portals und der Agent-Konsole.',
+  'common.loadEarlierMessages': 'Ältere Nachrichten laden',
 }
 export const it: Record<string, string> = {
   'admin.reportAgentPerformance': 'Performance agenti',
@@ -1518,6 +1520,7 @@ export const it: Record<string, string> = {
   'admin.visitorUiLangHint': 'Lingua del widget e della pagina di chat.',
   'admin.operatorUiLang': 'Lingua interfaccia admin / agente',
   'admin.operatorUiLangHint': 'Lingua del portale admin e della console agente.',
+  'common.loadEarlierMessages': 'Carica messaggi precedenti',
 }
 export const es: Record<string, string> = {
   'admin.reportAgentPerformance': 'Rendimiento de agentes',
@@ -2025,6 +2028,7 @@ export const es: Record<string, string> = {
   'admin.visitorUiLangHint': 'Idioma del widget y la página de chat.',
   'admin.operatorUiLang': 'Idioma de la interfaz de admin / agente',
   'admin.operatorUiLangHint': 'Idioma del portal de administración y la consola del agente.',
+  'common.loadEarlierMessages': 'Cargar mensajes anteriores',
 }
 export const pt: Record<string, string> = {
   'admin.reportAgentPerformance': 'Desempenho dos agentes',
@@ -2532,4 +2536,5 @@ export const pt: Record<string, string> = {
   'admin.visitorUiLangHint': 'Idioma do widget e da página de chat.',
   'admin.operatorUiLang': 'Idioma da interface de admin / agente',
   'admin.operatorUiLangHint': 'Idioma do portal de administração e do console do agente.',
+  'common.loadEarlierMessages': 'Carregar mensagens anteriores',
 }

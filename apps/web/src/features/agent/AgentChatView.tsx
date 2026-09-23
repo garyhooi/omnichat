@@ -519,6 +519,8 @@ export function AgentChatView({
         onTranslate={translateMessage}
         onOpenLightbox={setLightboxUrl}
         scrollKey={conversationId ? 1 : 0}
+        hasMoreMessages={state?.hasMoreMessages ?? false}
+        onLoadEarlier={() => socket.loadOlderMessages(conversationId)}
       />
 
       {/* Visitor review (shown after the visitor rates the conversation) */}

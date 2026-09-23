@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Message } from '../../../shared/types/models'
@@ -34,9 +34,15 @@ export interface MessageListProps {
   onScrollStateChange?: (userScrolledUp: boolean) => void
   /** Change this to force a scroll-to-bottom (e.g. panel just opened). */
   scrollKey?: number
+  /** Older transcript exists on the server — shows the "load earlier" control. */
+  hasMoreMessages?: boolean
+  /** True while an older page is in flight. */
+  loadingEarlier?: boolean
+  onLoadEarlier?: () => void
 }
 
 type Row =
+  | { kind: 'loadEarlier' }
   | { kind: 'date'; date: string }
   | { kind: 'message'; message: Message; isOwn: boolean; showSenderLabel: boolean }
   | { kind: 'stream'; content: string }
@@ -79,10 +85,15 @@ export function MessageList({
   onOpenLightbox,
   onScrollStateChange,
   scrollKey,
+  hasMoreMessages,
+  loadingEarlier,
+  onLoadEarlier,
 }: MessageListProps) {
   const { t } = useTranslation()
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = []
+    // Row 0 so it stays reachable when the list is scrolled up to its oldest end.
+    if (hasMoreMessages && onLoadEarlier) out.push({ kind: 'loadEarlier' })
     let prev: Message | null = null
     for (const message of messages) {
       if (!prev || !sameDay(prev.createdAt, message.createdAt)) {
@@ -106,7 +117,7 @@ export function MessageList({
       out.push({ kind: 'typing', users: typingUsers })
     }
     return out
-  }, [messages, visitorId, isOwnMessage, aiStreamContent, typingUsers])
+  }, [messages, visitorId, isOwnMessage, aiStreamContent, typingUsers, hasMoreMessages, onLoadEarlier])
 
   const { containerRef, scrollToBottom, onScroll } = useAutoScroll<HTMLDivElement>({
     // Re-stick whenever content identity changes (messages, stream text…).
@@ -130,6 +141,29 @@ export function MessageList({
       return row.kind === 'message' ? row.message.id : `${row.kind}-${index}`
     },
   })
+
+  // Preserve the reading position across a prepend: re-anchor to the message
+  // that was at the top, so the newly loaded page sits ABOVE the viewport
+  // instead of shoving it. Only the load-earlier path sets this ref, so appends
+  // (new messages arriving) are never affected.
+  const anchorMessageIdRef = useRef<string | null>(null)
+
+  const handleLoadEarlier = useCallback(() => {
+    const first = virtualizer.getVirtualItems()[0]
+    const row = first ? rows[first.index] : undefined
+    anchorMessageIdRef.current = row && row.kind === 'message' ? row.message.id : null
+    onLoadEarlier?.()
+  }, [onLoadEarlier, rows, virtualizer])
+
+  useLayoutEffect(() => {
+    const anchorId = anchorMessageIdRef.current
+    if (!anchorId) return
+    anchorMessageIdRef.current = null
+    const index = rows.findIndex((r) => r.kind === 'message' && r.message.id === anchorId)
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'start' })
+    // Runs exactly once per prepend — the ref is cleared above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length])
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current
@@ -163,6 +197,18 @@ export function MessageList({
                 transform: `translateY(${vi.start}px)`,
               }}
             >
+              {row.kind === 'loadEarlier' && (
+                <div className="oc-load-earlier">
+                  <button
+                    type="button"
+                    className="oc-load-earlier-btn"
+                    onClick={handleLoadEarlier}
+                    disabled={loadingEarlier}
+                  >
+                    {t('common.loadEarlierMessages')}
+                  </button>
+                </div>
+              )}
               {row.kind === 'date' && (
                 <div className="oc-date-sep">
                   <span>{DATE_FMT.format(new Date(row.date))}</span>

@@ -39,6 +39,7 @@ import {
   applyHistory,
   clearAiStream,
   markMessageRead,
+  prependMessages,
   removePendingSend,
   setBlacklisted,
   setConversationStatus,
@@ -83,6 +84,8 @@ export interface ChatSocket {
   sendImage: (attachmentUrl: string, thumbnailUrl?: string) => void
   readMessage: (messageId: string) => void
   markAllAsRead: () => void
+  /** Page in the transcript OLDER than the oldest message currently loaded. */
+  loadOlderMessages: () => void
   submitReview: (rating: number, review?: string) => void
   resolveConversation: () => void
   typingStart: () => void
@@ -173,11 +176,22 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
           break
         }
 
+        case SERVER_EVENTS.messagesPage: {
+          const { conversationId: pageId, messages, hasMoreMessages } =
+            payload as ServerEventMap['messages_page']
+          setConversationState(pageId, (s) =>
+            prependMessages(s, messages, hasMoreMessages),
+          )
+          break
+        }
+
         case SERVER_EVENTS.conversationHistory: {
-          const { conversation, isIpBlacklisted } =
+          const { conversation, isIpBlacklisted, hasMoreMessages } =
             payload as ServerEventMap['conversation_history']
           const id = conversation.id
-          setConversationState(id, (s) => applyHistory(s, conversation, isIpBlacklisted))
+          setConversationState(id, (s) =>
+            applyHistory(s, conversation, isIpBlacklisted, hasMoreMessages ?? false),
+          )
           // Fresh history → drop the streaming bubble if the stream died mid-way.
           setConversationState(id, clearAiStream)
           break
@@ -493,6 +507,17 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
     }
   }, [getConversationState, setConversationState])
 
+  const loadOlderMessages = useCallback(() => {
+    const id = conversationIdRef.current
+    if (!id) return
+    const oldest = getConversationState(id).messages[0]
+    if (!oldest) return
+    socketRef.current?.emit(CLIENT_EVENTS.loadMessages, {
+      conversationId: id,
+      before: oldest.createdAt,
+    })
+  }, [getConversationState])
+
   const submitReview = useCallback(
     (rating: number, review?: string) => {
       const id = conversationIdRef.current
@@ -538,6 +563,7 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
     sendImage,
     readMessage,
     markAllAsRead,
+    loadOlderMessages,
     submitReview,
     resolveConversation,
     typingStart,

@@ -38,11 +38,15 @@ export function getServerUrl(): string {
   return serverUrl
 }
 
-export async function refreshTokens(): Promise<AuthTokens> {
+export async function refreshTokens(baseUrl?: string): Promise<AuthTokens> {
   if (refreshPromise) return refreshPromise
   const refreshToken = storageGet(REFRESH_TOKEN_KEY)
   if (!refreshToken) throw new Error('No refresh token')
-  refreshPromise = fetch(`${serverUrl}/auth/refresh`, {
+  // baseUrl lets a caller that never ran initAuthClient (the agent widget — it
+  // has no AuthProvider) refresh against the right API instead of the host
+  // page's own origin.
+  const base = (baseUrl ?? serverUrl).replace(/\/$/, '')
+  refreshPromise = fetch(`${base}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),

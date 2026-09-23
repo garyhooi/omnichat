@@ -10,6 +10,7 @@ import {
   useAgentSocket,
   agentConversationsQueryKey,
   agentPresenceQueryKey,
+  type AgentConversationsState,
   type AgentSocket,
 } from '../features/agent/useAgentSocket'
 import type { Conversation, AgentPresenceEntry } from '../shared/types/models'
@@ -18,6 +19,8 @@ interface AdminDataValue {
   socket: AgentSocket
   conversations: Conversation[]
   loaded: boolean
+  /** Server capped the list — render "N+" rather than a misleading exact total. */
+  truncated: boolean
   agents: AgentPresenceEntry[]
 }
 
@@ -26,7 +29,7 @@ const AdminDataContext = createContext<AdminDataValue | null>(null)
 export function AdminDataProvider({ serverUrl, children }: { serverUrl: string; children: React.ReactNode }) {
   const socket = useAgentSocket({ serverUrl })
 
-  const { data: convsState } = useQuery({
+  const { data: convsState } = useQuery<AgentConversationsState>({
     queryKey: agentConversationsQueryKey(serverUrl),
     staleTime: Infinity,
     placeholderData: { conversations: [], currentUser: null, loaded: false },
@@ -44,6 +47,7 @@ export function AdminDataProvider({ serverUrl, children }: { serverUrl: string; 
       socket,
       conversations: convsState?.conversations ?? [],
       loaded: convsState?.loaded ?? false,
+      truncated: convsState?.truncated ?? false,
       agents: agents ?? [],
     }),
     [socket, convsState, agents],

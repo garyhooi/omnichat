@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { ACCESS_TOKEN_KEY, storageGet } from '../../shared/lib/storage'
+import { refreshTokens } from '../../shared/lib/api-client'
 import type {
   Conversation,
   CurrentUser,
@@ -33,6 +34,7 @@ import {
   applyHistory,
   clearAiStream,
   markMessageRead,
+  prependMessages,
   setConversationStatus,
   setInactivityWarning,
   setLastError,
@@ -49,6 +51,8 @@ export interface AgentConversationsState {
   conversations: Conversation[]
   currentUser: CurrentUser | null
   loaded: boolean
+  /** True when the server capped the list; the UI shows "N+", never a false total. */
+  truncated?: boolean
 }
 
 export interface AgentSocketOptions {
@@ -71,6 +75,8 @@ export interface AgentSocket {
   openConversationId: string | null
   openConversation: (id: string) => void
   closeConversation: () => void
+  /** Page in the transcript OLDER than the oldest message currently loaded. */
+  loadOlderMessages: (conversationId: string) => void
   /** Subscribe to live server events (after cache writes). Returns unsubscribe. */
   subscribeEvents: (fn: AgentServerEventListener) => () => void
   listConversations: (status?: ConversationStatusFilter, dateRange?: { start?: string; end?: string }) => void
@@ -107,6 +113,12 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   /** Last list_conversations request — re-emitted after a reconnect so date
    *  filters (Resolved tab) never silently drop while the socket is down. */
   const pendingListRef = useRef<{ status?: ConversationStatusFilter; startDate?: string; endDate?: string } | null>(null)
+  /** De-duplicates token refreshes: connect_error, disconnect and the auth
+   *  error event can all fire for the SAME failed attempt. */
+  const refreshingRef = useRef(false)
+  /** Last access token this socket attempted with — the signal that a fresh
+   *  login/refresh landed and a dead socket should try again. */
+  const lastTokenRef = useRef<string | null>(storageGet(ACCESS_TOKEN_KEY))
   useEffect(() => {
     optionsRef.current = options
   })
@@ -165,13 +177,56 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   )
 
   // ---------------------------------------------------------------------------
+  // Token recovery
+  // ---------------------------------------------------------------------------
+  /**
+   * Refresh the admin tokens through the SHARED client (which persists the
+   * rotated access + refresh tokens), then reconnect.
+   *
+   * The socket used to refresh on its own with a bare fetch: it kept only the
+   * access token in memory and threw the rotated refresh token away, while the
+   * server revokes the old refresh token on every use — so the stored
+   * credential rotted and recovery eventually became impossible.
+   */
+  const reconnectWithFreshToken = useCallback(async () => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    try {
+      // Explicit server: the agent widget has no AuthProvider, so the
+      // api-client module state may still be empty here.
+      await refreshTokens(serverUrl)
+    } catch {
+      // No usable refresh token (logged out, or already rotated away). The
+      // token watchers below retry as soon as a fresh token lands in storage.
+      return
+    } finally {
+      refreshingRef.current = false
+    }
+    socketRef.current?.connect()
+  }, [serverUrl])
+
+  /**
+   * Reconnect when a NEW access token appears in storage — the operator logged
+   * in, or another console refreshed. socket.io will NOT retry by itself after
+   * the server force-closes an unauthenticated connection, so the credential
+   * changing is the signal that a retry is worth making.
+   */
+  const reconnectOnTokenChange = useCallback(() => {
+    const token = storageGet(ACCESS_TOKEN_KEY)
+    if (token === lastTokenRef.current) return
+    lastTokenRef.current = token
+    const socket = socketRef.current
+    if (token && socket && !socket.connected) socket.connect()
+  }, [])
+
+  // ---------------------------------------------------------------------------
   // Event handling
   // ---------------------------------------------------------------------------
   const handleServerEvent = useCallback(
     (event: keyof ServerEventMap, payload: ServerEventMap[keyof ServerEventMap]) => {
       switch (event) {
         case SERVER_EVENTS.conversationsList: {
-          const { conversations, currentUser: cu } = payload as ServerEventMap['conversations_list']
+          const { conversations, currentUser: cu, truncated } = payload as ServerEventMap['conversations_list']
           setConversations((s) => ({
             ...s,
             conversations: conversations.map((c) => ({
@@ -180,6 +235,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
             })),
             currentUser: cu,
             loaded: true,
+            truncated: truncated ?? false,
           }))
           setCurrentUser(cu)
           break
@@ -284,11 +340,22 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
           break
         }
 
+        case SERVER_EVENTS.messagesPage: {
+          const { conversationId, messages, hasMoreMessages } =
+            payload as ServerEventMap['messages_page']
+          setConversationState(conversationId, (s) =>
+            prependMessages(s, messages, hasMoreMessages),
+          )
+          break
+        }
+
         case SERVER_EVENTS.conversationHistory: {
-          const { conversation, isIpBlacklisted } =
+          const { conversation, isIpBlacklisted, hasMoreMessages } =
             payload as ServerEventMap['conversation_history']
           const id = conversation.id
-          setConversationState(id, (s) => applyHistory(s, conversation, isIpBlacklisted))
+          setConversationState(id, (s) =>
+            applyHistory(s, conversation, isIpBlacklisted, hasMoreMessages ?? false),
+          )
           setConversationState(id, clearAiStream)
           // Read receipts for unread visitor messages (the agent just opened
           // this conversation) — matches the legacy mark-read-on-select.
@@ -382,6 +449,16 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
           break
         }
 
+        case SERVER_EVENTS.error: {
+          const { code } = payload as ServerEventMap['error']
+          // The gateway refuses a bad/expired credential by emitting this and
+          // then force-disconnecting. socket.io does not retry after an
+          // application-level disconnect, so recover explicitly here.
+          if (code === 'auth') void reconnectWithFreshToken()
+          optionsRef.current.onEvent?.(event, payload)
+          break
+        }
+
         default:
           optionsRef.current.onEvent?.(event, payload)
       }
@@ -389,7 +466,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
       // (notification sounds, etc.) observe consistent list/cache state.
       for (const listener of listenersRef.current) listener(event, payload)
     },
-    [currentUser?.displayName, queryClient, serverUrl, setConversationState, setConversations, updateTyping],
+    [currentUser?.displayName, queryClient, reconnectWithFreshToken, serverUrl, setConversationState, setConversations, updateTyping],
   )
 
   // ---------------------------------------------------------------------------
@@ -403,7 +480,11 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     const getToken = () =>
       optionsRef.current.getToken?.() ?? storageGet(ACCESS_TOKEN_KEY)
     const socket = io(serverUrl, {
-      auth: { token: getToken() },
+      // A FUNCTION, not an object: socket.io re-evaluates it on every attempt,
+      // so each reconnect presents the CURRENT token from storage. A frozen
+      // object is what let a socket replay an expired token forever while the
+      // HTTP client rotated tokens behind its back.
+      auth: (cb: (data: Record<string, unknown>) => void) => cb({ token: getToken() }),
       transports: ['websocket', 'polling'],
       withCredentials: true,
       reconnection: true,
@@ -427,28 +508,19 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
       }
     })
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       connectedRef.current = false
       setConnected(false)
+      // 'io server disconnect' = the SERVER called socket.disconnect(), which
+      // is how the gateway refuses an expired credential. socket.io deliberately
+      // does NOT auto-reconnect after this reason, so recover manually.
+      if (reason === 'io server disconnect') void reconnectWithFreshToken()
     })
 
-    socket.on('connect_error', async () => {
-      // Token expired → refresh once and retry with the new token.
-      try {
-        const refreshToken = storageGet('omnichat_refreshToken')
-        if (!refreshToken) return
-        const res = await fetch(`${serverUrl}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        })
-        if (!res.ok) return
-        const data = (await res.json()) as { accessToken: string }
-        socket.auth = { token: data.accessToken }
-        socket.connect()
-      } catch {
-        /* refresh failed — keep retrying */
-      }
+    socket.on('connect_error', () => {
+      // Handshake rejected. Refresh through the shared client (persists the
+      // rotated refresh token) and retry — auth() re-reads storage for us.
+      void reconnectWithFreshToken()
     })
 
     for (const event of Object.values(SERVER_EVENTS)) {
@@ -456,7 +528,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
         handleServerEvent(event as keyof ServerEventMap, payload as ServerEventMap[keyof ServerEventMap])
       })
     }
-  }, [handleServerEvent, serverUrl])
+  }, [handleServerEvent, reconnectWithFreshToken, serverUrl])
 
   useEffect(() => {
     connect()
@@ -465,6 +537,29 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connect])
+
+  // The socket object is created once, so a credential that appears AFTER it
+  // (the operator logging in on the same page, or a refresh from another tab)
+  // would otherwise never be picked up — the console sits on "connecting"
+  // until a full page reload rebuilds the socket.
+  useEffect(() => {
+    window.addEventListener('storage', reconnectOnTokenChange)
+    window.addEventListener('focus', reconnectOnTokenChange)
+    document.addEventListener('visibilitychange', reconnectOnTokenChange)
+    return () => {
+      window.removeEventListener('storage', reconnectOnTokenChange)
+      window.removeEventListener('focus', reconnectOnTokenChange)
+      document.removeEventListener('visibilitychange', reconnectOnTokenChange)
+    }
+  }, [reconnectOnTokenChange])
+
+  // A same-document login raises no 'storage' event, so poll while offline.
+  // One localStorage read every 2s, and only while the socket is down.
+  useEffect(() => {
+    if (connected) return
+    const timer = window.setInterval(reconnectOnTokenChange, 2000)
+    return () => window.clearInterval(timer)
+  }, [connected, reconnectOnTokenChange])
 
   // Heartbeat keeps lastSeenAt fresh so the presence/timeout logic works.
   useEffect(() => {
@@ -502,6 +597,18 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     openConversationIdRef.current = null
     setOpenConversationIdState(null)
   }, [])
+
+  const loadOlderMessages = useCallback(
+    (conversationId: string) => {
+      const oldest = getConversationState(conversationId).messages[0]
+      if (!oldest) return
+      socketRef.current?.emit(CLIENT_EVENTS.loadMessages, {
+        conversationId,
+        before: oldest.createdAt,
+      })
+    },
+    [getConversationState],
+  )
 
   const listConversations = useCallback(
     (status?: ConversationStatusFilter, dateRange?: { start?: string; end?: string }) => {
@@ -608,6 +715,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     openConversationId,
     openConversation,
     closeConversation,
+    loadOlderMessages,
     subscribeEvents,
     listConversations,
     sendText,

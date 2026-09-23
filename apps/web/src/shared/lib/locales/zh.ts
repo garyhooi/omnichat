@@ -504,6 +504,7 @@ export const zhHans: Record<string, string> = {
   'admin.visitorUiLangHint': '聊天小组件和聊天页面的语言。',
   'admin.operatorUiLang': '管理员 / 客服界面语言',
   'admin.operatorUiLangHint': '管理后台和客服控制台的语言。',
+  'common.loadEarlierMessages': '加载更早的消息',
 }
 export const zhHant: Record<string, string> = {
   'admin.reportAgentPerformance': '客服績效',
@@ -1011,4 +1012,5 @@ export const zhHant: Record<string, string> = {
   'admin.visitorUiLangHint': '聊天小工具和聊天頁面的語言。',
   'admin.operatorUiLang': '管理員 / 客服介面語言',
   'admin.operatorUiLangHint': '管理後台和客服控制台的語言。',
+  'common.loadEarlierMessages': '載入更早的訊息',
 }

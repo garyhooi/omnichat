@@ -6,6 +6,7 @@ import {
   clearAiStream,
   dedupeMessages,
   markMessageRead,
+  prependMessages,
   removePendingSend,
   setBlacklisted,
   setConversationStatus,
@@ -230,5 +231,55 @@ describe('helpers', () => {
       msg({ id: 'earlier', createdAt: '2026-08-16T01:00:00.000Z' }),
     ])
     expect(out.map((m) => m.id)).toEqual(['earlier', 'later'])
+  })
+})
+
+describe('prependMessages — paging older transcript in', () => {
+  it('puts an older page in front, keeping the list chronological', () => {
+    let s = appendMessage(createEmptyConversationState(), msg({ id: 'newer', createdAt: '2026-08-16T10:00:00.000Z' }))
+    s = prependMessages(s, [msg({ id: 'older', createdAt: '2026-08-16T09:00:00.000Z' })], false)
+
+    expect(s.messages.map((m) => m.id)).toEqual(['older', 'newer'])
+    expect(s.hasMoreMessages).toBe(false)
+  })
+
+  it('keeps hasMoreMessages true while the server still has older pages', () => {
+    const s = prependMessages(createEmptyConversationState(), [msg({ id: 'older' })], true)
+    expect(s.hasMoreMessages).toBe(true)
+  })
+
+  it('dedupes a message the page and the loaded list both contain', () => {
+    // The server pages with createdAt < before, so any overlap sits at the
+    // boundary — it must collapse to a single copy in chronological position.
+    let s = appendMessage(
+      createEmptyConversationState(),
+      msg({ id: 'shared', createdAt: '2026-08-16T09:00:00.000Z' }),
+    )
+    s = prependMessages(
+      s,
+      [
+        msg({ id: 'older', createdAt: '2026-08-16T08:00:00.000Z' }),
+        msg({ id: 'shared', createdAt: '2026-08-16T09:00:00.000Z' }),
+      ],
+      false,
+    )
+
+    expect(s.messages.map((m) => m.id)).toEqual(['older', 'shared'])
+  })
+
+  it('only records the flag when the page came back empty', () => {
+    const before = prependMessages(createEmptyConversationState(), [msg({ id: 'a' })], true)
+    const after = prependMessages(before, [], false)
+
+    expect(after.messages.map((m) => m.id)).toEqual(['a'])
+    expect(after.hasMoreMessages).toBe(false)
+  })
+})
+
+describe('applyHistory — pagination flag', () => {
+  it('records hasMoreMessages from the server', () => {
+    const historyConv = { ...conv, messages: [msg({ id: 'only' })] } as Conversation & { messages: Message[] }
+    expect(applyHistory(createEmptyConversationState(), historyConv, false, true).hasMoreMessages).toBe(true)
+    expect(applyHistory(createEmptyConversationState(), historyConv, false).hasMoreMessages).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ export function applyHistory(
   state: ConversationQueryState,
   conversation: Conversation & { messages: Message[] },
   isIpBlacklisted: boolean,
+  hasMoreMessages = false,
 ): ConversationQueryState {
   const { messages, ...rest } = conversation
   return {
@@ -41,6 +42,26 @@ export function applyHistory(
     aiStream: null,
     inactivityWarning: null,
     loaded: true,
+    hasMoreMessages,
+  }
+}
+
+/**
+ * Prepend an older page of transcript (from `messages_page`). Dedupes by id —
+ * the same message can also arrive as a live echo — and records whether even
+ * older messages remain. The incoming page is older, so prepending keeps the
+ * list chronological.
+ */
+export function prependMessages(
+  state: ConversationQueryState,
+  messages: Message[],
+  hasMoreMessages: boolean,
+): ConversationQueryState {
+  if (messages.length === 0) return { ...state, hasMoreMessages }
+  return {
+    ...state,
+    messages: dedupeMessages([...messages, ...state.messages]),
+    hasMoreMessages,
   }
 }
 

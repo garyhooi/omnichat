@@ -158,6 +158,34 @@
   text-transform: uppercase;
 }
 
+/* "Load earlier messages" — the first row of a paginated transcript. */
+.oc-load-earlier {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+}
+
+.oc-load-earlier-btn {
+  border: 1px solid var(--oc-border);
+  background: transparent;
+  color: var(--oc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.oc-load-earlier-btn:hover:not(:disabled) {
+  color: var(--oc-accent);
+  border-color: var(--oc-accent);
+}
+
+.oc-load-earlier-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .oc-msg-row {
   display: flex;
   gap: 8px;
