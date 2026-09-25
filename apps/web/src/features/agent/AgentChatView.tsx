@@ -174,7 +174,8 @@ export function AgentChatView({
           s ? setTranslation(s, latest.id, translateLang, text) : s,
         )
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.warn('[translate]', err instanceof Error ? err.message : err)
         markTranslationFailed(key)
       })
       .finally(() => {
@@ -206,7 +207,8 @@ export function AgentChatView({
           )
           return true
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[translate]', err instanceof Error ? err.message : err)
           markTranslationFailed(key)
           return false
         })

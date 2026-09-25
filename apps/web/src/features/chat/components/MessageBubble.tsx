@@ -75,17 +75,21 @@ export const MessageBubble = memo(function MessageBubble({
     setTranslating(false)
     setTranslateFailed(false)
   }, [translated])
+  const failTranslate = () => {
+    // A rejected translation (network/HTTP error, failed chunk load) must clear
+    // the spinner and report it — otherwise the button stays on "…" and every
+    // later click is ignored by the `translating` guard.
+    setTranslating(false)
+    setTranslateFailed(true)
+    setTimeout(() => setTranslateFailed((v) => (v ? false : v)), 4000)
+  }
   const handleTranslate = () => {
     if (translating) return
     setTranslating(true)
     setTranslateFailed(false)
-    Promise.resolve(onTranslate(message)).then((ok) => {
-      setTranslating(false)
-      if (!ok) {
-        setTranslateFailed(true)
-        setTimeout(() => setTranslateFailed((v) => (v ? false : v)), 4000)
-      }
-    })
+    Promise.resolve(onTranslate(message))
+      .then((ok) => (ok ? setTranslating(false) : failTranslate()))
+      .catch(failTranslate)
   }
   const effectiveText = showTranslated && translated ? translated : (message.content ?? '')
 

@@ -60,6 +60,8 @@ export interface ChatSession {
   isIpBlacklisted: boolean
   uploadToken: string | null
   inactivityWarning: string | null
+  /** Hide the inactivity banner without re-arming the server timer. */
+  dismissInactivityWarning: () => void
   lastError: string | null
   loaded: boolean
   isResolved: boolean
@@ -208,20 +210,28 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     [socket, visitorId, visitorContext],
   )
 
+  /**
+   * Hide the inactivity banner. Sending a message is what re-arms the server
+   * timer, so dismissing is a client-only affordance: the chat still closes when
+   * the grace period ends, and no "warning cleared" event exists to wait for.
+   */
+  const dismissInactivityWarning = useCallback(() => {
+    const id = socket.conversationId
+    if (!id) return
+    queryClient.setQueryData(conversationQueryKey(serverUrl, id), (s: ConversationQueryState | undefined) =>
+      s ? { ...s, inactivityWarning: null } : s,
+    )
+  }, [queryClient, serverUrl, socket.conversationId])
+
   const sendText = useCallback(
     (content: string) => {
       if (content.trim().length > VISITOR_MAX_CHARS) return
-      // Sending a message re-arms the server's inactivity timer — clear the
-      // local warning banner (the server sends no "warning cleared" event).
-      const id = socket.conversationId
-      if (id) {
-        queryClient.setQueryData(conversationQueryKey(serverUrl, id), (s: ConversationQueryState | undefined) =>
-          s ? { ...s, inactivityWarning: null } : s,
-        )
-      }
+      // Sending a message re-arms the server's inactivity timer — the warning
+      // banner goes with it (the server sends no "warning cleared" event).
+      dismissInactivityWarning()
       socket.sendText(content)
     },
-    [queryClient, serverUrl, socket],
+    [dismissInactivityWarning, socket],
   )
 
   const requestHuman = useCallback(() => {
@@ -282,7 +292,8 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
             )
             return true
           })
-          .catch(() => {
+          .catch((err: unknown) => {
+            console.warn('[translate]', err instanceof Error ? err.message : err)
             markTranslationFailed(key)
             return false
           }),
@@ -312,7 +323,8 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
             s ? setTranslation(s, latest.id, translateLang, text) : s,
           )
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[translate]', err instanceof Error ? err.message : err)
           markTranslationFailed(key)
         })
         .finally(() => {
@@ -347,6 +359,7 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     isIpBlacklisted: state?.isIpBlacklisted ?? false,
     uploadToken: state?.uploadToken ?? null,
     inactivityWarning: state?.inactivityWarning ?? null,
+    dismissInactivityWarning,
     lastError: state?.lastError ?? null,
     loaded: state?.loaded ?? false,
     isResolved,

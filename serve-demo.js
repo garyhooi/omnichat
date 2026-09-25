@@ -61,7 +61,10 @@ serve({
     try {
       const content = await readFile(filePath);
       return new Response(content, {
-        headers: { 'Content-Type': contentType }
+        // Local dev: never let a cached bundle hide the build you just made.
+        // Production revalidates these fixed-url bundles for the same reason —
+        // see nginx.conf.
+        headers: { 'Content-Type': contentType, 'Cache-Control': 'no-store' }
       });
     } catch (error) {
       // For SPA routes, serve admin.html (hash routing handles the rest)
