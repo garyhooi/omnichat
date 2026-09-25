@@ -54,7 +54,6 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
     typingUsers,
     isIpBlacklisted,
     inactivityWarning,
-    dismissInactivityWarning,
     lastError,
     loaded,
     isResolved,
@@ -177,19 +176,6 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
         <div className="oc-banner oc-banner-warn">
           {inactivityWarning}
           {secondsLeft != null && ` ${t('visitor.closesIn', { time: formatCountdown(secondsLeft) })}`}
-          <button
-            type="button"
-            className="oc-translate-btn"
-            onClick={() => {
-              // Hiding the notice is client-side only — the server still closes
-              // the chat when the grace period ends (typing re-arms it).
-              dismissWarning()
-              dismissInactivityWarning()
-            }}
-            style={{ marginLeft: 8 }}
-          >
-            {t('visitor.dismiss')}
-          </button>
         </div>
       )}
 
