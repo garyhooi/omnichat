@@ -629,9 +629,13 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
     (conversationId: string, content: string) => {
       if (!content.trim()) return
       if (content.trim().length > AGENT_MAX_CHARS) return
-      // Optimistic append — resolved by the server echo in appendMessage.
+      // Optimistic append — resolved by the server echo in appendMessage. Carries
+      // the agent identity so the bubble starts on the agent's own side.
       setConversationState(conversationId, (s) =>
-        addPendingSend(s, `temp_${crypto.randomUUID()}`, content, conversationId, currentUser?.id ?? 'me'),
+        addPendingSend(s, `temp_${crypto.randomUUID()}`, content, conversationId, {
+          senderType: 'agent',
+          senderId: currentUser?.id ?? 'me',
+        }),
       )
       socketRef.current?.emit(CLIENT_EVENTS.sendMessage, {
         conversationId,

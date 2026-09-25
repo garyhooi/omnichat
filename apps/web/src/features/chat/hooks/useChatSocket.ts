@@ -457,8 +457,14 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
       const id = conversationIdRef.current
       const socket = socketRef.current
       if (!id || !socket || !content.trim()) return
-      // Optimistic append — resolved by the server echo in appendMessage.
-      setConversationState(id, (s) => addPendingSend(s, `temp_${crypto.randomUUID()}`, content, id))
+      // Optimistic append — resolved by the server echo in appendMessage. Carries
+      // the visitor's identity so the bubble starts on the sender's own side.
+      setConversationState(id, (s) =>
+        addPendingSend(s, `temp_${crypto.randomUUID()}`, content, id, {
+          senderType: 'visitor',
+          senderId: authoritativeVisitorId,
+        }),
+      )
       socket.emit(CLIENT_EVENTS.sendMessage, {
         conversationId: id,
         content,
@@ -466,7 +472,7 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
       })
       socket.emit(CLIENT_EVENTS.typingStop, { conversationId: id })
     },
-    [setConversationState],
+    [authoritativeVisitorId, setConversationState],
   )
 
   const sendImage = useCallback(

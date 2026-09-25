@@ -65,20 +65,27 @@ export function prependMessages(
   }
 }
 
-/** Optimistic placeholder inserted before the server echo arrives. */
+/**
+ * Optimistic placeholder inserted before the server echo arrives.
+ *
+ * It MUST carry the real sender identity: every surface decides which side a
+ * bubble sits on from (senderType, senderId), so an anonymous placeholder shows
+ * up on the wrong side for the moment before the echo lands — the
+ * left-then-right flash the sender sees.
+ */
 export function addPendingSend(
   state: ConversationQueryState,
   tempId: string,
   content: string,
   conversationId: string,
-  senderId = 'me',
+  sender: { senderType?: Message['senderType']; senderId?: string } = {},
 ): ConversationQueryState {
   const pending: PendingSend = { tempId, content, conversationId, sentAt: new Date().toISOString() }
   const placeholder: Message = {
     id: tempId,
     conversationId,
-    senderType: 'visitor',
-    senderId,
+    senderType: sender.senderType ?? 'visitor',
+    senderId: sender.senderId ?? 'me',
     messageType: 'text',
     content,
     attachmentUrl: null,
