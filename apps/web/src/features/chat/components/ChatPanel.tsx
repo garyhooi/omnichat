@@ -231,6 +231,7 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
           <MessageList
             messages={messages}
             visitorId={session.visitorId}
+            timeZone={siteConfig?.displayTimezone || undefined}
             aiStreamContent={aiStreamContent}
             typingUsers={typingUsers}
             accentColor={accentColor}

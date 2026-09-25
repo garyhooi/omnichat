@@ -50,6 +50,8 @@ export interface SiteConfig {
   greetingMessage?: string | null
   visitorLanguage: string
   adminLanguage: string
+  /** IANA zone every rendered datetime is converted to (null = viewer's zone). */
+  displayTimezone?: string | null
   bubbleSize: 'small' | 'medium' | 'large'
   bubblePattern: 'solid' | 'gradient' | 'stripes' | 'dots'
   websitePosition: string

@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart3, CalendarRange, Coins, Download, Sparkles, User } from 'lucide-react'
 import { useAuth } from '../auth'
 import { authFetchJson } from '../../shared/lib/api-client'
+import { todayIso, zonedDayBoundaryIso } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type {
   AiProvider,
   AiReviewResponse,
@@ -67,14 +69,16 @@ const STATUS_KEYS: Record<string, string> = {
 const reportsKey = (serverUrl: string, report: ReportKey, type: ReportType, from: string, to: string, username: string) =>
   ['reports', serverUrl, report, type, from, to, username] as const
 
+// Range defaults are local dates, not UTC ones — an evening operator in UTC+8
+// would otherwise open the report on "yesterday".
 function today(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayIso()
 }
 
 function monthStart(): string {
   const d = new Date()
-  d.setDate(1)
-  return d.toISOString().slice(0, 10)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  return d.getFullYear() + '-' + month + '-01'
 }
 
 function fmtCost(cost: number): string {
@@ -200,6 +204,8 @@ function SortHeader({
 export function ReportPage() {
   const { t, i18n } = useTranslation()
   const { serverUrl } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const [report, setReport] = useState<ReportKey>('token-usage')
   const [type, setType] = useState<ReportType>('conversations')
   const [from, setFrom] = useState(monthStart)
@@ -221,7 +227,12 @@ export function ReportPage() {
   const { data, isLoading } = useQuery<any>({
     queryKey: reportsKey(serverUrl, report, type, from, to, username),
     queryFn: () => {
-      const qs = new URLSearchParams({ from, to })
+      // Day windows resolved in the display timezone; the API keeps the raw
+      // instants when the value carries a time component.
+      const qs = new URLSearchParams({
+        from: zonedDayBoundaryIso(from, timeZone),
+        to: zonedDayBoundaryIso(to, timeZone, true),
+      })
       if (username.trim()) qs.set('username', username.trim())
       let endpoint: string
       if (report === 'agent-performance') {

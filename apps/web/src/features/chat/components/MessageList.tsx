@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Message } from '../../../shared/types/models'
+import { formatDate, isSameDisplayDay } from '../../../shared/lib/format'
 import { useAutoScroll } from '../hooks/useAutoScroll'
 import { MessageBubble } from './MessageBubble'
 import { TypingIndicator } from './TypingIndicator'
@@ -30,8 +31,12 @@ export interface MessageListProps {
   translateLang: string
   translationEnabled: boolean
   onTranslate: (message: Message) => Promise<boolean> | boolean
+  /** Agent console: offer Translate even when the target language is English. */
+  alwaysOfferTranslate?: boolean
   onOpenLightbox: (url: string) => void
   onScrollStateChange?: (userScrolledUp: boolean) => void
+  /** Display timezone for separators/bubble times (undefined = viewer's zone). */
+  timeZone?: string
   /** Change this to force a scroll-to-bottom (e.g. panel just opened). */
   scrollKey?: number
   /** Older transcript exists on the server — shows the "load earlier" control. */
@@ -47,22 +52,6 @@ type Row =
   | { kind: 'message'; message: Message; isOwn: boolean; showSenderLabel: boolean }
   | { kind: 'stream'; content: string }
   | { kind: 'typing'; users: string[] }
-
-const DATE_FMT = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: new Date().getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
-})
-
-function sameDay(a: string, b: string): boolean {
-  const da = new Date(a)
-  const db = new Date(b)
-  return (
-    da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate()
-  )
-}
 
 /**
  * Virtualized message list with day separators, the AI streaming bubble and
@@ -82,8 +71,10 @@ export function MessageList({
   translateLang,
   translationEnabled,
   onTranslate,
+  alwaysOfferTranslate,
   onOpenLightbox,
   onScrollStateChange,
+  timeZone,
   scrollKey,
   hasMoreMessages,
   loadingEarlier,
@@ -96,7 +87,7 @@ export function MessageList({
     if (hasMoreMessages && onLoadEarlier) out.push({ kind: 'loadEarlier' })
     let prev: Message | null = null
     for (const message of messages) {
-      if (!prev || !sameDay(prev.createdAt, message.createdAt)) {
+      if (!prev || !isSameDisplayDay(prev.createdAt, message.createdAt, timeZone)) {
         out.push({ kind: 'date', date: message.createdAt })
       }
       const isOwn = isOwnMessage
@@ -117,7 +108,7 @@ export function MessageList({
       out.push({ kind: 'typing', users: typingUsers })
     }
     return out
-  }, [messages, visitorId, isOwnMessage, aiStreamContent, typingUsers, hasMoreMessages, onLoadEarlier])
+  }, [messages, visitorId, isOwnMessage, aiStreamContent, typingUsers, hasMoreMessages, onLoadEarlier, timeZone])
 
   const { containerRef, scrollToBottom, onScroll } = useAutoScroll<HTMLDivElement>({
     // Re-stick whenever content identity changes (messages, stream text…).
@@ -211,7 +202,7 @@ export function MessageList({
               )}
               {row.kind === 'date' && (
                 <div className="oc-date-sep">
-                  <span>{DATE_FMT.format(new Date(row.date))}</span>
+                  <span>{formatDate(row.date, timeZone)}</span>
                 </div>
               )}
               {row.kind === 'message' && (
@@ -219,6 +210,7 @@ export function MessageList({
                   message={row.message}
                   isOwn={row.isOwn}
                   accentColor={accentColor}
+                  timeZone={timeZone}
                   avatarUrl={
                     row.message.senderType === 'ai'
                       ? avatars?.ai
@@ -240,6 +232,7 @@ export function MessageList({
                   translateLang={translateLang}
                   translationEnabled={translationEnabled}
                   onTranslate={onTranslate}
+                  alwaysOfferTranslate={alwaysOfferTranslate}
                   onOpenLightbox={onOpenLightbox}
                 />
               )}

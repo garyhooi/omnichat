@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, FileUp, Pencil, Search, Trash2, X } from 'lucide-react'
 import { useAuth } from '../auth'
 import { authFetch, authFetchJson } from '../../shared/lib/api-client'
-import { formatBytes } from '../../shared/lib/format'
+import { formatBytes, formatDate } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type { KnowledgeDocument, KnowledgeSearchResult } from '../../shared/types/api'
 
 const kbKey = (serverUrl: string) => ['knowledge', serverUrl] as const
@@ -34,6 +35,8 @@ const TEMPLATES = [
 export function KnowledgeBasePage() {
   const { t } = useTranslation()
   const { serverUrl } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [title, setTitle] = useState('')
@@ -404,7 +407,7 @@ export function KnowledgeBasePage() {
                       <div className="adm-muted" style={{ fontSize: 11, marginTop: 3 }}>{d.errorMessage}</div>
                     )}
                   </td>
-                  <td className="adm-muted">{new Date(d.createdAt).toLocaleDateString()}</td>
+                  <td className="adm-muted">{formatDate(d.createdAt, timeZone)}</td>
                   <td>
                     <div className="adm-row" style={{ gap: 4 }}>
                       <button className="adm-btn adm-btn-sm" title={t('admin.kbViewContent')} onClick={() => void openView(d.id)}>

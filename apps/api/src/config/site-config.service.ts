@@ -22,6 +22,7 @@ export class SiteConfigService {
   /** Create a new site configuration. */
   async createConfig(data: {
     siteName: string;
+    displayTimezone?: string;
     bubbleColor?: string;
     welcomeMessage?: string;
     offlineMessage?: string;
@@ -50,6 +51,7 @@ export class SiteConfigService {
     id: string,
     data: {
       siteName?: string;
+      displayTimezone?: string;
       bubbleColor?: string;
       welcomeMessage?: string;
       offlineMessage?: string;

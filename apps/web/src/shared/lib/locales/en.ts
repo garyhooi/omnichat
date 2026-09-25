@@ -153,6 +153,7 @@ export const en: Record<string, string> = {
   'admin.logs': 'Logs',
   'admin.users': 'Users',
   'admin.settings': 'Settings',
+  'admin.configuration': 'Configuration',
   'admin.logout': 'Log out',
   'admin.expandSidebar': 'Expand sidebar',
   'admin.collapseSidebar': 'Collapse sidebar',

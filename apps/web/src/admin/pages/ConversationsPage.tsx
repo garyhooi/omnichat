@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ShieldAlert, Search } from 'lucide-react'
 import type { Conversation } from '../../shared/types/models'
 import { parseConversationMetadata } from '../../shared/types/models'
-import { formatTicketId, timeAgo, truncate } from '../../shared/lib/format'
+import { formatTicketId, formatTime, timeAgo, todayIso, truncate, zonedDayBoundaryIso } from '../../shared/lib/format'
 import { useAdminData } from '../AdminDataProvider'
 import { useAuth } from '../auth'
 import { useSiteAccent } from '../accent'
@@ -37,6 +37,7 @@ export function ConversationsPage() {
   const { serverUrl } = useAuth()
   const accentColor = useSiteAccent(serverUrl)
   const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const [tab, setTab] = useState<StatusTab>('active')
   const [searchQuery, setSearchQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -51,34 +52,32 @@ export function ConversationsPage() {
   })
   useEffect(() => () => socketRef.current.closeConversation(), [])
 
-  // Resolved-tab date-range filter (legacy parity). Applied both server-side
-  // (re-fetch through list_conversations with the window) and client-side as a
-  // fallback, so the UI narrows immediately and the server sends only that slice.
+  // Resolved-tab date-range filter, applied to the conversation's CREATED date
+  // (not updatedAt — the inactivity safety net rewrites that, which made old
+  // chats surface under today). Sent server-side through list_conversations and
+  // mirrored client-side so the table narrows while the refetch is in flight.
   const [resolvedStart, setResolvedStart] = useState('')
   const [resolvedEnd, setResolvedEnd] = useState('')
   const [resolvedDefaulted, setResolvedDefaulted] = useState(false)
 
   const applyResolvedDateRange = useCallback(
     (range: { start?: string; end?: string }) => {
-      socket.listConversations('resolved', range)
+      // The picked days become exact instants in the display timezone, so the
+      // server window matches the operator's calendar day, not the server's.
+      socket.listConversations('resolved', {
+        start: range.start ? zonedDayBoundaryIso(range.start, timeZone) : undefined,
+        end: range.end ? zonedDayBoundaryIso(range.end, timeZone, true) : undefined,
+      })
     },
-    [socket],
+    [socket, timeZone],
   )
-
-  const todayIso = () => {
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return y + '-' + m + '-' + day
-  }
 
   const handleTabChange = useCallback(
     (next: StatusTab) => {
       setTab(next)
       if (next === 'resolved') {
         if (!resolvedDefaulted) {
-          const today = todayIso()
+          const today = todayIso(timeZone)
           setResolvedDefaulted(true)
           setResolvedStart(today)
           setResolvedEnd(today)
@@ -94,7 +93,7 @@ export function ConversationsPage() {
         socket.listConversations(next)
       }
     },
-    [applyResolvedDateRange, resolvedDefaulted, resolvedStart, resolvedEnd, socket],
+    [applyResolvedDateRange, resolvedDefaulted, resolvedStart, resolvedEnd, socket, timeZone],
   )
 
   const filtered = useMemo(() => {
@@ -105,13 +104,13 @@ export function ConversationsPage() {
       return c.status === tab
     })
 
-    // Client-side fallback for the server-side resolved date window, so the
+    // Client-side fallback for the server-side created-date window, so the
     // table narrows immediately and stays correct while the refetch is in flight.
     if (tab === 'resolved' && (resolvedStart || resolvedEnd)) {
-      const start = resolvedStart ? new Date(resolvedStart + 'T00:00:00') : null
-      const end = resolvedEnd ? new Date(resolvedEnd + 'T23:59:59.999') : null
+      const start = resolvedStart ? new Date(zonedDayBoundaryIso(resolvedStart, timeZone)) : null
+      const end = resolvedEnd ? new Date(zonedDayBoundaryIso(resolvedEnd, timeZone, true)) : null
       list = list.filter((c) => {
-        const d = new Date(c.updatedAt).getTime()
+        const d = new Date(c.createdAt).getTime()
         if (start && d < start.getTime()) return false
         if (end && d > end.getTime()) return false
         return true
@@ -146,7 +145,7 @@ export function ConversationsPage() {
     }
 
     return [...list].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-  }, [conversations, resolvedEnd, resolvedStart, searchQuery, socket.currentUser?.username, tab])
+  }, [conversations, resolvedEnd, resolvedStart, searchQuery, socket.currentUser?.username, tab, timeZone])
 
   const openConversation = conversations.find((c) => c.id === openId) ?? null
 
@@ -259,6 +258,7 @@ export function ConversationsPage() {
                   <th>{t('admin.lastMessage')}</th>
                   <th>{t('admin.status')}</th>
                   <th>{t('common.agent')}</th>
+                  <th>{t('admin.created')}</th>
                   <th>{t('admin.updated')}</th>
                   <th></th>
                 </tr>
@@ -266,7 +266,7 @@ export function ConversationsPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="adm-empty">
                         {loaded ? t('admin.noConversations') : t('common.connecting')}
                       </div>
@@ -314,8 +314,11 @@ export function ConversationsPage() {
                                 : t('common.statusResolved')}
                         </span>
                       </td>
-                      <td className="adm-muted">{c.assignedUsername || c.specialistUsername || '—'}</td>
-                      <td className="adm-muted">{timeAgo(c.updatedAt)}</td>
+                      {/* assignedUsername is the visitor's own account username
+                          (verified external JWT / details field), never an agent. */}
+                      <td className="adm-muted">{c.agent?.displayName || c.specialistUsername || '—'}</td>
+                      <td className="adm-muted">{formatTime(c.createdAt, timeZone)}</td>
+                      <td className="adm-muted">{timeAgo(c.updatedAt, timeZone)}</td>
                       <td>
                         {(c.unreadCount ?? 0) > 0 && (
                           <span className="adm-badge adm-badge-danger">{c.unreadCount}</span>

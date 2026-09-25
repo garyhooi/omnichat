@@ -143,16 +143,32 @@ export class ChatService {
     });
   }
 
-  /** Parse a "YYYY-MM-DD" (local-time) string into a Date at that day's start. */
+  /**
+   * Resolve one end of a conversation date window. The console sends full ISO
+   * instants (it resolves the picked day in the configured display timezone); a
+   * bare "YYYY-MM-DD" from an older client still means that day, server-local.
+   */
   private parseDayStart(value: string): Date {
-    const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+    return this.parseInstant(value) ?? this.parseLocalDay(value, false);
   }
 
-  /** Parse a "YYYY-MM-DD" (local-time) string into the last millisecond of that day. */
+  /** Same contract as parseDayStart, at the last millisecond of the day. */
   private parseDayEnd(value: string): Date {
+    return this.parseInstant(value) ?? this.parseLocalDay(value, true);
+  }
+
+  /** An ISO value carrying a time component, when it parses. */
+  private parseInstant(value: string): Date | null {
+    if (!value.includes('T')) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  private parseLocalDay(value: string, endOfDay: boolean): Date {
     const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, (m || 1) - 1, d || 1, 23, 59, 59, 999);
+    const date = new Date(y, (m || 1) - 1, d || 1);
+    if (endOfDay) date.setHours(23, 59, 59, 999);
+    return date;
   }
 
   /**
@@ -170,7 +186,10 @@ export class ChatService {
    * silently presenting the cap as the whole set.
    */
   async listConversations(status?: string, dateRange?: { start?: string; end?: string }) {
-    const updatedAt: Record<string, Date> | undefined =
+    // The window is applied to createdAt, NOT updatedAt: updatedAt is rewritten
+    // by non-message writes (inactivity auto-resolve, assign/resolve/remarks),
+    // so filtering on it pulled week-old transcripts into "today's" list.
+    const createdAt: Record<string, Date> | undefined =
       dateRange?.start || dateRange?.end
         ? {
             ...(dateRange.start ? { gte: this.parseDayStart(dateRange.start) } : {}),
@@ -181,7 +200,7 @@ export class ChatService {
     const rows = await this.prisma.conversation.findMany({
       where: {
         ...(status ? { status } : {}),
-        ...(updatedAt ? { updatedAt } : {}),
+        ...(createdAt ? { createdAt } : {}),
       },
       include: {
         messages: {

@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FileText, Cpu, Wrench } from 'lucide-react'
 import { useAuth } from '../auth'
 import { authFetchJson } from '../../shared/lib/api-client'
+import { formatDateTime } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type { Paginated, HttpLogEntry, AiLogEntry, ToolLogEntry } from '../../shared/types/api'
 
 type LogKind = 'http' | 'ai' | 'tool'
@@ -50,6 +52,8 @@ function Pre({ label, value }: { label: string; value: string | null | undefined
 export function LogsPage() {
   const { t } = useTranslation()
   const { serverUrl } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const [kind, setKind] = useState<LogKind>('http')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -169,6 +173,7 @@ export function LogsPage() {
                   entry={e}
                   kind={kind}
                   expanded={expandedId === e.id}
+                  timeZone={timeZone}
                   onToggle={() => toggle(e.id)}
                 />
               ))
@@ -196,11 +201,13 @@ function ExpandedRow({
   entry,
   kind,
   expanded,
+  timeZone,
   onToggle,
 }: {
   entry: HttpLogEntry | AiLogEntry | ToolLogEntry
   kind: LogKind
   expanded: boolean
+  timeZone?: string
   onToggle: () => void
 }) {
   const { t } = useTranslation()
@@ -213,7 +220,7 @@ function ExpandedRow({
           </span>
         </td>
         <td className="adm-muted" style={{ whiteSpace: 'nowrap' }}>
-          {new Date(entry.createdAt).toLocaleString()}
+          {formatDateTime(entry.createdAt, timeZone)}
         </td>
         {kind === 'http' && (
           <>

@@ -13,6 +13,20 @@ const quickRepliesKey = (serverUrl: string) => ['quick-replies', serverUrl] as c
 
 const EMOJI_OPTIONS = ['💬', '👋', '🤖', '💡', '❓', '🎉', '⭐', '🔔', '📩', '🛎️']
 
+/** Zone of whoever is looking at the console — the fallback when nothing is configured. */
+const LOCAL_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+/** Every IANA zone the runtime knows; degrades to the viewer's zone + UTC. */
+const TIME_ZONES: string[] = (() => {
+  try {
+    const supported = (Intl as any).supportedValuesOf?.('timeZone') as string[] | undefined
+    if (supported?.length) return supported
+  } catch {
+    /* runtime without supportedValuesOf */
+  }
+  return [LOCAL_TIME_ZONE, 'UTC']
+})()
+
 /** Legacy parity: bubble icon / avatars are stored as an emoji char or "custom:url". */
 type AvatarField = 'ai' | 'agent' | 'visitor'
 
@@ -101,7 +115,7 @@ export function SettingsPage() {
   const { t, i18n } = useTranslation()
   const { serverUrl, isDeveloper } = useAuth()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'widget' | 'quick-replies'>('widget')
+  const [tab, setTab] = useState<'widget' | 'quick-replies' | 'configuration'>('widget')
   const [form, setForm] = useState<Partial<SiteConfig> | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -389,7 +403,7 @@ export function SettingsPage() {
           <h1 className="adm-page-title">{t('admin.settings')}</h1>
           <p className="adm-page-sub">{t('admin.siteConfigTitle')}</p>
         </div>
-        {tab === 'widget' && (
+        {tab !== 'quick-replies' && (
           <button type="button" className="adm-btn adm-btn-primary" onClick={() => void save()} disabled={saving}>
             <Save size={15} /> {saving ? t('admin.saving') : t('admin.saveChanges')}
           </button>
@@ -402,6 +416,9 @@ export function SettingsPage() {
         </button>
         <button type="button" className={`adm-tab ${tab === 'quick-replies' ? 'active' : ''}`} onClick={() => setTab('quick-replies')}>
           {t('admin.quickReplies')}
+        </button>
+        <button type="button" className={`adm-tab ${tab === 'configuration' ? 'active' : ''}`} onClick={() => setTab('configuration')}>
+          {t('admin.configuration')}
         </button>
       </div>
 
@@ -416,7 +433,30 @@ export function SettingsPage() {
         </div>
       )}
 
-      {tab === 'quick-replies' ? (
+      {tab === 'configuration' ? (
+        <div className="adm-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+          <div className="adm-card">
+            <h2 className="adm-card-title">{t('admin.configuration')}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              <label htmlFor="adm-display-timezone" style={{ fontSize: 12, color: 'var(--adm-text-muted)' }}>
+                {t('agent.timezone')}
+              </label>
+              <select
+                id="adm-display-timezone"
+                className="adm-input"
+                value={form?.displayTimezone || LOCAL_TIME_ZONE}
+                onChange={(e) => set('displayTimezone', e.target.value)}
+              >
+                {TIME_ZONES.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      ) : tab === 'quick-replies' ? (
         <div className="adm-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
           <div className="adm-card">
             <div className="adm-flex-between" style={{ marginBottom: 10 }}>

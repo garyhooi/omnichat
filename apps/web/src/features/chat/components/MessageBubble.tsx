@@ -11,6 +11,8 @@ export interface MessageBubbleProps {
   message: Message
   isOwn: boolean
   accentColor: string
+  /** Display timezone (undefined = viewer's zone). */
+  timeZone?: string
   avatarUrl?: string | null
   /** Emoji symbol fallback when no avatar image is configured. */
   avatarSymbol?: string
@@ -23,6 +25,8 @@ export interface MessageBubbleProps {
   translationEnabled: boolean
   /** Translate one message; resolves false if the request failed. */
   onTranslate: (message: Message) => Promise<boolean> | boolean
+  /** Agent console: offer Translate even when the target language is English. */
+  alwaysOfferTranslate?: boolean
   onOpenLightbox: (url: string) => void
 }
 
@@ -35,6 +39,7 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   accentColor,
+  timeZone,
   avatarUrl,
   avatarSymbol,
   visitorName,
@@ -44,6 +49,7 @@ export const MessageBubble = memo(function MessageBubble({
   translateLang,
   translationEnabled,
   onTranslate,
+  alwaysOfferTranslate,
   onOpenLightbox,
 }: MessageBubbleProps) {
   const { t } = useTranslation()
@@ -97,8 +103,16 @@ export const MessageBubble = memo(function MessageBubble({
         ? message.senderDisplayName || t('common.agent')
         : visitorName || t('visitor.you')
 
+  // `.oc-from-visitor` is the OWN side (right, accent bubble). A visitor message
+  // in the agent console is the OTHER party, so it needs the left-side class.
+  const rowSide = isOwn
+    ? 'oc-from-visitor'
+    : message.senderType === 'visitor'
+      ? 'oc-from-visitor-other'
+      : `oc-from-${message.senderType}`
+
   return (
-    <div className={`oc-msg-row ${isOwn ? 'oc-from-visitor' : `oc-from-${message.senderType}`}`}>
+    <div className={`oc-msg-row ${rowSide}`}>
       {!isOwn && (
         <ChatAvatar
           senderType={message.senderType}
@@ -136,7 +150,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
         <div className="oc-msg-meta">
-          <span>{formatTimeOnly(message.createdAt)}</span>
+          <span>{formatTimeOnly(message.createdAt, timeZone)}</span>
           {isOwn && readReceiptsEnabled && (
             <span className="oc-read-tick" title={message.readAt ? t('visitor.read') : t('visitor.sent')}>
               {message.readAt ? <CheckCheck size={13} /> : <Check size={13} />}
@@ -156,7 +170,7 @@ export const MessageBubble = memo(function MessageBubble({
                     {showTranslated ? t('visitor.original') : t('visitor.translated')}
                   </button>
                 )}
-                {!translated && translateLang !== 'en' && (
+                {!translated && (alwaysOfferTranslate || translateLang !== 'en') && (
                   <button
                     type="button"
                     className="oc-translate-btn"

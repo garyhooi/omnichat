@@ -13,6 +13,8 @@ export interface AgentConversationListProps {
   activeTab: AgentTab
   onTabChange: (tab: AgentTab) => void
   onSelect: (conversationId: string) => void
+  /** Display timezone for row times (undefined = viewer's zone). */
+  timeZone?: string
 }
 
 const TABS: { key: AgentTab; labelKey: string }[] = [
@@ -39,6 +41,7 @@ export function AgentConversationList({
   activeTab,
   onTabChange,
   onSelect,
+  timeZone,
 }: AgentConversationListProps) {
   const { t } = useTranslation()
   const tabs: { key: AgentTab; label: string }[] = useMemo(
@@ -116,7 +119,7 @@ export function AgentConversationList({
                       ? t('common.statusSpecialist')
                       : t('common.statusActive')}
                 </span>
-                <span className="aw-conv-time">{timeAgo(c.updatedAt)}</span>
+                <span className="aw-conv-time">{timeAgo(c.updatedAt, timeZone)}</span>
               </div>
               <div className="aw-conv-item-bottom">
                 <span className="aw-conv-preview">

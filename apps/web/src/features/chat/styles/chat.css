@@ -252,7 +252,8 @@
 }
 
 .oc-from-agent .oc-bubble,
-.oc-from-ai .oc-bubble {
+.oc-from-ai .oc-bubble,
+.oc-from-visitor-other .oc-bubble {
   border-top-left-radius: 5px;
 }
 
