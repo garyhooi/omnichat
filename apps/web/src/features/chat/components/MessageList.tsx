@@ -28,9 +28,12 @@ export interface MessageListProps {
   visitorName?: string
   readReceiptsEnabled: boolean
   translations: Record<string, string>
+  translationsPending: Record<string, true>
   translateLang: string
   translationEnabled: boolean
   onTranslate: (message: Message) => Promise<boolean> | boolean
+  /** Cancel an in-flight translation (restores the original text). */
+  onCancelTranslate?: (message: Message) => void
   /** Agent console: offer Translate even when the target language is English. */
   alwaysOfferTranslate?: boolean
   onOpenLightbox: (url: string) => void
@@ -68,9 +71,11 @@ export function MessageList({
   visitorName,
   readReceiptsEnabled,
   translations,
+  translationsPending,
   translateLang,
   translationEnabled,
   onTranslate,
+  onCancelTranslate,
   alwaysOfferTranslate,
   onOpenLightbox,
   onScrollStateChange,
@@ -229,9 +234,11 @@ export function MessageList({
                   showSenderLabel={row.showSenderLabel}
                   readReceiptsEnabled={readReceiptsEnabled}
                   translations={translations}
+                  translationsPending={translationsPending}
                   translateLang={translateLang}
                   translationEnabled={translationEnabled}
                   onTranslate={onTranslate}
+                  onCancelTranslate={onCancelTranslate}
                   alwaysOfferTranslate={alwaysOfferTranslate}
                   onOpenLightbox={onOpenLightbox}
                 />

@@ -35,6 +35,8 @@ export interface ConversationQueryState {
   aiStream: AiStreamState | null
   /** `messageId:lang` → translated text (auto-translate / manual translate). */
   translations: Record<string, string>
+  /** `messageId:lang` keys with a translation request in flight. */
+  translationsPending: Record<string, true>
   /** Messages sent optimistically, awaiting the server echo. */
   pendingSends: PendingSend[]
   /** Set when the server warns about inactivity; drives auto-resolution. */
@@ -69,6 +71,7 @@ export function createEmptyConversationState(): ConversationQueryState {
     uploadToken: null,
     aiStream: null,
     translations: {},
+    translationsPending: {},
     pendingSends: [],
     inactivityWarning: null,
     lastError: null,

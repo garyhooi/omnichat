@@ -65,6 +65,8 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
     translateLang,
     setTranslateLang,
     translations,
+    translationsPending,
+    cancelTranslation,
     siteConfig,
   } = session
 
@@ -235,9 +237,11 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
             avatars={avatars}
             readReceiptsEnabled={readReceiptsEnabled}
             translations={translations}
+            translationsPending={translationsPending}
             translateLang={translateLang}
             translationEnabled={translationEnabled}
             onTranslate={session.translateMessage}
+            onCancelTranslate={cancelTranslation}
             onOpenLightbox={setLightboxUrl}
             scrollKey={scrollResetKey}
             hasMoreMessages={session.hasMoreMessages}

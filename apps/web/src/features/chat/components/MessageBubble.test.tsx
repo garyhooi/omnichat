@@ -73,6 +73,21 @@ function render(overrides: Record<string, unknown>): HTMLElement {
 
 const showsTranslate = (el: HTMLElement) => (el.textContent || '').includes('visitor.translate')
 
+const markdownMessage: Message = {
+  ...message,
+  id: 'm2',
+  content: 'Hi!\n\n- **Account questions**\n- **Deposits / Withdrawals**',
+}
+
+const clickButton = (el: HTMLElement, label: string) => {
+  const btn = Array.from(el.querySelectorAll('button')).find((b) => b.textContent === label)
+  expect(btn, 'button ' + label).toBeDefined()
+  act(() => {
+    btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  return btn
+}
+
 describe('MessageBubble translate affordance', () => {
   it('offers Translate in the agent console even when the target language is English', () => {
     const el = render({ alwaysOfferTranslate: true, translateLang: 'en' })
@@ -97,5 +112,58 @@ describe('MessageBubble translate affordance', () => {
   it('offers no Translate button when translation is disabled', () => {
     const el = render({ translationEnabled: false, translateLang: 'es', alwaysOfferTranslate: true })
     expect(showsTranslate(el)).toBe(false)
+  })
+})
+
+describe('MessageBubble translation states', () => {
+  it('renders a translation through the markdown pipeline (bold/list, not raw text)', () => {
+    const el = render({
+      translateLang: 'tr',
+      message: markdownMessage,
+      translations: { 'm2:tr': 'Merhaba!\n\n- **Hesap** soruları\n- **Para Yatırma**' },
+    })
+    // The regression: translated text used to render as plain text, showing **.
+    expect(el.textContent).not.toContain('**')
+    expect(el.querySelectorAll('strong').length).toBe(2)
+    expect(el.querySelectorAll('li').length).toBe(2)
+    expect(el.querySelector('.oc-bubble')?.classList.contains('oc-translated')).toBe(true)
+  })
+
+  it('shows a Translating… placeholder with Cancel while a request is in flight', () => {
+    const el = render({
+      translateLang: 'tr',
+      translationsPending: { 'm1:tr': true },
+      onCancelTranslate: () => {},
+    })
+    expect(el.textContent).toContain('visitor.translating')
+    expect(el.querySelector('.oc-tx-loading')).not.toBeNull()
+    expect(el.textContent).toContain('common.cancel')
+    // The original text is replaced by the placeholder while translating.
+    expect(el.textContent).not.toContain('Hello there')
+  })
+
+  it('calls onCancelTranslate when Cancel is clicked', () => {
+    const onCancelTranslate = vi.fn()
+    const el = render({
+      translateLang: 'tr',
+      translationsPending: { 'm1:tr': true },
+      onCancelTranslate,
+    })
+    clickButton(el, 'common.cancel')
+    expect(onCancelTranslate).toHaveBeenCalledTimes(1)
+    expect(onCancelTranslate).toHaveBeenCalledWith(message)
+  })
+
+  it('restores the original text with a retry hint when the translation fails', async () => {
+    const onTranslate = vi.fn().mockResolvedValue(false)
+    const el = render({ translateLang: 'tr', onTranslate })
+    const btn = Array.from(el.querySelectorAll('button')).find((b) => b.textContent === 'visitor.translate')
+    await act(async () => {
+      btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(el.textContent).toContain('Hello there')
+    expect(el.textContent).toContain('visitor.translateFallback')
+    expect(el.textContent).toContain('visitor.retry')
   })
 })

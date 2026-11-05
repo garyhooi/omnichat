@@ -46,6 +46,7 @@ import {
   setInactivityWarning,
   setLastError,
   setTranslation,
+  setTranslationPending,
   setUploadToken,
   translationKey,
   upsertAiStream,
@@ -68,6 +69,11 @@ export interface ChatSocketOptions {
   onEvent?: (event: keyof ServerEventMap, payload: ServerEventMap[keyof ServerEventMap]) => void
   /** Auto-translate incoming agent/ai messages when enabled. */
   translate?: { enabled: boolean; lang: string }
+  /**
+   * Abort controllers for in-flight translations, keyed `messageId:lang`
+   * (manual + auto-translate share this map so both can be cancelled).
+   */
+  translationJobs?: Map<string, AbortController>
   /** Ref-based panel visibility — read receipts are only sent while open. */
   isPanelOpen?: () => boolean
 }
@@ -226,16 +232,30 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
               if (isTranslationOnCooldown(key)) return
               const qk = conversationQueryKey(serverUrl, currentId)
               const state = queryClient.getQueryData<ConversationQueryState>(qk)
-              if (state && !state.translations[key]) {
-                fetchTranslation(serverUrl, message.content, t.lang)
+              if (state && !state.translations[key] && !state.translationsPending[key]) {
+                // Same state machine as a manual translate: the bubble shows a
+                // "Translating…" placeholder (with Cancel) while this runs.
+                const controller = new AbortController()
+                optionsRef.current.translationJobs?.set(key, controller)
+                setConversationState(currentId, (s) => setTranslationPending(s, message.id, t.lang, true))
+                fetchTranslation(serverUrl, message.content, t.lang, controller.signal)
                   .then((text) => {
+                    // Cancelled while the request was settling — never show the
+                    // late result over the text the user chose to keep.
+                    if (controller.signal.aborted) return
                     clearTranslationCooldown(key)
                     setConversationState(currentId, (s) => setTranslation(s, message.id, t.lang, text))
                   })
                   .catch(() => {
-                    // Back off for a minute so rate-limited retries don't hammer
-                    // the translate endpoint on every cache update.
+                    // A user cancel is not a failure: no cooldown, just back to
+                    // the original text. Real failures back off for a minute so
+                    // rate-limited retries don't hammer the endpoint.
+                    if (controller.signal.aborted) return
                     markTranslationFailed(key)
+                  })
+                  .finally(() => {
+                    optionsRef.current.translationJobs?.delete(key)
+                    setConversationState(currentId, (s) => setTranslationPending(s, message.id, t.lang, false))
                   })
               }
             }

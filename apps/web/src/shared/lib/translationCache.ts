@@ -160,13 +160,19 @@ function withDeadline<T>(work: Promise<T>, fallback: T): Promise<T> {
   ])
 }
 
+const abortError = () => new DOMException('Translation cancelled', 'AbortError')
+
 export async function fetchTranslation(
   serverUrl: string,
   text: string,
   targetLanguage: string,
+  signal?: AbortSignal,
 ): Promise<string> {
+  if (signal?.aborted) throw abortError()
   const key = makeKey(text, targetLanguage)
   const cached = await withDeadline(dbGet(key), undefined)
+  // The user can cancel while the IndexedDB cache read is in flight.
+  if (signal?.aborted) throw abortError()
   // An entry identical to the source is a no-op ("already in the target
   // language", or a provider echoing the input). Serving it makes the button
   // look dead — no request, no visible change — so treat it as a miss.
@@ -176,6 +182,7 @@ export async function fetchTranslation(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, targetLanguage }),
+    signal,
   })
   if (!res.ok) {
     // Include the server's reason ("AI agent is not enabled", "Translation is

@@ -358,6 +358,135 @@
   color: color-mix(in srgb, var(--oc-text) 78%, var(--oc-accent));
 }
 
+/* ---------------------------------------------------------------------------
+ * Translation in flight
+ *
+ * While a translation is running the bubble becomes a placeholder (spinner +
+ * shimmer) with a Cancel action, so a slow AI call never looks like a dead
+ * button and can be aborted. Failure restores the original text plus an inline
+ * retry hint below the bubble.
+ * --------------------------------------------------------------------------- */
+.oc-bubble.oc-tx-bubble {
+  min-height: 42px;
+}
+
+.oc-tx-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 200px;
+  padding: 2px 0;
+}
+
+.oc-tx-loading-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.oc-tx-loading-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--oc-text-muted);
+}
+
+.oc-tx-spinner {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--oc-text-muted) 30%, transparent);
+  border-top-color: var(--oc-text-muted);
+  animation: oc-tx-spin 0.7s linear infinite;
+}
+
+@keyframes oc-tx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.oc-tx-shimmer {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--oc-border) 25%,
+    var(--oc-surface) 37%,
+    var(--oc-border) 63%
+  );
+  background-size: 400% 100%;
+  animation: oc-tx-shimmer 1.15s ease infinite;
+}
+
+.oc-tx-shimmer.w80 {
+  width: 80%;
+}
+
+.oc-tx-shimmer.w60 {
+  width: 60%;
+}
+
+@keyframes oc-tx-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+.oc-tx-cancel {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--oc-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.oc-tx-cancel:hover {
+  color: var(--oc-accent);
+}
+
+.oc-translate-btn.oc-translate-pending {
+  text-decoration: none;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.oc-tx-fail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+  padding-left: 2px;
+  font-size: 11.5px;
+  color: #dc2626;
+}
+
+.oc-tx-fail button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--oc-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Image message */
 .oc-bubble.oc-image-msg {
   padding: 4px;

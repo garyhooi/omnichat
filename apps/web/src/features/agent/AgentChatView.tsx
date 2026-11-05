@@ -20,7 +20,7 @@ import { Composer, type ComposerSuggestion } from '../chat/components/Composer'
 import type { AgentSocket } from './useAgentSocket'
 import type { ConversationQueryState } from '../chat/types'
 import { conversationQueryKey, createEmptyConversationState, typingQueryKey } from '../chat/types'
-import { setTranslation, translationKey } from '../chat/chatState'
+import { setTranslation, setTranslationPending, translationKey } from '../chat/chatState'
 
 const AGENT_MAX_CHARS = 2000
 
@@ -157,7 +157,8 @@ export function AgentChatView({
   )
 
   // Auto-translate incoming messages to the selected language (legacy parity).
-  const inFlightTranslations = useRef<Set<string>>(new Set())
+  // Controllers let the bubble's Cancel abort a request in flight.
+  const inFlightTranslations = useRef<Map<string, AbortController>>(new Map())
   useEffect(() => {
     if (!autoTranslate || !conversationId || messages.length === 0) return
     const latest = messages[messages.length - 1]
@@ -165,21 +166,37 @@ export function AgentChatView({
     const qk = conversationQueryKey(serverUrl, conversationId)
     const st = queryClient.getQueryData<ConversationQueryState>(qk)
     const key = translationKey(latest.id, translateLang)
-    if (st?.translations[key] || inFlightTranslations.current.has(key) || isTranslationOnCooldown(key)) return
-    inFlightTranslations.current.add(key)
-    fetchTranslation(serverUrl, latest.content, translateLang)
+    if (
+      st?.translations[key] ||
+      st?.translationsPending[key] ||
+      inFlightTranslations.current.has(key) ||
+      isTranslationOnCooldown(key)
+    ) {
+      return
+    }
+    const controller = new AbortController()
+    inFlightTranslations.current.set(key, controller)
+    queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+      s ? setTranslationPending(s, latest.id, translateLang, true) : s,
+    )
+    fetchTranslation(serverUrl, latest.content, translateLang, controller.signal)
       .then((text) => {
+        if (controller.signal.aborted) return
         clearTranslationCooldown(key)
         queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
           s ? setTranslation(s, latest.id, translateLang, text) : s,
         )
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return
         console.warn('[translate]', err instanceof Error ? err.message : err)
         markTranslationFailed(key)
       })
       .finally(() => {
         inFlightTranslations.current.delete(key)
+        queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+          s ? setTranslationPending(s, latest.id, translateLang, false) : s,
+        )
       })
   }, [autoTranslate, conversationId, messages, queryClient, serverUrl, translateLang])
 
@@ -198,9 +215,18 @@ export function AgentChatView({
       const qk = conversationQueryKey(serverUrl, conversationId)
       const current = queryClient.getQueryData<ConversationQueryState>(qk)
       if (current?.translations[key]) return Promise.resolve(true)
+      if (current?.translationsPending[key] || inFlightTranslations.current.has(key)) {
+        return Promise.resolve(false)
+      }
       if (isTranslationOnCooldown(key)) return Promise.resolve(false)
-      return fetchTranslation(serverUrl, message.content, translateLang)
+      const controller = new AbortController()
+      inFlightTranslations.current.set(key, controller)
+      queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+        s ? setTranslationPending(s, message.id, translateLang, true) : s,
+      )
+      return fetchTranslation(serverUrl, message.content, translateLang, controller.signal)
         .then((text) => {
+          if (controller.signal.aborted) return false
           clearTranslationCooldown(key)
           queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
             s ? setTranslation(s, message.id, translateLang, text) : s,
@@ -208,10 +234,31 @@ export function AgentChatView({
           return true
         })
         .catch((err: unknown) => {
+          if (controller.signal.aborted) return false
           console.warn('[translate]', err instanceof Error ? err.message : err)
           markTranslationFailed(key)
           return false
         })
+        .finally(() => {
+          inFlightTranslations.current.delete(key)
+          queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+            s ? setTranslationPending(s, message.id, translateLang, false) : s,
+          )
+        })
+    },
+    [conversationId, queryClient, serverUrl, translateLang],
+  )
+
+  const cancelTranslation = useCallback(
+    (message: Message) => {
+      const key = translationKey(message.id, translateLang)
+      inFlightTranslations.current.get(key)?.abort()
+      inFlightTranslations.current.delete(key)
+      queryClient.setQueryData(
+        conversationQueryKey(serverUrl, conversationId),
+        (s: ConversationQueryState | undefined) =>
+          s ? setTranslationPending(s, message.id, translateLang, false) : s,
+      )
     },
     [conversationId, queryClient, serverUrl, translateLang],
   )
@@ -532,9 +579,11 @@ export function AgentChatView({
         visitorName={visitorName}
         readReceiptsEnabled
         translations={state?.translations ?? {}}
+        translationsPending={state?.translationsPending ?? {}}
         translateLang={translateLang}
         translationEnabled={translationsEnabled}
         onTranslate={translateMessage}
+        onCancelTranslate={cancelTranslation}
         alwaysOfferTranslate
         onOpenLightbox={setLightboxUrl}
         scrollKey={conversationId ? 1 : 0}

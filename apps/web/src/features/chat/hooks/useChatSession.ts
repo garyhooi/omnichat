@@ -28,7 +28,7 @@ import { useChatSocket } from './useChatSocket'
 import { useSound } from './useSound'
 import type { ConversationQueryState } from '../types'
 import { conversationQueryKey, createEmptyConversationState, typingQueryKey } from '../types'
-import { setTranslation, translationKey } from '../chatState'
+import { setTranslation, setTranslationPending, translationKey } from '../chatState'
 
 export interface ChatSessionStorageKeys {
   mutedKey: string
@@ -74,6 +74,8 @@ export interface ChatSession {
   translateLang: string
   setTranslateLang: (lang: string) => void
   translations: Record<string, string>
+  /** `messageId:lang` keys with a translation request in flight. */
+  translationsPending: Record<string, true>
   // Site config
   siteConfig: ReturnType<typeof useSiteConfig>['config']
   // Actions
@@ -96,6 +98,8 @@ export interface ChatSession {
   playSound: () => void
   /** Translate one message into the selected language; resolves false on failure. */
   translateMessage: (message: Message) => Promise<boolean>
+  /** Cancel an in-flight translation and restore the original text immediately. */
+  cancelTranslation: (message: Message) => void
   visitorId: string
 }
 
@@ -104,6 +108,10 @@ const VISITOR_MAX_CHARS = 500
 export function useChatSession(options: ChatSessionOptions): ChatSession {
   const { serverUrl, storageKeys, externalToken } = options
   const queryClient = useQueryClient()
+  // Abort controllers for in-flight translations, shared with the socket hook so
+  // auto-translate and the manual Translate button are one cancellable state
+  // machine. Keyed `messageId:lang` (same key as the translations map).
+  const translationJobs = useRef<Map<string, AbortController>>(new Map())
 
   const visitorContext = useVisitorContext()
   const visitorId = visitorContext.visitorId
@@ -141,6 +149,7 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     externalToken,
     isPanelOpen: () => getPanelOpenRef.current?.() ?? true,
     translate: { enabled: autoTranslateEnabled, lang: translateLang },
+    translationJobs: translationJobs.current,
     onEvent: (event, payload) => {
       if (event === 'new_message') {
         const { message } = payload as ServerEventMap['new_message']
@@ -282,10 +291,20 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
       const qk = conversationQueryKey(serverUrl, id)
       const stateNow = queryClient.getQueryData<ConversationQueryState>(qk)
       if (stateNow?.translations[key]) return Promise.resolve(true)
+      // Already in flight (auto-translate or a double click) — join it, don't
+      // start a second request.
+      if (stateNow?.translationsPending[key]) return Promise.resolve(false)
       if (isTranslationOnCooldown(key)) return Promise.resolve(false)
+
+      const controller = new AbortController()
+      translationJobs.current.set(key, controller)
+      queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+        s ? setTranslationPending(s, message.id, translateLang, true) : s,
+      )
       return import('../../../shared/lib/translationCache').then(({ fetchTranslation }) =>
-        fetchTranslation(serverUrl, message.content!, translateLang)
+        fetchTranslation(serverUrl, message.content!, translateLang, controller.signal)
           .then((text) => {
+            if (controller.signal.aborted) return true
             clearTranslationCooldown(key)
             queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
               s ? setTranslation(s, message.id, translateLang, text) : s,
@@ -293,10 +312,33 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
             return true
           })
           .catch((err: unknown) => {
+            // A user cancel restores the original and is not an error — don't
+            // put the key on cooldown, so a retry works immediately.
+            if (controller.signal.aborted) return false
             console.warn('[translate]', err instanceof Error ? err.message : err)
             markTranslationFailed(key)
             return false
+          })
+          .finally(() => {
+            translationJobs.current.delete(key)
+            queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+              s ? setTranslationPending(s, message.id, translateLang, false) : s,
+            )
           }),
+      )
+    },
+    [queryClient, serverUrl, socket.conversationId, translateLang],
+  )
+
+  const cancelTranslation = useCallback(
+    (message: Message) => {
+      const id = socket.conversationId
+      if (!id) return
+      const key = translationKey(message.id, translateLang)
+      translationJobs.current.get(key)?.abort()
+      translationJobs.current.delete(key)
+      queryClient.setQueryData(conversationQueryKey(serverUrl, id), (s: ConversationQueryState | undefined) =>
+        s ? setTranslationPending(s, message.id, translateLang, false) : s,
       )
     },
     [queryClient, serverUrl, socket.conversationId, translateLang],
@@ -313,22 +355,40 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     const qk = conversationQueryKey(serverUrl, socket.conversationId)
     const st = queryClient.getQueryData<ConversationQueryState>(qk)
     const key = translationKey(latest.id, translateLang)
-    if (st?.translations[key] || inFlightTranslations.current.has(key) || isTranslationOnCooldown(key)) return
+    if (
+      st?.translations[key] ||
+      st?.translationsPending[key] ||
+      inFlightTranslations.current.has(key) ||
+      isTranslationOnCooldown(key)
+    ) {
+      return
+    }
     inFlightTranslations.current.add(key)
+    const controller = new AbortController()
+    translationJobs.current.set(key, controller)
+    queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+      s ? setTranslationPending(s, latest.id, translateLang, true) : s,
+    )
     void import('../../../shared/lib/translationCache').then(({ fetchTranslation }) =>
-      fetchTranslation(serverUrl, latest.content!, translateLang)
+      fetchTranslation(serverUrl, latest.content!, translateLang, controller.signal)
         .then((text) => {
+          if (controller.signal.aborted) return
           clearTranslationCooldown(key)
           queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
             s ? setTranslation(s, latest.id, translateLang, text) : s,
           )
         })
         .catch((err: unknown) => {
+          if (controller.signal.aborted) return
           console.warn('[translate]', err instanceof Error ? err.message : err)
           markTranslationFailed(key)
         })
         .finally(() => {
           inFlightTranslations.current.delete(key)
+          translationJobs.current.delete(key)
+          queryClient.setQueryData(qk, (s: ConversationQueryState | undefined) =>
+            s ? setTranslationPending(s, latest.id, translateLang, false) : s,
+          )
         }),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,6 +431,7 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     translateLang,
     setTranslateLang,
     translations: state?.translations ?? {},
+    translationsPending: state?.translationsPending ?? {},
     siteConfig,
     startConversation,
     sendText,
@@ -389,6 +450,7 @@ export function useChatSession(options: ChatSessionOptions): ChatSession {
     clearError,
     playSound,
     translateMessage,
+    cancelTranslation,
   }
 }
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, CheckCheck } from 'lucide-react'
 import type { Message } from '../../../shared/types/models'
@@ -21,19 +21,31 @@ export interface MessageBubbleProps {
   showSenderLabel: boolean
   readReceiptsEnabled: boolean
   translations: Record<string, string>
+  /** `messageId:lang` keys with a translation request in flight. */
+  translationsPending?: Record<string, true>
   translateLang: string
   translationEnabled: boolean
-  /** Translate one message; resolves false if the request failed. */
+  /** Translate one message; resolves false if the request failed or was cancelled. */
   onTranslate: (message: Message) => Promise<boolean> | boolean
+  /** Cancel an in-flight translation (restores the original text). */
+  onCancelTranslate?: (message: Message) => void
   /** Agent console: offer Translate even when the target language is English. */
   alwaysOfferTranslate?: boolean
   onOpenLightbox: (url: string) => void
 }
 
+/** How long the "translation failed" hint stays before clearing itself. */
+const FAIL_HINT_MS = 6000
+
 /**
  * One chat message. System messages render as centered pills; image messages
  * as thumbnails (click → lightbox); text as sanitized markdown with an
  * optional translated view.
+ *
+ * Translation is a small state machine driven by the query cache:
+ *   idle → translating (placeholder + Cancel) → translated | failed
+ * The pending marker lives in the conversation state so auto-translate and the
+ * manual button share the exact same bubble UI.
  */
 export const MessageBubble = memo(function MessageBubble({
   message,
@@ -46,13 +58,87 @@ export const MessageBubble = memo(function MessageBubble({
   showSenderLabel,
   readReceiptsEnabled,
   translations,
+  translationsPending,
   translateLang,
   translationEnabled,
   onTranslate,
+  onCancelTranslate,
   alwaysOfferTranslate,
   onOpenLightbox,
 }: MessageBubbleProps) {
   const { t } = useTranslation()
+  const key = translationKey(message.id, translateLang)
+  const translated = translations[key]
+  const isTranslating = !!translationsPending?.[key]
+
+  const [showTranslated, setShowTranslated] = useState(!!translated)
+  const [translateFailed, setTranslateFailed] = useState(false)
+  // A user cancel must not show the error hint: the promise resolves false for
+  // both "request failed" and "user aborted", so track which one happened.
+  const cancelledByUser = useRef(false)
+  const failTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // A translation arrived (or was dropped when the target language changed):
+  // show it / fall back to the original.
+  useEffect(() => {
+    setShowTranslated(!!translated)
+    if (translated) setTranslateFailed(false)
+  }, [translated])
+
+  // A new request starts: clear the previous failure state.
+  useEffect(() => {
+    if (isTranslating) {
+      cancelledByUser.current = false
+      setTranslateFailed(false)
+    }
+  }, [isTranslating])
+
+  useEffect(
+    () => () => {
+      if (failTimer.current) clearTimeout(failTimer.current)
+    },
+    [],
+  )
+
+  const markFailed = () => {
+    setTranslateFailed(true)
+    if (failTimer.current) clearTimeout(failTimer.current)
+    failTimer.current = setTimeout(() => {
+      failTimer.current = null
+      setTranslateFailed(false)
+    }, FAIL_HINT_MS)
+  }
+
+  const handleTranslate = () => {
+    if (isTranslating) return
+    cancelledByUser.current = false
+    setTranslateFailed(false)
+    Promise.resolve(onTranslate(message))
+      .then((ok) => {
+        if (!ok && !cancelledByUser.current) markFailed()
+      })
+      .catch(() => {
+        if (!cancelledByUser.current) markFailed()
+      })
+  }
+
+  const handleCancel = () => {
+    if (!isTranslating) return
+    cancelledByUser.current = true
+    setTranslateFailed(false)
+    onCancelTranslate?.(message)
+  }
+
+  // Original and translated text go through the SAME markdown pipeline — the
+  // translated view used to bypass renderMarkdown(), which is what turned
+  // `- **bold**` lists into raw text.
+  const showingTranslation = showTranslated && !!translated
+  const effectiveText = showingTranslation ? translated : (message.content ?? '')
+  const html = useMemo(
+    () => (message.messageType !== 'text' ? null : renderMarkdown(effectiveText)),
+    [message.messageType, effectiveText],
+  )
+
   // System messages — centered pill, no bubble chrome.
   if (message.senderType === 'system') {
     return (
@@ -61,42 +147,6 @@ export const MessageBubble = memo(function MessageBubble({
       </div>
     )
   }
-
-  const translated = translations[translationKey(message.id, translateLang)]
-  const [showTranslated, setShowTranslated] = useState(!!translated)
-  // Manual translate button state — visible feedback instead of dead silence:
-  // "…" while the request is in flight, a transient "Failed" label on error.
-  const [translating, setTranslating] = useState(false)
-  const [translateFailed, setTranslateFailed] = useState(false)
-  // Switching the target language invalidates this message's translation —
-  // drop back to the original until the new-language translation arrives.
-  useEffect(() => {
-    setShowTranslated(!!translated)
-    setTranslating(false)
-    setTranslateFailed(false)
-  }, [translated])
-  const failTranslate = () => {
-    // A rejected translation (network/HTTP error, failed chunk load) must clear
-    // the spinner and report it — otherwise the button stays on "…" and every
-    // later click is ignored by the `translating` guard.
-    setTranslating(false)
-    setTranslateFailed(true)
-    setTimeout(() => setTranslateFailed((v) => (v ? false : v)), 4000)
-  }
-  const handleTranslate = () => {
-    if (translating) return
-    setTranslating(true)
-    setTranslateFailed(false)
-    Promise.resolve(onTranslate(message))
-      .then((ok) => (ok ? setTranslating(false) : failTranslate()))
-      .catch(failTranslate)
-  }
-  const effectiveText = showTranslated && translated ? translated : (message.content ?? '')
-
-  const html = useMemo(() => {
-    if (message.messageType !== 'text' || showTranslated) return null
-    return renderMarkdown(effectiveText)
-  }, [message.messageType, effectiveText, showTranslated])
 
   const isImage = message.messageType === 'image'
 
@@ -107,13 +157,16 @@ export const MessageBubble = memo(function MessageBubble({
         ? message.senderDisplayName || t('common.agent')
         : visitorName || t('visitor.you')
 
-  // `.oc-from-visitor` is the OWN side (right, accent bubble). A visitor message
+  // .oc-from-visitor is the OWN side (right, accent bubble). A visitor message
   // in the agent console is the OTHER party, so it needs the left-side class.
   const rowSide = isOwn
     ? 'oc-from-visitor'
     : message.senderType === 'visitor'
       ? 'oc-from-visitor-other'
       : `oc-from-${message.senderType}`
+
+  const canTranslate =
+    !isOwn && translationEnabled && message.messageType === 'text' && !!message.content
 
   return (
     <div className={`oc-msg-row ${rowSide}`}>
@@ -143,14 +196,43 @@ export const MessageBubble = memo(function MessageBubble({
               loading="lazy"
             />
           </button>
+        ) : isTranslating ? (
+          // Placeholder replaces the text while the request is in flight, so a
+          // slow AI call never looks like a dead button. Cancel aborts it.
+          <div className="oc-bubble oc-tx-bubble">
+            <div className="oc-tx-loading" role="status" aria-live="polite">
+              <div className="oc-tx-loading-top">
+                <span className="oc-tx-loading-label">
+                  <span className="oc-tx-spinner" aria-hidden="true" />
+                  {t('visitor.translating')}
+                </span>
+                {onCancelTranslate && (
+                  <button type="button" className="oc-tx-cancel" onClick={handleCancel}>
+                    {t('common.cancel')}
+                  </button>
+                )}
+              </div>
+              <span className="oc-tx-shimmer" />
+              <span className="oc-tx-shimmer w80" />
+              <span className="oc-tx-shimmer w60" />
+            </div>
+          </div>
         ) : html ? (
           <div
-            className={`oc-bubble ${showTranslated && translated ? 'oc-translated' : ''}`}
+            className={`oc-bubble ${showingTranslation ? 'oc-translated' : ''}`}
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (
-          <div className={`oc-bubble ${showTranslated && translated ? 'oc-translated' : ''}`}>
+          <div className={`oc-bubble ${showingTranslation ? 'oc-translated' : ''}`}>
             {effectiveText}
+          </div>
+        )}
+        {translateFailed && !isTranslating && !isOwn && (
+          <div className="oc-tx-fail" role="status">
+            {t('visitor.translateFallback')}{' '}
+            <button type="button" onClick={handleTranslate}>
+              {t('visitor.retry')}
+            </button>
           </div>
         )}
         <div className="oc-msg-meta">
@@ -160,34 +242,31 @@ export const MessageBubble = memo(function MessageBubble({
               {message.readAt ? <CheckCheck size={13} /> : <Check size={13} />}
             </span>
           )}
-          {!isOwn &&
-            translationEnabled &&
-            message.messageType === 'text' &&
-            !!message.content && (
-              <>
-                {translated && (
-                  <button
-                    type="button"
-                    className="oc-translate-btn"
-                    onClick={() => setShowTranslated((v) => !v)}
-                  >
-                    {showTranslated ? t('visitor.original') : t('visitor.translated')}
-                  </button>
-                )}
-                {!translated && (alwaysOfferTranslate || translateLang !== 'en') && (
-                  <button
-                    type="button"
-                    className="oc-translate-btn"
-                    disabled={translating}
-                    onClick={handleTranslate}
-                    title={translateFailed ? t('visitor.translateFailedTitle') : undefined}
-                    style={translateFailed ? { color: '#dc2626', cursor: 'pointer' } : undefined}
-                  >
-                    {translating ? '…' : translateFailed ? t('visitor.translateFailed') : t('visitor.translate')}
-                  </button>
-                )}
-              </>
-            )}
+          {canTranslate && (
+            <>
+              {translated && !isTranslating && (
+                <button
+                  type="button"
+                  className="oc-translate-btn"
+                  onClick={() => setShowTranslated((v) => !v)}
+                >
+                  {showTranslated ? t('visitor.original') : t('visitor.translated')}
+                </button>
+              )}
+              {isTranslating && (
+                <span className="oc-translate-btn oc-translate-pending">{t('visitor.translating')}</span>
+              )}
+              {!translated && !isTranslating && (alwaysOfferTranslate || translateLang !== 'en') && (
+                <button
+                  type="button"
+                  className="oc-translate-btn"
+                  onClick={handleTranslate}
+                >
+                  {translateFailed ? t('visitor.retry') : t('visitor.translate')}
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

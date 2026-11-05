@@ -257,7 +257,41 @@ export function setTranslation(
 ): ConversationQueryState {
   const key = translationKey(messageId, lang)
   if (state.translations[key] === text) return state
-  return { ...state, translations: { ...state.translations, [key]: text } }
+  return {
+    ...state,
+    translations: { ...state.translations, [key]: text },
+    // A result always settles the in-flight marker.
+    translationsPending: clearPendingKey(state.translationsPending, key),
+  }
+}
+
+/**
+ * Mark (or clear) a translation request as in flight. Drives the bubble's
+ * "Translating…" placeholder and the Cancel action — for both the manual
+ * Translate button and auto-translate.
+ */
+export function setTranslationPending(
+  state: ConversationQueryState,
+  messageId: string,
+  lang: string,
+  pending: boolean,
+): ConversationQueryState {
+  const key = translationKey(messageId, lang)
+  if (!!state.translationsPending[key] === pending) return state
+  const translationsPending = { ...state.translationsPending }
+  if (pending) translationsPending[key] = true
+  else delete translationsPending[key]
+  return { ...state, translationsPending }
+}
+
+function clearPendingKey(
+  pending: Record<string, true>,
+  key: string,
+): Record<string, true> {
+  if (!pending[key]) return pending
+  const next = { ...pending }
+  delete next[key]
+  return next
 }
 
 export function setInactivityWarning(
