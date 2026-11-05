@@ -1030,7 +1030,9 @@
  * --------------------------------------------------------------------------- */
 .oc-popover {
   position: absolute;
-  z-index: 50;
+  /* Above the agent-console details popover (.aw-popover, z-index 60) so the
+     translation menu is never covered by an open details panel. */
+  z-index: 70;
   background: var(--oc-bg);
   border: 1px solid var(--oc-border);
   border-radius: 12px;
