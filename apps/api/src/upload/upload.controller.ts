@@ -17,14 +17,33 @@ import { UploadTokenService } from './upload-token.service';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { AdminIpAllowlistService } from '../auth/admin-ip-allowlist.service';
+import { AuthService } from '../auth/auth.service';
 
 const execPromise = promisify(exec);
+
+/**
+ * Cheap magic-byte check for the audio formats we accept. The mimetype is
+ * client-controlled and trivially spoofed, so an attacker could upload an HTML
+ * payload labelled audio/* — this guard rejects anything that is not a real
+ * audio container before it is written under /uploads.
+ */
+function isProbablyAudio(buf: Buffer): boolean {
+  if (!buf || buf.length < 8) return false;
+  if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return true;       // ID3 (MP3)
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46) return true; // RIFF (WAV)
+  if (buf[0] === 0x4f && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) return true; // OggS
+  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return true; // ftyp (M4A/AAC/MP4)
+  if (buf[0] === 0x66 && buf[1] === 0x4c && buf[2] === 0x61 && buf[3] === 0x43) return true; // fLaC
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return true; // WebM
+  return false;
+}
 
 @Controller('upload')
 export class UploadController {
   constructor(
     private readonly uploadTokenService: UploadTokenService,
     private readonly adminIpAllowlistService: AdminIpAllowlistService,
+    private readonly authService: AuthService,
   ) {}
 
   @Post()
@@ -84,9 +103,10 @@ export class UploadController {
       await this.adminIpAllowlistService.assertIpAllowed(requestIp);
 
       try {
-        const { JwtService } = require('@nestjs/jwt');
-        const jwt = new JwtService({ secret: process.env.JWT_SECRET });
-        jwt.verify(token);
+        // Full session check (DB revocation, expiry, user-locked) — a bare
+        // jwt.verify only checked the signature, so a revoked/logged-out admin
+        // JWT could still upload.
+        await this.authService.validateToken(token);
       } catch (error) {
         throw new ForbiddenException('Invalid authentication token');
       }
@@ -102,8 +122,18 @@ export class UploadController {
     const prefix = safeConversationId ? `${safeConversationId}-` : '';
     
     if (isAudio) {
-      const rawExt = file.originalname.split('.').pop()?.toLowerCase() || 'mp3';
-      const ext = rawExt.replace(/[^a-z0-9]/g, '') || 'bin';
+      // Whitelist audio extensions — the old code derived the extension from the
+      // client-controlled originalname with a generic [^a-z0-9] strip, so
+      // "evil.html" produced /uploads/sounds/<uuid>.html, which express.static
+      // served as text/html → stored XSS. Default to mp3 for unknown/missing.
+      const AUDIO_EXTS = ['mp3', 'wav', 'ogg', 'm4a', 'webm', 'aac', 'flac'];
+      const rawExt = file.originalname.split('.').pop()?.toLowerCase() || '';
+      const ext = AUDIO_EXTS.includes(rawExt) ? rawExt : 'mp3';
+      // Validate the buffer is actually an audio container — magic bytes for the
+      // common formats. Rejects HTML/text/JS masquerading with an audio mimetype.
+      if (!isProbablyAudio(file.buffer)) {
+        throw new BadRequestException('Invalid or corrupt audio file');
+      }
       const filename = `${prefix}${uniqueSuffix}.${ext}`;
       const uploadDir = join('./uploads', 'sounds');
       const filePath = join(uploadDir, filename);

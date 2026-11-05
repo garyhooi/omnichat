@@ -249,6 +249,24 @@ export class AuthService {
     return { visitorId: payload.sub };
   }
 
+  /**
+   * Verify an external-site JWT (the data-external-token handed to the widget by
+   * the host site) with EXTERNAL_SITE_JWT_SECRET. The signature MUST be checked —
+   * base64-decoding the payload without verification let a visitor forge
+   * `assignedUsername` and claim any agent as the assignee of their conversation.
+   * Returns the verified username, or null on any verification failure.
+   */
+  verifyExternalSiteJwt(token: string): { username?: string } | null {
+    try {
+      const secret = this.config.get<string>('EXTERNAL_SITE_JWT_SECRET');
+      if (!secret) return null;
+      const payload = this.jwtService.verify<{ username?: string }>(token, { secret });
+      return { username: payload.username };
+    } catch {
+      return null;
+    }
+  }
+
   async logout(jti: string) {
     await this.prisma.session.update({
       where: { jti },

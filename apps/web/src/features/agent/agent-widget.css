@@ -499,6 +499,7 @@
 
 .aw-chat-view .oc-from-agent .oc-bubble,
 .aw-chat-view .oc-from-ai .oc-bubble,
+.aw-chat-view .oc-from-visitor-other .oc-bubble,
 .aw-chat-view .oc-bubble.oc-image-msg {
   background: #fff;
   border-color: #e5e7f0;

@@ -29,8 +29,12 @@ import { IpSpamBlacklistTool } from '../ai/tools/builtin/ip-spam-blacklist.tool'
 import { GetCurrentTimeTool } from '../ai/tools/builtin/get-current-time.tool';
 import { GetVisitorInfoTool } from '../ai/tools/builtin/get-visitor-info.tool';
 import { CoreMessage } from 'ai';
+import {
+  VISITOR_EMAIL_MAX, VISITOR_NAME_MAX, VISITOR_SHORT_MAX,
+  clampVisitorMetadata, clampVisitorText, parseVisitorMetadata, sanitizeAttachmentUrl, sanitizeVisitorUrl,
+} from './visitor-input';
 import * as fs from 'fs/promises';
-import { join, extname } from 'path';
+import { extname, resolve, sep } from 'path';
 
 // Types for inbound/outbound events
 interface JoinConversationPayload {
@@ -430,7 +434,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     // Validate origin for visitor connections
     if (!token) {
-      await this.validateVisitorOrigin(origin, referer);
+      try {
+        await this.validateVisitorOrigin(origin, referer);
+      } catch (error) {
+        // A rejected origin used to escape handleConnection as an unhandled
+        // rejection, leaving the socket CONNECTED with no identity and no room
+        // — it received nothing, forever, while the UI reported "online".
+        this.logger.warn(`Rejected visitor origin for socket ${client.id}: ${error.message}`);
+        client.emit('error', { message: 'Origin not allowed', code: 'auth' });
+        client.disconnect();
+        return;
+      }
     }
 
     if (token) {
@@ -460,7 +474,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         this.server.to('agents').emit('agent_presence', { agents: onlineAgents });
 
         // Send conversation list and current user details to the newly connected agent immediately
-        const conversations = await this.chatService.listConversations();
+        const { conversations, truncated } = await this.chatService.listConversations();
         const conversationsWithBlacklist = await Promise.all(conversations.map(async (c) => ({
           ...c,
           isIpBlacklisted: c.visitorIp
@@ -474,16 +488,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             username: user.username,
             displayName: user.displayName,
             role: user.role
-          }
+          },
+          truncated
         });
 
         this.logger.log(`Agent connected: ${user.displayName} (${client.id})`);
       } catch (error) {
         this.logger.warn(`Connection rejected: ${error.message}`);
-        client.emit('error', { message: 'Authentication failed' });
+        client.emit('error', { message: 'Authentication failed', code: 'auth' });
         client.disconnect();
       }
-    } else {
+    } else if (client.handshake.auth?.visitorId || visitorCookieId) {
       // Visitor connection — prefer validated cookie visitorId over handshake.auth fallback
       client.data.isVisitor = true;
       client.data.visitorId =
@@ -494,6 +509,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       this.logger.log(
         `Visitor connected: ${client.data.visitorId} (${client.id})`,
       );
+    } else {
+      // Neither an admin token nor any visitor identity. This used to be
+      // silently downgraded to a visitor, which left an unauthenticated admin
+      // socket CONNECTED but joined to no room: the console showed "online"
+      // and received nothing, forever. Refuse it explicitly so the client can
+      // recover instead of hanging.
+      this.logger.warn(`Rejected socket ${client.id}: no admin token and no visitor identity`);
+      client.emit('error', { message: 'Authentication required', code: 'auth' });
+      client.disconnect();
     }
   }
 
@@ -504,9 +528,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       throw new ForbiddenException('Origin header required for visitor connections');
     }
 
-    // Allow localhost for development
-    if ((origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) ||
-        (referer && (referer.startsWith('http://localhost') || referer.startsWith('http://127.0.0.1')))) {
+    // Allow localhost for development (hostname-precise — startsWith matched
+    // "http://localhost.attacker.com", a real origin an attacker controls).
+    const isLocalhost = (s?: string): boolean => {
+      if (!s) return false;
+      try { return ['localhost', '127.0.0.1'].includes(new URL(s).hostname); } catch { return false; }
+    };
+    if (isLocalhost(origin) || isLocalhost(referer)) {
       return;
     }
 
@@ -643,33 +671,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       return;
     }
 
-    // Combine any existing metadata with the new pre-chat form details
-    let parsedMetadata: Record<string, any> = {};
-    if (payload.metadata) {
-      try {
-        parsedMetadata = JSON.parse(payload.metadata);
-      } catch {
-        parsedMetadata = {};
-      }
-    }
-    if (payload.visitorName) parsedMetadata.visitorName = payload.visitorName;
-    if (payload.visitorEmail) parsedMetadata.visitorEmail = payload.visitorEmail;
+    // Everything below arrives from the visitor and is never re-checked
+    // downstream, so normalise it here — the display name and email are rendered
+    // in the console, and the metadata blob ships in EVERY conversations_list
+    // response.
+    const parsedMetadata = clampVisitorMetadata(parseVisitorMetadata(payload.metadata));
+    const visitorName = clampVisitorText(payload.visitorName, VISITOR_NAME_MAX);
+    if (visitorName) parsedMetadata.visitorName = visitorName;
+    const visitorEmail = clampVisitorText(payload.visitorEmail, VISITOR_EMAIL_MAX);
+    if (visitorEmail) parsedMetadata.visitorEmail = visitorEmail;
 
-    // Read external auth token from socket handshake (sent via data-external-token attribute)
+    // Read external auth token from socket handshake (sent via data-external-token
+    // attribute). A client-supplied copy was stripped by parseVisitorMetadata
+    // above — trusting one let a visitor forge assignedUsername below.
     if (client.handshake.auth?.externalToken) {
       parsedMetadata.externalAuthToken = client.handshake.auth.externalToken;
     }
 
-    // Extract username from externalAuthToken JWT if present
-    let assignedUsername = payload.visitorName || '';
-    if (parsedMetadata.externalAuthToken && !assignedUsername) {
-      try {
-        const token = parsedMetadata.externalAuthToken as string;
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-         assignedUsername = payload.username || '';
-        this.logger.log(`Extracted username from external JWT: ${assignedUsername}`);
-      } catch {
-        this.logger.warn('Failed to decode externalAuthToken JWT payload');
+    // Extract username from externalAuthToken JWT — VERIFY the signature with
+    // EXTERNAL_SITE_JWT_SECRET. The old code base64-decoded the payload without
+    // verification, which let a visitor forge any assignedUsername by crafting an
+    // unsigned JWT. assignedUsername is NEVER seeded from visitorName (that was a
+    // separate forgery: setting visitorName to an agent's username).
+    let assignedUsername = '';
+    if (parsedMetadata.externalAuthToken) {
+      const verified = this.authService.verifyExternalSiteJwt(
+        parsedMetadata.externalAuthToken as string,
+      );
+      if (verified?.username) {
+        assignedUsername = verified.username;
+        this.logger.log(`Extracted username from verified external JWT: ${assignedUsername}`);
+      } else {
+        this.logger.warn('externalAuthToken failed signature verification — ignoring');
       }
     }
 
@@ -683,18 +716,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const visitorOs = parser.getOS().name;
     const visitorDevice = parser.getDevice().type || 'Desktop';
 
+    // Only absolute http(s) URLs survive: these two are rendered as clickable
+    // links in the agent console.
+    const visitorCurrentUrl = sanitizeVisitorUrl(payload.visitorCurrentUrl);
+    const visitorReferrer = sanitizeVisitorUrl(payload.visitorReferrer);
+
     const conversation = await this.chatService.createConversation({
       visitorId,
       metadata: JSON.stringify(parsedMetadata),
       visitorIp,
-      visitorBrowser,
-      visitorOs,
-      visitorDevice,
-      visitorCurrentUrl: payload.visitorCurrentUrl,
-      visitorTimezone: payload.visitorTimezone,
-      visitorLanguage: payload.visitorLanguage,
-      visitorScreenRes: payload.visitorScreenRes,
-      visitorReferrer: payload.visitorReferrer,
+      visitorBrowser: clampVisitorText(visitorBrowser, VISITOR_SHORT_MAX),
+      visitorOs: clampVisitorText(visitorOs, VISITOR_SHORT_MAX),
+      visitorDevice: clampVisitorText(visitorDevice, VISITOR_SHORT_MAX),
+      visitorCurrentUrl,
+      visitorTimezone: clampVisitorText(payload.visitorTimezone, VISITOR_SHORT_MAX),
+      visitorLanguage: clampVisitorText(payload.visitorLanguage, VISITOR_SHORT_MAX),
+      visitorScreenRes: clampVisitorText(payload.visitorScreenRes, VISITOR_SHORT_MAX),
+      visitorReferrer,
       assignedUsername: assignedUsername || undefined,
     });
 
@@ -802,8 +840,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   ) {
     const { conversationId } = payload;
 
-    // Verify the conversation exists
-    const conversation = await this.chatService.getConversation(conversationId);
+    // Oldest-first page of the transcript; older messages come from load_messages.
+    const conversation = await this.chatService.getConversationPage(
+      conversationId, ChatService.HISTORY_PAGE_SIZE,
+    );
     if (!conversation) {
       client.emit('error', { message: 'Conversation not found' });
       return;
@@ -829,7 +869,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const isIpBlacklisted = conversation.visitorIp
       ? await this.securityService.isIpBlacklisted(conversation.visitorIp)
       : false;
-    client.emit('conversation_history', { conversation, isIpBlacklisted });
+    client.emit('conversation_history', {
+      conversation,
+      isIpBlacklisted,
+      hasMoreMessages: conversation.hasMoreMessages,
+    });
 
     // Provide upload token for visitor if conversation is still active
     if (client.data.isVisitor && conversation.status === 'active') {
@@ -845,6 +889,37 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.logger.log(
       `Socket ${client.id} joined room ${roomName}`,
     );
+  }
+
+  /**
+   * Page OLDER transcript for a conversation the socket is allowed to read.
+   * The client sends the createdAt of its oldest loaded message; the reply
+   * carries the previous page plus whether even older messages remain.
+   */
+  @SubscribeMessage('load_messages')
+  async handleLoadMessages(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { conversationId: string; before: string },
+  ) {
+    const conversationId = payload?.conversationId;
+    const before = payload?.before;
+    if (!conversationId || !before) return;
+
+    const ownership = await this.chatService.getConversationOwnership(conversationId);
+    if (!ownership) return;
+    if (client.data.isVisitor) {
+      if (ownership.visitorId !== client.data.visitorId) {
+        this.logger.warn(`Socket ${client.id} asked for history it does not own (${conversationId})`);
+        return;
+      }
+    } else if (!client.data.user) {
+      return;
+    }
+
+    const page = await this.chatService.getMessagePage(
+      conversationId, before, ChatService.HISTORY_PAGE_SIZE,
+    );
+    client.emit('messages_page', { conversationId, ...page });
   }
 
   /** Send a message within a conversation — persisted BEFORE emission. */
@@ -887,7 +962,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Validate conversation ownership for visitors
     let visitorIp: string | undefined;
     if (senderType === 'visitor') {
-      const conversation = await this.chatService.getConversation(conversationId);
+      const conversation = await this.chatService.getConversationOwnership(conversationId);
       if (!conversation || conversation.visitorId !== client.data.visitorId) {
         client.emit('message_error', {
           conversationId,
@@ -937,8 +1012,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         senderId,
         content: content || '',
         messageType,
-        attachmentUrl,
-        attachmentThumbnailUrl,
+        attachmentUrl: sanitizeAttachmentUrl(attachmentUrl),
+        attachmentThumbnailUrl: sanitizeAttachmentUrl(attachmentThumbnailUrl),
       });
 
       // Emit to all clients in the conversation room AND all agents for dashboard preview updates
@@ -1215,7 +1290,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       return;
     }
 
-    const conversations = await this.chatService.listConversations(
+    const { conversations, truncated } = await this.chatService.listConversations(
       payload?.status,
       payload?.startDate || payload?.endDate
         ? { start: payload.startDate, end: payload.endDate }
@@ -1234,7 +1309,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         username: client.data.user.username,
         displayName: client.data.user.displayName,
         role: client.data.user.role
-      }
+      },
+      truncated
     });
   }
 
@@ -1405,6 +1481,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         services: {
           prisma: this.prisma,
           siteConfigService: this.siteConfigService,
+          chatService: this.chatService,
           io: this.server,
           conversationRoom: (id: string) => `conv:${id}`,
           agentsRoom: () => 'agents',
@@ -1753,17 +1830,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /** Read an uploaded image from disk and return a base64 data URL. */
+  /**
+   * Read an uploaded image from disk and return a base64 data URL.
+   *
+   * Security: the attachment URL is visitor-controlled, so it is confined to a
+   * local "/uploads/..." path that resolves INSIDE the uploads directory. The
+   * old code passed absolute http(s) URLs straight to the AI provider (SSRF to
+   * internal hosts / cloud metadata) and joined "../.." paths against cwd
+   * (arbitrary file read — e.g. .env with JWT_SECRET and provider keys). Both are
+   * rejected now; only verified local uploads are read.
+   */
   private async readImageAsDataUrl(attachmentUrl: string): Promise<string | null> {
     try {
-      // HTTP/HTTPS URLs can be passed directly to the AI SDK
-      if (attachmentUrl.startsWith('http://') || attachmentUrl.startsWith('https://')) {
-        return attachmentUrl;
+      const safe = sanitizeAttachmentUrl(attachmentUrl);
+      if (!safe) {
+        this.logger.warn(`Rejected attachment URL for AI input: ${attachmentUrl}`);
+        return null;
       }
-      // Local file path — read from disk
-      const filePath = join(process.cwd(), attachmentUrl);
-      const buffer = await fs.readFile(filePath);
-      const ext = extname(attachmentUrl).toLowerCase();
+      const uploadsRoot = resolve(process.cwd(), 'uploads');
+      const filePath = resolve(uploadsRoot, safe.slice('/uploads/'.length));
+      // Confine to the uploads directory — realpath defeats symlink/.. escapes.
+      const real = await fs.realpath(filePath);
+      if (!real.startsWith(uploadsRoot + sep) && real !== uploadsRoot) {
+        this.logger.warn(`Attachment path escapes uploads dir: ${attachmentUrl}`);
+        return null;
+      }
+      const buffer = await fs.readFile(real);
+      const ext = extname(real).toLowerCase();
       const mime =
         ext === '.png' ? 'image/png' :
         ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :

@@ -153,6 +153,7 @@ export const en: Record<string, string> = {
   'admin.logs': 'Logs',
   'admin.users': 'Users',
   'admin.settings': 'Settings',
+  'admin.configuration': 'Configuration',
   'admin.logout': 'Log out',
   'admin.expandSidebar': 'Expand sidebar',
   'admin.collapseSidebar': 'Collapse sidebar',
@@ -518,5 +519,6 @@ export const en: Record<string, string> = {
   'admin.visitorUiLangHint': 'Language of the chat widget and chat page.',
   'admin.operatorUiLang': 'Admin / agent UI language',
   'admin.operatorUiLangHint': 'Language of the admin portal and agent console.',
+  'common.loadEarlierMessages': 'Load earlier messages',
 }
 

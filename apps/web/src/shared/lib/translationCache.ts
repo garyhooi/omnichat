@@ -59,8 +59,12 @@ export function getDefaultLang(storageKey: string): string {
 // ---------------------------------------------------------------------------
 // IndexedDB cache
 // ---------------------------------------------------------------------------
+// The cache key carries CACHE_VERSION: bumping it silently drops every stale
+// entry on every client, so a bad cached translation is never something users
+// have to clear out of their browser storage by hand.
 const DB_NAME = 'omnichat_translations'
 const STORE = 'translations'
+const CACHE_VERSION = 'v2'
 
 interface CachedTranslation {
   id: string
@@ -69,21 +73,45 @@ interface CachedTranslation {
 }
 
 function makeKey(text: string, lang: string): string {
-  return `${djb2Hash(text)}:${lang}`
+  // Length in the key: an accidental 32-bit hash collision between two different
+  // texts can then never serve the wrong translation.
+  return CACHE_VERSION + ':' + text.length + ':' + djb2Hash(text) + ':' + lang
 }
 
+/** One shared connection: opening per call leaked handles until opens queued. */
+let dbPromise: Promise<IDBDatabase> | null = null
+
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'id' })
+  if (!dbPromise) {
+    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1)
+      req.onupgradeneeded = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE, { keyPath: 'id' })
+        }
       }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
+      // Fail fast instead of hanging: an open() that never settles would block
+      // the request itself (no translation, no network call, no error).
+      req.onblocked = () => {
+        dbPromise = null
+        reject(new Error('indexedDB blocked'))
+      }
+      req.onerror = () => {
+        dbPromise = null
+        reject(req.error)
+      }
+      req.onsuccess = () => {
+        const db = req.result
+        db.onversionchange = () => {
+          db.close()
+          dbPromise = null
+        }
+        resolve(db)
+      }
+    })
+  }
+  return dbPromise
 }
 
 async function dbGet(key: string): Promise<CachedTranslation | undefined> {
@@ -117,22 +145,65 @@ async function dbPut(record: CachedTranslation): Promise<void> {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * A blocked or hung IndexedDB (sandboxed iframe, Safari storage eviction,
+ * corrupted store) must never gate the network: the cache read is bounded and a
+ * timeout counts as a miss, so a click always reaches /ai/translate.
+ */
+const CACHE_WAIT_MS = 800
+
+function withDeadline<T>(work: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    work.catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), CACHE_WAIT_MS)),
+  ])
+}
+
 export async function fetchTranslation(
   serverUrl: string,
   text: string,
   targetLanguage: string,
 ): Promise<string> {
   const key = makeKey(text, targetLanguage)
-  const cached = await dbGet(key)
-  if (cached) return cached.translatedText
+  const cached = await withDeadline(dbGet(key), undefined)
+  // An entry identical to the source is a no-op ("already in the target
+  // language", or a provider echoing the input). Serving it makes the button
+  // look dead — no request, no visible change — so treat it as a miss.
+  if (cached && cached.translatedText.trim() !== text.trim()) return cached.translatedText
 
   const res = await fetch(`${serverUrl}/ai/translate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, targetLanguage }),
   })
-  if (!res.ok) throw new Error(`Translation failed (${res.status})`)
-  const data = (await res.json()) as { translatedText: string; targetLanguage: string }
-  await dbPut({ id: key, translatedText: data.translatedText, createdAt: Date.now() })
-  return data.translatedText
+  if (!res.ok) {
+    // Include the server's reason ("AI agent is not enabled", "Translation is
+    // disabled", credit errors) — it is the difference between a broken feature
+    // and an unconfigured one, and it is what support needs to see.
+    const body = await res.text().catch(() => '')
+    let reason = body.slice(0, 200)
+    try {
+      const parsed = JSON.parse(body) as { message?: string | string[]; error?: string }
+      reason = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message || parsed.error || reason
+    } catch {
+      /* not JSON — keep the raw body */
+    }
+    throw new Error('Translation failed (' + res.status + ')' + (reason ? ': ' + reason : ''))
+  }
+  const data = (await res.json()) as { translatedText?: string; translated?: string; targetLanguage?: string }
+  // Write-behind: the result is returned immediately and the cache write can
+  // neither delay nor fail the request. No-op results are never cached, so they
+  // can never mask a real translation later.
+  // Accept either field name: the fork's API answered `{ translated }` (the
+  // legacy Vue contract), so reading only `translatedText` made a successful
+  // translation look like a failure.
+  const translated = data.translatedText ?? data.translated
+  if (typeof translated !== 'string' || !translated.trim()) {
+    throw new Error('Translation response had no text: ' + JSON.stringify(data).slice(0, 120))
+  }
+  if (translated.trim() !== text.trim()) {
+    void dbPut({ id: key, translatedText: translated, createdAt: Date.now() })
+  }
+  return translated
 }

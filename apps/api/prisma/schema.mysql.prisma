@@ -135,6 +135,9 @@ model SiteConfig {
   greetingMessage    String?  @db.Text
   visitorLanguage    String   @default("en")
   adminLanguage      String   @default("en")
+  // IANA zone (e.g. "Asia/Kuala_Lumpur") used to render every datetime on the
+  // admin console and widgets; null = the viewer's own zone.
+  displayTimezone    String?
   bubbleSize         String   @default("medium")
   bubblePattern      String   @default("solid")
   websitePosition    String   @default("bottom-right")

@@ -6,6 +6,7 @@ import {
   clearAiStream,
   dedupeMessages,
   markMessageRead,
+  prependMessages,
   removePendingSend,
   setBlacklisted,
   setConversationStatus,
@@ -85,9 +86,28 @@ describe('optimistic sends (addPendingSend / appendMessage / removePendingSend)'
     expect(s.pendingSends[0].tempId).toBe('temp_1')
   })
 
-  it('keeps a custom senderId for the placeholder (agent sends)', () => {
-    const s = addPendingSend(createEmptyConversationState(), 'temp_1', 'hi', 'conv1', 'agent-1')
+  it('keeps the sender identity for the placeholder (agent sends)', () => {
+    const s = addPendingSend(createEmptyConversationState(), 'temp_1', 'hi', 'conv1', {
+      senderType: 'agent',
+      senderId: 'agent-1',
+    })
+    expect(s.messages[0].senderType).toBe('agent')
     expect(s.messages[0].senderId).toBe('agent-1')
+  })
+
+  it('gives the placeholder the same identity as its echo, so it never changes side', () => {
+    // Visitor surfaces treat (senderType 'visitor', senderId === visitorId) as
+    // "own". A placeholder without that identity sat on the other side until the
+    // server echo replaced it: the left-then-right flash users see on send.
+    const visitorId = 'v1'
+    const pending = addPendingSend(createEmptyConversationState(), 'temp_1', 'hello', 'conv1', {
+      senderType: 'visitor',
+      senderId: visitorId,
+    })
+    const [placeholder] = pending.messages
+    const echo = msg({ id: 'real-1', senderId: visitorId, content: 'hello', createdAt: '2026-08-16T00:00:01.000Z' })
+    expect(placeholder.senderType).toBe(echo.senderType)
+    expect(placeholder.senderId).toBe(echo.senderId)
   })
 
   it('resolves the pending send when the echo arrives (content match)', () => {
@@ -230,5 +250,55 @@ describe('helpers', () => {
       msg({ id: 'earlier', createdAt: '2026-08-16T01:00:00.000Z' }),
     ])
     expect(out.map((m) => m.id)).toEqual(['earlier', 'later'])
+  })
+})
+
+describe('prependMessages — paging older transcript in', () => {
+  it('puts an older page in front, keeping the list chronological', () => {
+    let s = appendMessage(createEmptyConversationState(), msg({ id: 'newer', createdAt: '2026-08-16T10:00:00.000Z' }))
+    s = prependMessages(s, [msg({ id: 'older', createdAt: '2026-08-16T09:00:00.000Z' })], false)
+
+    expect(s.messages.map((m) => m.id)).toEqual(['older', 'newer'])
+    expect(s.hasMoreMessages).toBe(false)
+  })
+
+  it('keeps hasMoreMessages true while the server still has older pages', () => {
+    const s = prependMessages(createEmptyConversationState(), [msg({ id: 'older' })], true)
+    expect(s.hasMoreMessages).toBe(true)
+  })
+
+  it('dedupes a message the page and the loaded list both contain', () => {
+    // The server pages with createdAt < before, so any overlap sits at the
+    // boundary — it must collapse to a single copy in chronological position.
+    let s = appendMessage(
+      createEmptyConversationState(),
+      msg({ id: 'shared', createdAt: '2026-08-16T09:00:00.000Z' }),
+    )
+    s = prependMessages(
+      s,
+      [
+        msg({ id: 'older', createdAt: '2026-08-16T08:00:00.000Z' }),
+        msg({ id: 'shared', createdAt: '2026-08-16T09:00:00.000Z' }),
+      ],
+      false,
+    )
+
+    expect(s.messages.map((m) => m.id)).toEqual(['older', 'shared'])
+  })
+
+  it('only records the flag when the page came back empty', () => {
+    const before = prependMessages(createEmptyConversationState(), [msg({ id: 'a' })], true)
+    const after = prependMessages(before, [], false)
+
+    expect(after.messages.map((m) => m.id)).toEqual(['a'])
+    expect(after.hasMoreMessages).toBe(false)
+  })
+})
+
+describe('applyHistory — pagination flag', () => {
+  it('records hasMoreMessages from the server', () => {
+    const historyConv = { ...conv, messages: [msg({ id: 'only' })] } as Conversation & { messages: Message[] }
+    expect(applyHistory(createEmptyConversationState(), historyConv, false, true).hasMoreMessages).toBe(true)
+    expect(applyHistory(createEmptyConversationState(), historyConv, false).hasMoreMessages).toBe(false)
   })
 })

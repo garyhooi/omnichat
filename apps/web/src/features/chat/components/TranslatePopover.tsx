@@ -13,6 +13,11 @@ export interface TranslatePopoverProps {
 /**
  * Language + auto-translate popover anchored under the header's translate
  * button. Closes on outside click / Escape.
+ *
+ * The language list selects the AI-translation target only — the interface
+ * language is independent (element [lang] attribute / admin default). It is a
+ * two-column grid so all 20 languages — Español included — are visible
+ * without a hidden scroll.
  */
 export function TranslatePopover({ lang, autoEnabled, onLangChange, onAutoChange }: TranslatePopoverProps) {
   const { t } = useTranslation()
@@ -63,19 +68,21 @@ export function TranslatePopover({ lang, autoEnabled, onLangChange, onAutoChange
             {t('common.autoTranslate')}
           </button>
           <div style={{ height: 1, background: 'var(--oc-border)', margin: '4px 0' }} />
-          {TRANSLATE_LANGS.map((l) => (
-            <button
-              key={l.value}
-              type="button"
-              className={`oc-popover-item ${l.value === lang ? 'oc-active' : ''}`}
-              onClick={() => {
-                onLangChange(l.value)
-                setOpen(false)
-              }}
-            >
-              {l.label}
-            </button>
-          ))}
+          <div className="oc-popover-langs">
+            {TRANSLATE_LANGS.map((l) => (
+              <button
+                key={l.value}
+                type="button"
+                className={`oc-popover-item ${l.value === lang ? 'oc-active' : ''}`}
+                onClick={() => {
+                  onLangChange(l.value)
+                  setOpen(false)
+                }}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

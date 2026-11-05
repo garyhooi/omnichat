@@ -93,6 +93,21 @@ export function AgentChatView({
     localStorage.setItem('omnichat_admin_widget_translate_lang', lang)
   }, [])
 
+  // Opening another conversation in the same mounted view must re-seed the
+  // per-conversation state: otherwise the details popover keeps the previously
+  // opened chat's drafts, and an open confirm dialog would act on the chat that
+  // replaced it.
+  useEffect(() => {
+    setDraftAssigned(conversation?.assignedUsername ?? '')
+    setDraftRemarks(conversation?.agentRemarks ?? '')
+    setShowResolveConfirm(false)
+    setShowTransferConfirm(false)
+    setTransferTarget('')
+    setLightboxUrl(null)
+    setCopied(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId])
+
   const copyText = useCallback((text: string, label: string) => {
     const done = () => {
       setCopied(label)
@@ -159,7 +174,8 @@ export function AgentChatView({
           s ? setTranslation(s, latest.id, translateLang, text) : s,
         )
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.warn('[translate]', err instanceof Error ? err.message : err)
         markTranslationFailed(key)
       })
       .finally(() => {
@@ -191,7 +207,8 @@ export function AgentChatView({
           )
           return true
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[translate]', err instanceof Error ? err.message : err)
           markTranslationFailed(key)
           return false
         })
@@ -507,6 +524,7 @@ export function AgentChatView({
         messages={messages}
         visitorId=""
         isOwnMessage={isOwn}
+        timeZone={siteConfig?.displayTimezone || undefined}
         aiStreamContent={state?.aiStream?.content ?? null}
         typingUsers={typingUsers ?? []}
         accentColor={accentColor}
@@ -517,8 +535,11 @@ export function AgentChatView({
         translateLang={translateLang}
         translationEnabled={translationsEnabled}
         onTranslate={translateMessage}
+        alwaysOfferTranslate
         onOpenLightbox={setLightboxUrl}
         scrollKey={conversationId ? 1 : 0}
+        hasMoreMessages={state?.hasMoreMessages ?? false}
+        onLoadEarlier={() => socket.loadOlderMessages(conversationId)}
       />
 
       {/* Visitor review (shown after the visitor rates the conversation) */}

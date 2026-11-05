@@ -14,6 +14,7 @@ import { useAuth } from '../auth'
 import { authFetchJson } from '../../shared/lib/api-client'
 import { visitorLabel } from '../../features/agent/AgentConversationList'
 import { formatTicketId, timeAgo, truncate } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type { ReportSummary } from '../../shared/types/api'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -38,6 +39,8 @@ export function DashboardPage() {
   const { t } = useTranslation()
   const { conversations, loaded, agents } = useAdminData()
   const { serverUrl } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
 
   const { data: summary } = useQuery<ReportSummary>({
     queryKey: ['report-summary', serverUrl],
@@ -267,7 +270,7 @@ export function DashboardPage() {
                         {c.status === 'ai' ? t('common.statusAi') : t(STATUS_KEYS[c.status] ?? 'common.unknown')}
                       </span>
                     </td>
-                    <td className="adm-muted">{timeAgo(c.updatedAt)}</td>
+                    <td className="adm-muted">{timeAgo(c.updatedAt, timeZone)}</td>
                   </tr>
                 ))}
               </tbody>

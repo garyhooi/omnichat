@@ -164,6 +164,7 @@ export const ar: Record<string, string> = {
   'admin.logs': 'السجلات',
   'admin.users': 'المستخدمون',
   'admin.settings': 'الإعدادات',
+  'admin.configuration': 'التهيئة',
   'admin.logout': 'تسجيل الخروج',
   'admin.expandSidebar': 'توسيع الشريط الجانبي',
   'admin.collapseSidebar': 'طي الشريط الجانبي',
@@ -504,6 +505,7 @@ export const ar: Record<string, string> = {
   'admin.visitorUiLangHint': 'لغة أداة الدردشة وصفحة الدردشة.',
   'admin.operatorUiLang': 'لغة واجهة المشرف / الوكيل',
   'admin.operatorUiLangHint': 'لغة بوابة المشرف ولوحة الوكيل.',
+  'common.loadEarlierMessages': 'تحميل الرسائل السابقة',
 }
 export const th: Record<string, string> = {
   'admin.reportAgentPerformance': 'ผลงานตัวแทน',
@@ -671,6 +673,7 @@ export const th: Record<string, string> = {
   'admin.logs': 'บันทึก',
   'admin.users': 'ผู้ใช้',
   'admin.settings': 'การตั้งค่า',
+  'admin.configuration': 'การกำหนดค่า',
   'admin.logout': 'ออกจากระบบ',
   'admin.expandSidebar': 'ขยายแถบด้านข้าง',
   'admin.collapseSidebar': 'ย่อแถบด้านข้าง',
@@ -1011,6 +1014,7 @@ export const th: Record<string, string> = {
   'admin.visitorUiLangHint': 'ภาษาของวิดเจ็ตแชทและหน้าแชท',
   'admin.operatorUiLang': 'ภาษาส่วนต่อประสานผู้ดูแล / เอเจนต์',
   'admin.operatorUiLangHint': 'ภาษาของพอร์ทัลผู้ดูแลและคอนโซลเอเจนต์',
+  'common.loadEarlierMessages': 'โหลดข้อความก่อนหน้า',
 }
 export const vi: Record<string, string> = {
   'admin.reportAgentPerformance': 'Hiệu suất nhân viên',
@@ -1178,6 +1182,7 @@ export const vi: Record<string, string> = {
   'admin.logs': 'Nhật ký',
   'admin.users': 'Người dùng',
   'admin.settings': 'Cài đặt',
+  'admin.configuration': 'Cấu hình',
   'admin.logout': 'Đăng xuất',
   'admin.expandSidebar': 'Mở rộng thanh bên',
   'admin.collapseSidebar': 'Thu gọn thanh bên',
@@ -1518,6 +1523,7 @@ export const vi: Record<string, string> = {
   'admin.visitorUiLangHint': 'Ngôn ngữ của widget trò chuyện và trang trò chuyện.',
   'admin.operatorUiLang': 'Ngôn ngữ giao diện quản trị / đại lý',
   'admin.operatorUiLangHint': 'Ngôn ngữ của cổng quản trị và bảng điều khiển đại lý.',
+  'common.loadEarlierMessages': 'Tải tin nhắn cũ hơn',
 }
 export const id: Record<string, string> = {
   'admin.reportAgentPerformance': 'Kinerja agen',
@@ -1685,6 +1691,7 @@ export const id: Record<string, string> = {
   'admin.logs': 'Log',
   'admin.users': 'Pengguna',
   'admin.settings': 'Pengaturan',
+  'admin.configuration': 'Konfigurasi',
   'admin.logout': 'Keluar',
   'admin.expandSidebar': 'Perluas sidebar',
   'admin.collapseSidebar': 'Ciutkan sidebar',
@@ -2025,6 +2032,7 @@ export const id: Record<string, string> = {
   'admin.visitorUiLangHint': 'Bahasa widget obrolan dan halaman obrolan.',
   'admin.operatorUiLang': 'Bahasa antarmuka admin / agen',
   'admin.operatorUiLangHint': 'Bahasa portal admin dan konsol agen.',
+  'common.loadEarlierMessages': 'Muat pesan sebelumnya',
 }
 export const ms: Record<string, string> = {
   'admin.reportAgentPerformance': 'Prestasi ejen',
@@ -2192,6 +2200,7 @@ export const ms: Record<string, string> = {
   'admin.logs': 'Log',
   'admin.users': 'Pengguna',
   'admin.settings': 'Tetapan',
+  'admin.configuration': 'Konfigurasi',
   'admin.logout': 'Log keluar',
   'admin.expandSidebar': 'Kembangkan bar sisi',
   'admin.collapseSidebar': 'Lipat bar sisi',
@@ -2532,6 +2541,7 @@ export const ms: Record<string, string> = {
   'admin.visitorUiLangHint': 'Bahasa widget sembang dan halaman sembang.',
   'admin.operatorUiLang': 'Bahasa antara muka admin / ejen',
   'admin.operatorUiLangHint': 'Bahasa portal admin dan konsol ejen.',
+  'common.loadEarlierMessages': 'Muatkan mesej terdahulu',
 }
 export const hi: Record<string, string> = {
   'admin.reportAgentPerformance': 'एजेंट प्रदर्शन',
@@ -2699,6 +2709,7 @@ export const hi: Record<string, string> = {
   'admin.logs': 'लॉग',
   'admin.users': 'उपयोगकर्ता',
   'admin.settings': 'सेटिंग्स',
+  'admin.configuration': 'कॉन्फ़िगरेशन',
   'admin.logout': 'लॉग आउट',
   'admin.expandSidebar': 'साइडबार विस्तारित करें',
   'admin.collapseSidebar': 'साइडबार संक्षिप्त करें',
@@ -3039,4 +3050,5 @@ export const hi: Record<string, string> = {
   'admin.visitorUiLangHint': 'चैट विजेट और चैट पेज की भाषा।',
   'admin.operatorUiLang': 'एडमिन / एजेंट इंटरफ़ेस भाषा',
   'admin.operatorUiLangHint': 'एडमिन पोर्टल और एजेंट कंसोल की भाषा।',
+  'common.loadEarlierMessages': 'पिछले संदेश लोड करें',
 }

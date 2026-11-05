@@ -164,6 +164,7 @@ export const zhHans: Record<string, string> = {
   'admin.logs': '日志',
   'admin.users': '用户',
   'admin.settings': '设置',
+  'admin.configuration': '配置',
   'admin.logout': '退出登录',
   'admin.expandSidebar': '展开侧边栏',
   'admin.collapseSidebar': '收起侧边栏',
@@ -504,6 +505,7 @@ export const zhHans: Record<string, string> = {
   'admin.visitorUiLangHint': '聊天小组件和聊天页面的语言。',
   'admin.operatorUiLang': '管理员 / 客服界面语言',
   'admin.operatorUiLangHint': '管理后台和客服控制台的语言。',
+  'common.loadEarlierMessages': '加载更早的消息',
 }
 export const zhHant: Record<string, string> = {
   'admin.reportAgentPerformance': '客服績效',
@@ -671,6 +673,7 @@ export const zhHant: Record<string, string> = {
   'admin.logs': '日誌',
   'admin.users': '使用者',
   'admin.settings': '設定',
+  'admin.configuration': '組態',
   'admin.logout': '登出',
   'admin.expandSidebar': '展開側邊欄',
   'admin.collapseSidebar': '收合側邊欄',
@@ -1011,4 +1014,5 @@ export const zhHant: Record<string, string> = {
   'admin.visitorUiLangHint': '聊天小工具和聊天頁面的語言。',
   'admin.operatorUiLang': '管理員 / 客服介面語言',
   'admin.operatorUiLangHint': '管理後台和客服控制台的語言。',
+  'common.loadEarlierMessages': '載入更早的訊息',
 }

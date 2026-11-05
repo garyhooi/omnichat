@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -12,8 +13,18 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
+
+/** A bad zone makes every Intl formatter throw — reject it at the door. */
+function assertValidTimeZone(value?: string) {
+  if (!value) return;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+  } catch {
+    throw new BadRequestException(`Unknown timezone: ${value}`);
+  }
+}
 
 type AuthenticatedRequest = {
   user?: {
@@ -26,6 +37,11 @@ class CreateSiteConfigDto {
   @IsString()
   @IsNotEmpty()
   siteName: string;
+
+  /** IANA zone for every rendered datetime; omit to follow the viewer's zone. */
+  @IsString()
+  @IsOptional()
+  displayTimezone?: string;
 
   @IsString()
   @IsOptional()
@@ -81,10 +97,12 @@ class CreateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'visitorNotificationSoundUrl must be a /uploads/ path or https URL' })
   visitorNotificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'agentNotificationSoundUrl must be a /uploads/ path or https URL' })
   agentNotificationSoundUrl?: string;
 
   @IsBoolean()
@@ -116,6 +134,11 @@ class UpdateSiteConfigDto {
   @IsString()
   @IsOptional()
   siteName?: string;
+
+  /** IANA zone for every rendered datetime; omit to follow the viewer's zone. */
+  @IsString()
+  @IsOptional()
+  displayTimezone?: string;
 
   @IsString()
   @IsOptional()
@@ -179,10 +202,12 @@ class UpdateSiteConfigDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'visitorNotificationSoundUrl must be a /uploads/ path or https URL' })
   visitorNotificationSoundUrl?: string;
 
   @IsString()
   @IsOptional()
+  @Matches(/^\/uploads\/|^https:\/\//, { message: 'agentNotificationSoundUrl must be a /uploads/ path or https URL' })
   agentNotificationSoundUrl?: string;
 
   @IsString()
@@ -264,6 +289,7 @@ export class SiteConfigController {
     if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'developer') {
       throw new ForbiddenException('Only developers can update site security settings');
     }
+    assertValidTimeZone(dto.displayTimezone);
 
     return this.siteConfigService.createConfig(dto);
   }
@@ -278,6 +304,7 @@ export class SiteConfigController {
     if ((dto.allowedOrigins !== undefined || dto.adminAllowedIps !== undefined) && req.user?.role !== 'developer') {
       throw new ForbiddenException('Only developers can update site security settings');
     }
+    assertValidTimeZone(dto.displayTimezone);
 
     return this.siteConfigService.updateConfig(id, dto);
   }

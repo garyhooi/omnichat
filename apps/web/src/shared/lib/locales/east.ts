@@ -164,6 +164,7 @@ export const ja: Record<string, string> = {
   'admin.logs': 'ログ',
   'admin.users': 'ユーザー',
   'admin.settings': '設定',
+  'admin.configuration': '基本設定',
   'admin.logout': 'ログアウト',
   'admin.expandSidebar': 'サイドバーを展開',
   'admin.collapseSidebar': 'サイドバーを折りたたむ',
@@ -504,6 +505,7 @@ export const ja: Record<string, string> = {
   'admin.visitorUiLangHint': 'チャットウィジェットとチャットページの言語。',
   'admin.operatorUiLang': '管理者 / エージェントUI言語',
   'admin.operatorUiLangHint': '管理ポータルとエージェントコンソールの言語。',
+  'common.loadEarlierMessages': '以前のメッセージを読み込む',
 }
 export const ko: Record<string, string> = {
   'admin.reportAgentPerformance': '상담원 성과',
@@ -671,6 +673,7 @@ export const ko: Record<string, string> = {
   'admin.logs': '로그',
   'admin.users': '사용자',
   'admin.settings': '설정',
+  'admin.configuration': '구성',
   'admin.logout': '로그아웃',
   'admin.expandSidebar': '사이드바 펼치기',
   'admin.collapseSidebar': '사이드바 접기',
@@ -1011,4 +1014,5 @@ export const ko: Record<string, string> = {
   'admin.visitorUiLangHint': '채팅 위젯 및 채팅 페이지의 언어입니다.',
   'admin.operatorUiLang': '관리자 / 에이전트 UI 언어',
   'admin.operatorUiLangHint': '관리자 포털 및 에이전트 콘솔의 언어입니다.',
+  'common.loadEarlierMessages': '이전 메시지 불러오기',
 }

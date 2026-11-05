@@ -20,6 +20,8 @@ export interface ToolContext {
   services?: {
     prisma?: any;
     siteConfigService?: any;
+    /** ChatService — the ONLY sanctioned writer of messages (it sanitises content). */
+    chatService?: any;
     /** Socket.io Server instance for emitting real-time notifications */
     io?: any;
     /** Returns the room name for a conversation (e.g. "conv:abc123") */

@@ -39,6 +39,7 @@ import {
   applyHistory,
   clearAiStream,
   markMessageRead,
+  prependMessages,
   removePendingSend,
   setBlacklisted,
   setConversationStatus,
@@ -83,6 +84,8 @@ export interface ChatSocket {
   sendImage: (attachmentUrl: string, thumbnailUrl?: string) => void
   readMessage: (messageId: string) => void
   markAllAsRead: () => void
+  /** Page in the transcript OLDER than the oldest message currently loaded. */
+  loadOlderMessages: () => void
   submitReview: (rating: number, review?: string) => void
   resolveConversation: () => void
   typingStart: () => void
@@ -173,11 +176,22 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
           break
         }
 
+        case SERVER_EVENTS.messagesPage: {
+          const { conversationId: pageId, messages, hasMoreMessages } =
+            payload as ServerEventMap['messages_page']
+          setConversationState(pageId, (s) =>
+            prependMessages(s, messages, hasMoreMessages),
+          )
+          break
+        }
+
         case SERVER_EVENTS.conversationHistory: {
-          const { conversation, isIpBlacklisted } =
+          const { conversation, isIpBlacklisted, hasMoreMessages } =
             payload as ServerEventMap['conversation_history']
           const id = conversation.id
-          setConversationState(id, (s) => applyHistory(s, conversation, isIpBlacklisted))
+          setConversationState(id, (s) =>
+            applyHistory(s, conversation, isIpBlacklisted, hasMoreMessages ?? false),
+          )
           // Fresh history → drop the streaming bubble if the stream died mid-way.
           setConversationState(id, clearAiStream)
           break
@@ -443,8 +457,14 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
       const id = conversationIdRef.current
       const socket = socketRef.current
       if (!id || !socket || !content.trim()) return
-      // Optimistic append — resolved by the server echo in appendMessage.
-      setConversationState(id, (s) => addPendingSend(s, `temp_${crypto.randomUUID()}`, content, id))
+      // Optimistic append — resolved by the server echo in appendMessage. Carries
+      // the visitor's identity so the bubble starts on the sender's own side.
+      setConversationState(id, (s) =>
+        addPendingSend(s, `temp_${crypto.randomUUID()}`, content, id, {
+          senderType: 'visitor',
+          senderId: authoritativeVisitorId,
+        }),
+      )
       socket.emit(CLIENT_EVENTS.sendMessage, {
         conversationId: id,
         content,
@@ -452,7 +472,7 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
       })
       socket.emit(CLIENT_EVENTS.typingStop, { conversationId: id })
     },
-    [setConversationState],
+    [authoritativeVisitorId, setConversationState],
   )
 
   const sendImage = useCallback(
@@ -492,6 +512,17 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
       setConversationState(id, (s) => markMessageRead(s, m.id, new Date().toISOString()))
     }
   }, [getConversationState, setConversationState])
+
+  const loadOlderMessages = useCallback(() => {
+    const id = conversationIdRef.current
+    if (!id) return
+    const oldest = getConversationState(id).messages[0]
+    if (!oldest) return
+    socketRef.current?.emit(CLIENT_EVENTS.loadMessages, {
+      conversationId: id,
+      before: oldest.createdAt,
+    })
+  }, [getConversationState])
 
   const submitReview = useCallback(
     (rating: number, review?: string) => {
@@ -538,6 +569,7 @@ export function useChatSocket(options: ChatSocketOptions): ChatSocket {
     sendImage,
     readMessage,
     markAllAsRead,
+    loadOlderMessages,
     submitReview,
     resolveConversation,
     typingStart,

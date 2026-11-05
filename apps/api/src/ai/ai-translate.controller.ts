@@ -74,10 +74,10 @@ export class AiTranslateController {
     }
 
     const agentConfig = await this.aiConfigService.getAgentConfig();
-    if (!agentConfig?.enabled) {
-      throw new HttpException('AI agent is not enabled', HttpStatus.SERVICE_UNAVAILABLE);
-    }
-
+    // Translation is its own feature — its own toggle and its own provider. It
+    // must not require the AI agent to be answering visitors: a human-only desk
+    // still needs translated conversations. Gating on `enabled` made every
+    // translate call 503 ("AI agent is not enabled") on such sites.
     if (agentConfig?.translationEnabled === false) {
       throw new HttpException('Translation is disabled', HttpStatus.SERVICE_UNAVAILABLE);
     }
@@ -117,7 +117,9 @@ export class AiTranslateController {
         },
       );
 
-      return { translatedText: result.text.trim(), targetLanguage };
+      const translatedText = result.text.trim();
+      // Both keys, matching the fork: the legacy Vue client reads `translated`.
+      return { translatedText, translated: translatedText, targetLanguage };
     } catch (error: any) {
       this.logger.error(`Translation failed: ${error.message}`);
       if (error.status === 402 || error.status === 429 || error.message?.includes('quota') || error.message?.includes('credit')) {

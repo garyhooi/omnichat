@@ -176,9 +176,6 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
         <div className="oc-banner oc-banner-warn">
           {inactivityWarning}
           {secondsLeft != null && ` ${t('visitor.closesIn', { time: formatCountdown(secondsLeft) })}`}
-          <button type="button" className="oc-translate-btn" onClick={dismissWarning} style={{ marginLeft: 8 }}>
-            {t('visitor.dismiss')}
-          </button>
         </div>
       )}
 
@@ -231,6 +228,7 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
           <MessageList
             messages={messages}
             visitorId={session.visitorId}
+            timeZone={siteConfig?.displayTimezone || undefined}
             aiStreamContent={aiStreamContent}
             typingUsers={typingUsers}
             accentColor={accentColor}
@@ -242,6 +240,8 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
             onTranslate={session.translateMessage}
             onOpenLightbox={setLightboxUrl}
             scrollKey={scrollResetKey}
+            hasMoreMessages={session.hasMoreMessages}
+            onLoadEarlier={session.loadOlderMessages}
           />
           <Composer
             maxChars={VISITOR_MAX_CHARS}

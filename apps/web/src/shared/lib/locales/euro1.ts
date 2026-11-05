@@ -164,6 +164,7 @@ export const fr: Record<string, string> = {
   'admin.logs': 'Journaux',
   'admin.users': 'Utilisateurs',
   'admin.settings': 'Paramètres',
+  'admin.configuration': 'Configuration',
   'admin.logout': 'Se déconnecter',
   'admin.expandSidebar': 'Agrandir la barre latérale',
   'admin.collapseSidebar': 'Réduire la barre latérale',
@@ -504,6 +505,7 @@ export const fr: Record<string, string> = {
   'admin.visitorUiLangHint': 'Langue du widget de chat et de la page de chat.',
   'admin.operatorUiLang': 'Langue de l\'interface admin / agent',
   'admin.operatorUiLangHint': 'Langue du portail admin et de la console agent.',
+  'common.loadEarlierMessages': 'Charger les messages précédents',
 }
 export const de: Record<string, string> = {
   'admin.reportAgentPerformance': 'Agenten-Performance',
@@ -671,6 +673,7 @@ export const de: Record<string, string> = {
   'admin.logs': 'Protokolle',
   'admin.users': 'Benutzer',
   'admin.settings': 'Einstellungen',
+  'admin.configuration': 'Konfiguration',
   'admin.logout': 'Abmelden',
   'admin.expandSidebar': 'Seitenleiste erweitern',
   'admin.collapseSidebar': 'Seitenleiste einklappen',
@@ -1011,6 +1014,7 @@ export const de: Record<string, string> = {
   'admin.visitorUiLangHint': 'Sprache des Chat-Widgets und der Chat-Seite.',
   'admin.operatorUiLang': 'Sprache der Admin-/Agent-Oberfläche',
   'admin.operatorUiLangHint': 'Sprache des Admin-Portals und der Agent-Konsole.',
+  'common.loadEarlierMessages': 'Ältere Nachrichten laden',
 }
 export const it: Record<string, string> = {
   'admin.reportAgentPerformance': 'Performance agenti',
@@ -1178,6 +1182,7 @@ export const it: Record<string, string> = {
   'admin.logs': 'Log',
   'admin.users': 'Utenti',
   'admin.settings': 'Impostazioni',
+  'admin.configuration': 'Configurazione',
   'admin.logout': 'Esci',
   'admin.expandSidebar': 'Espandi barra laterale',
   'admin.collapseSidebar': 'Comprimi barra laterale',
@@ -1518,6 +1523,7 @@ export const it: Record<string, string> = {
   'admin.visitorUiLangHint': 'Lingua del widget e della pagina di chat.',
   'admin.operatorUiLang': 'Lingua interfaccia admin / agente',
   'admin.operatorUiLangHint': 'Lingua del portale admin e della console agente.',
+  'common.loadEarlierMessages': 'Carica messaggi precedenti',
 }
 export const es: Record<string, string> = {
   'admin.reportAgentPerformance': 'Rendimiento de agentes',
@@ -1685,6 +1691,7 @@ export const es: Record<string, string> = {
   'admin.logs': 'Registros',
   'admin.users': 'Usuarios',
   'admin.settings': 'Ajustes',
+  'admin.configuration': 'Configuración',
   'admin.logout': 'Cerrar sesión',
   'admin.expandSidebar': 'Ampliar barra lateral',
   'admin.collapseSidebar': 'Contraer barra lateral',
@@ -2025,6 +2032,7 @@ export const es: Record<string, string> = {
   'admin.visitorUiLangHint': 'Idioma del widget y la página de chat.',
   'admin.operatorUiLang': 'Idioma de la interfaz de admin / agente',
   'admin.operatorUiLangHint': 'Idioma del portal de administración y la consola del agente.',
+  'common.loadEarlierMessages': 'Cargar mensajes anteriores',
 }
 export const pt: Record<string, string> = {
   'admin.reportAgentPerformance': 'Desempenho dos agentes',
@@ -2192,6 +2200,7 @@ export const pt: Record<string, string> = {
   'admin.logs': 'Registos',
   'admin.users': 'Utilizadores',
   'admin.settings': 'Definições',
+  'admin.configuration': 'Configuração',
   'admin.logout': 'Terminar sessão',
   'admin.expandSidebar': 'Expandir barra lateral',
   'admin.collapseSidebar': 'Recolher barra lateral',
@@ -2532,4 +2541,5 @@ export const pt: Record<string, string> = {
   'admin.visitorUiLangHint': 'Idioma do widget e da página de chat.',
   'admin.operatorUiLang': 'Idioma da interface de admin / agente',
   'admin.operatorUiLangHint': 'Idioma do portal de administração e do console do agente.',
+  'common.loadEarlierMessages': 'Carregar mensagens anteriores',
 }

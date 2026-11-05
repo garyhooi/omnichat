@@ -17,6 +17,8 @@ export interface SiteConfig {
   greetingMessage?: string | null
   visitorLanguage?: string
   adminLanguage?: string
+  /** IANA zone every rendered datetime is converted to (unset = viewer's zone). */
+  displayTimezone?: string | null
   /** Sound played on the visitor surfaces when an agent/AI replies. */
   visitorNotificationSoundUrl?: string
   /** Sound played on the agent console/widget on incoming messages. */

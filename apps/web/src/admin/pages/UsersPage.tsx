@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Lock, LockOpen, Plus, Search, Shield, Trash2, X } from 'lucide-react'
 import { useAuth } from '../auth'
 import { authFetchJson } from '../../shared/lib/api-client'
+import { formatDate, formatDateTime } from '../../shared/lib/format'
+import { useSiteConfig } from '../../features/chat/hooks/useSiteConfig'
 import type { AdminUser } from '../../shared/types/models'
 
 const usersKey = (serverUrl: string) => ['admin-users', serverUrl] as const
@@ -12,6 +14,8 @@ const usersKey = (serverUrl: string) => ['admin-users', serverUrl] as const
 export function UsersPage() {
   const { t } = useTranslation()
   const { serverUrl, isAdmin, isDeveloper } = useAuth()
+  const { config: siteConfig } = useSiteConfig(serverUrl)
+  const timeZone = siteConfig?.displayTimezone || undefined
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -268,9 +272,9 @@ export function UsersPage() {
                       <span className="adm-badge adm-badge-neutral">{t('admin.offline')}</span>
                     )}
                   </td>
-                  <td className="adm-muted">{u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : '—'}</td>
+                  <td className="adm-muted">{u.lastSeenAt ? formatDateTime(u.lastSeenAt, timeZone) : '—'}</td>
                   <td className="adm-muted">{u.activeSessions}</td>
-                  <td className="adm-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  <td className="adm-muted">{formatDate(u.createdAt, timeZone)}</td>
                   {canManage && (
                     <td>
                       <div className="adm-row" style={{ gap: 4 }}>

@@ -293,6 +293,7 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onSelect={socket.openConversation}
+                timeZone={siteConfig?.displayTimezone || undefined}
               />
             ) : (
               <div className="aw-offline">

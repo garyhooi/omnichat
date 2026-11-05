@@ -31,6 +31,7 @@ export function applyHistory(
   state: ConversationQueryState,
   conversation: Conversation & { messages: Message[] },
   isIpBlacklisted: boolean,
+  hasMoreMessages = false,
 ): ConversationQueryState {
   const { messages, ...rest } = conversation
   return {
@@ -41,23 +42,50 @@ export function applyHistory(
     aiStream: null,
     inactivityWarning: null,
     loaded: true,
+    hasMoreMessages,
   }
 }
 
-/** Optimistic placeholder inserted before the server echo arrives. */
+/**
+ * Prepend an older page of transcript (from `messages_page`). Dedupes by id —
+ * the same message can also arrive as a live echo — and records whether even
+ * older messages remain. The incoming page is older, so prepending keeps the
+ * list chronological.
+ */
+export function prependMessages(
+  state: ConversationQueryState,
+  messages: Message[],
+  hasMoreMessages: boolean,
+): ConversationQueryState {
+  if (messages.length === 0) return { ...state, hasMoreMessages }
+  return {
+    ...state,
+    messages: dedupeMessages([...messages, ...state.messages]),
+    hasMoreMessages,
+  }
+}
+
+/**
+ * Optimistic placeholder inserted before the server echo arrives.
+ *
+ * It MUST carry the real sender identity: every surface decides which side a
+ * bubble sits on from (senderType, senderId), so an anonymous placeholder shows
+ * up on the wrong side for the moment before the echo lands — the
+ * left-then-right flash the sender sees.
+ */
 export function addPendingSend(
   state: ConversationQueryState,
   tempId: string,
   content: string,
   conversationId: string,
-  senderId = 'me',
+  sender: { senderType?: Message['senderType']; senderId?: string } = {},
 ): ConversationQueryState {
   const pending: PendingSend = { tempId, content, conversationId, sentAt: new Date().toISOString() }
   const placeholder: Message = {
     id: tempId,
     conversationId,
-    senderType: 'visitor',
-    senderId,
+    senderType: sender.senderType ?? 'visitor',
+    senderId: sender.senderId ?? 'me',
     messageType: 'text',
     content,
     attachmentUrl: null,
