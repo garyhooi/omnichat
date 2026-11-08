@@ -68,6 +68,17 @@ async function bootstrap() {
   }));
   expressApp.use('/rag-templates', express.static(join(process.cwd(), '..', '..', 'rag_templates')));
 
+  // Embeddable web components built from apps/web (committed in dist/):
+  //   /widget/omnichat-chat-widget.js, -chat-page.js, -agent-widget.js, -admin-portal.js
+  // Served from the same origin as the API so host pages only need one URL.
+  expressApp.use('/widget', express.static(join(process.cwd(), '..', 'web', 'dist'), {
+    maxAge: '5m',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  }));
+
   const prisma = app.get(PrismaService);
   
   app.enableCors({

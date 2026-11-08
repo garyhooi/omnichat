@@ -19,6 +19,7 @@ WORKDIR /app
 COPY package.json ./
 COPY apps/api ./apps/api
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/web/dist ./apps/web/dist
 COPY rag_templates ./rag_templates
 COPY deploy/docker-entrypoint.sh ./deploy/docker-entrypoint.sh
 
