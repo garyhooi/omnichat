@@ -5,7 +5,7 @@
     {
       "name": "api",
       "build": ".",
-      "dockerfile": "deploy/omnichat-api.Dockerfile",
+      "dockerfile": "Dockerfile",
       "ports": [
         "3001"
       ],
