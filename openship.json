@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openship.io/openship.schema.json",
+  "framework": "docker",
+  "services": [
+    {
+      "name": "api",
+      "build": ".",
+      "dockerfile": "Dockerfile",
+      "ports": [
+        "3001"
+      ],
+      "exposed": true,
+      "exposedPort": "3001",
+      "restart": "unless-stopped",
+      "volumes": [
+        "./apps/api/uploads:/app/apps/api/uploads"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "nc -z 127.0.0.1 3001 || exit 1"
+        ],
+        "interval": "30s",
+        "timeout": "5s",
+        "retries": 3,
+        "startPeriod": "60s"
+      }
+    }
+  ]
+}

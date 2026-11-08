@@ -20,7 +20,7 @@ export class PrismaService
   private async ensureLogTtlIndexes(): Promise<void> {
     try {
       // Check if this is MongoDB by attempting $runCommandRaw
-      await this.$runCommandRaw({
+      await (this as any).$runCommandRaw({
         ping: 1,
       });
     } catch {
@@ -31,7 +31,7 @@ export class PrismaService
     const collections = ['httpLog', 'aiLog', 'toolLog'];
     for (const collection of collections) {
       try {
-        await this.$runCommandRaw({
+        await (this as any).$runCommandRaw({
           createIndexes: collection,
           indexes: [
             {

@@ -1,34 +1,34 @@
+# OmniChat API — production image (PostgreSQL by default)
+# The checked-in Prisma schema is the MongoDB variant (switched via
+# scripts/use-provider.sh); this image selects DATABASE_PROVIDER at build time.
 FROM oven/bun:1-alpine
 
-# Install system dependencies including ImageMagick with HEIC support
+ARG DATABASE_PROVIDER=postgresql
+
+# Runtime deps: HEIC image conversion (upload pipeline) + Prisma (needs openssl)
 RUN apk add --no-cache \
     imagemagick \
     imagemagick-heic \
     ghostscript-fonts \
-    libheif
+    libheif \
+    openssl
 
-# Set up application directory
 WORKDIR /app
 
-# Copy package files from root (for workspace setup)
-COPY package.json bun.lockb ./
-
-# Copy workspace apps
+# bun.lock is gitignored in this repo, so resolve from package.json.
+COPY package.json ./
 COPY apps/api ./apps/api
-COPY apps/web ./apps/web
+COPY apps/web/package.json ./apps/web/package.json
+COPY rag_templates ./rag_templates
+COPY deploy/docker-entrypoint.sh ./deploy/docker-entrypoint.sh
 
-# Install dependencies using bun
-RUN bun install --frozen-lockfile
+RUN cp "apps/api/prisma/schema.${DATABASE_PROVIDER}.prisma" apps/api/prisma/schema.prisma
 
-# Build both API and web applications
+RUN bun install
+RUN cd apps/api && ./node_modules/.bin/prisma generate
 RUN bun run build:api
-RUN bun run build:web
 
-# Expose application port
 EXPOSE 3001
-
-# Set working directory to API app
 WORKDIR /app/apps/api
 
-# Start the API application using bun
-CMD ["bun", "run", "start:prod"]
+ENTRYPOINT ["sh", "/app/deploy/docker-entrypoint.sh"]
