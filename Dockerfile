@@ -25,7 +25,7 @@ COPY deploy/docker-entrypoint.sh ./deploy/docker-entrypoint.sh
 RUN cp "apps/api/prisma/schema.${DATABASE_PROVIDER}.prisma" apps/api/prisma/schema.prisma
 
 RUN bun install
-RUN bunx prisma generate --schema apps/api/prisma/schema.prisma
+RUN cd apps/api && ./node_modules/.bin/prisma generate
 RUN bun run build:api
 
 EXPOSE 3001

@@ -5,7 +5,7 @@ set -e
 
 attempt=1
 while true; do
-  if bunx prisma db push --skip-generate; then
+  if ./node_modules/.bin/prisma db push --skip-generate; then
     break
   fi
   if [ "$attempt" -ge 5 ]; then
