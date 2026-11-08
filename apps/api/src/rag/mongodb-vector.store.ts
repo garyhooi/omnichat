@@ -131,7 +131,7 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
   /** Fallback: cosine similarity in memory when Atlas index unavailable. */
   private async fallbackCosineSimilaritySearch(queryEmbedding: number[], topK: number): Promise<VectorSearchResult[]> {
     try {
-      const allChunks = await this.prisma.documentChunk.findMany({
+      const allChunks = (await this.prisma.documentChunk.findMany({
         select: {
           id: true,
           documentId: true,
@@ -140,7 +140,7 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
           metadata: true,
           embedding: true,
         },
-      });
+      } as any)) as any[];
 
       this.logger.log(`Fallback search: found ${allChunks.length} total chunks in DB`);
 
