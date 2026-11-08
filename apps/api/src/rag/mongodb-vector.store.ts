@@ -72,7 +72,7 @@ export class MongoDBVectorStore implements VectorStoreProvider, OnModuleInit {
           embedding: chunk.embedding,
           chunkIndex: chunk.chunkIndex,
           metadata: chunk.metadata || null,
-        },
+        } as any,
       });
     }
     this.logger.log(`Stored ${chunks.length} chunks for document ${chunks[0]?.documentId}`);
