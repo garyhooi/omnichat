@@ -12,7 +12,7 @@ import {
   storageRemove,
   storageSet,
 } from '../shared/lib/storage'
-import { initAuthClient, authFetchJson } from '../shared/lib/api-client'
+import { initAuthClient, authFetch, authFetchJson } from '../shared/lib/api-client'
 import { checkServerUrl } from '../shared/lib/serverUrl'
 import type { Role } from '../shared/types/models'
 
@@ -116,7 +116,10 @@ export function AuthProvider({
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${serverUrl}/auth/logout`, { method: 'POST' })
+      // authFetch adds the Bearer token (and site token) the endpoint requires;
+      // without them /auth/logout answers 401 and the server session, plus its
+      // refresh token, would survive a client-side "sign out".
+      await authFetch(`${serverUrl}/auth/logout`, { method: 'POST' })
     } catch {
       /* token already invalid */
     }

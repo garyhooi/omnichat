@@ -16,6 +16,42 @@ import type {
 
 const aiKey = (serverUrl: string, kind: string) => ['ai-config', serverUrl, kind] as const
 
+/**
+ * The form's starting values when the server has no AiAgentConfig row yet.
+ *
+ * GET /ai/config/agent answers `null` on a fresh installation (the row is only
+ * created by the first save). The tab used to wait for a non-null response, so a
+ * new deployment sat on its spinner forever instead of showing the defaults the
+ * server would apply. These mirror schema.prisma's defaults exactly.
+ */
+const DEFAULT_AGENT_FORM: Partial<AiAgentConfig> = {
+  enabled: false,
+  systemPrompt: 'You are a helpful customer support assistant. Be concise and helpful.',
+  greetingMessage: '',
+  humanRequestKeywords: '',
+  maxTokensPerResponse: 1024,
+  temperature: 0.7,
+  maxTurnsPerConversation: 50,
+  maxTokensPerSession: 50000,
+  ragFailureThreshold: 2,
+  humanRequestThreshold: 2,
+  aiRateLimitPerMinute: 10,
+  spamIpBlacklistMinutes: 15,
+  embeddingProviderId: null,
+  translateProviderId: null,
+  chatFailoverProviderId: null,
+  embeddingFailoverProviderId: null,
+  translateFailoverProviderId: null,
+  translationEnabled: true,
+  autoTranslationEnabled: true,
+  maxTokensPerDay: null,
+  maxTokensPerWeek: null,
+  maxTokensPerMonth: null,
+  maxTokensPerQuarter: null,
+  maxTokensPerHalfYear: null,
+  maxTokensPerYear: null,
+}
+
 const PROVIDER_TYPES: AiProviderType[] = [
   'openai',
   'anthropic',
@@ -568,9 +604,12 @@ function AgentTab({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (config && !form) setForm(config)
+    // `null` is a legitimate answer (no row saved yet), not "still loading":
+    // fall back to the defaults so the tab is editable on a fresh install.
+    if (isLoading) return
+    setForm((current) => current ?? config ?? DEFAULT_AGENT_FORM)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config])
+  }, [config, isLoading])
 
   if (isLoading || !form) {
     return (
