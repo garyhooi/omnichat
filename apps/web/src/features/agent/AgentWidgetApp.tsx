@@ -211,6 +211,11 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
   const openConversationId = socket.openConversationId
   const openConversation = conversations.find((c) => c.id === openConversationId) ?? null
 
+  // Settings → "Show admin widget". The operator can switch the floating agent
+  // console off without removing the element from the host page (legacy agent
+  // widget used the same v-if on its bubble).
+  if (siteConfig?.showAdminWidget === false) return null
+
   return (
     <div
       className="aw-root"

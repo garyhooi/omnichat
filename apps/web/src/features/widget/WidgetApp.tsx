@@ -147,6 +147,11 @@ export function WidgetApp({ serverUrl, bubbleColor, externalToken, position, lan
     }
   }, [pos])
 
+  // Settings → "Show visitor widget". The element stays mounted, but the
+  // operator switched the visitor surface off, so render nothing (the legacy
+  // widget used the same v-if on its launcher bubble).
+  if (session.siteConfig?.showVisitorWidget === false) return null
+
   return (
     <div className="oc-widget-root">
       {/* Launcher bubble — hidden while the panel is open (the panel has its

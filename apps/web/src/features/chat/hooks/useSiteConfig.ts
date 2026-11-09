@@ -26,6 +26,7 @@ export interface SiteConfig {
   enableReadReceipts?: boolean
   isOfflineMode?: boolean
   showVisitorWidget?: boolean
+  showAdminWidget?: boolean
   aiEnabled?: boolean
   translationEnabled?: boolean
   autoTranslationEnabled?: boolean

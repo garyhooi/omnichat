@@ -69,6 +69,11 @@ export function PageApp({ serverUrl, bubbleColor, externalToken, lang }: PageApp
     [session],
   )
 
+  // Settings → "Show visitor widget" also governs the full-page chat (the
+  // legacy page checked the same flag), so a disabled visitor surface does not
+  // leave a blank chat shell behind.
+  if (session.siteConfig?.showVisitorWidget === false) return null
+
   return (
     <div
       className="oc-page-root"
