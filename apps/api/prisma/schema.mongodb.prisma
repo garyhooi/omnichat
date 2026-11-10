@@ -157,6 +157,10 @@ model SiteConfig {
   agentNotificationSoundUrl String?
   showAdminWidget   Boolean  @default(true)
   showVisitorWidget Boolean  @default(true)
+  // Whether visitors may end (resolve) their own conversation from the widget.
+  allowVisitorResolve Boolean  @default(true)
+  // Minutes of inactivity before a chat auto-resolves; null = never auto-resolve.
+  autoResolveMinutes  Int?     @default(5)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

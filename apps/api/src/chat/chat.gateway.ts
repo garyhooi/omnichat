@@ -131,6 +131,12 @@ function isOriginAllowed(candidateOrigin: string, allowedOrigin: string): boolea
   }
 }
 
+/** Normalize the configured auto-resolve window: null/0/negative = never auto-resolve. */
+function normalizeAutoResolveMinutes(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+  return Math.floor(value);
+}
+
 // Chat Gateway — Socket.io WebSocket handler
 
 @WebSocketGateway({
@@ -170,7 +176,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   // DB-based auto-resolve safety net interval
   private autoResolveInterval: NodeJS.Timeout | null = null;
   private static readonly AUTO_RESOLVE_INTERVAL_MS = 60_000; // every 60s
-  private static readonly AUTO_RESOLVE_TIMEOUT_MS = 5 * 60_000; // 5 minutes
+  private static readonly AUTO_RESOLVE_CONFIG_TTL_MS = 30_000; // cache the configured window
+  /** Cached inactivity window (minutes; null = never auto-resolve). */
+  private autoResolveCache: { minutes: number | null; at: number } | null = null;
+  /** Guards an in-flight inactivity schedule; a newer reset supersedes it. */
+  private inactivityScheduleTokens = new Map<string, object>();
 
   constructor(
     private readonly chatService: ChatService,
@@ -217,7 +227,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       () => this.checkStaleConversations(),
       ChatGateway.AUTO_RESOLVE_INTERVAL_MS,
     );
-    this.logger.log('Auto-resolve safety net started (every 60s, timeout 5min)');
+    this.logger.log('Auto-resolve safety net started (every 60s, timeout from site config; unset = disabled)');
 
     // Start rate limit Map eviction sweep
     this.rateLimitCleanupInterval = setInterval(
@@ -239,6 +249,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (this.rateLimitCleanupInterval) {
       clearInterval(this.rateLimitCleanupInterval);
       this.rateLimitCleanupInterval = null;
+    }
+    // Clear armed inactivity timers and any in-flight schedules.
+    for (const conversationId of new Set([
+      ...this.inactivityWarnings.keys(),
+      ...this.inactivityResolves.keys(),
+      ...this.inactivityScheduleTokens.keys(),
+    ])) {
+      this.clearInactivityTimer(conversationId);
     }
   }
 
@@ -276,10 +294,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     }
   }
 
-  /** Resolve conversations inactive beyond the timeout threshold. DB-based safety net. */
+  /** Resolve conversations inactive beyond the configured timeout. DB-based safety net. */
   private async checkStaleConversations() {
     try {
-      const threshold = new Date(Date.now() - ChatGateway.AUTO_RESOLVE_TIMEOUT_MS);
+      // Admin-configurable inactivity window; null/zero turns auto-resolve off entirely.
+      const config = await this.siteConfigService.getActiveConfig();
+      const minutes = normalizeAutoResolveMinutes(config?.autoResolveMinutes);
+      if (minutes === null) return;
+
+      const threshold = new Date(Date.now() - minutes * 60_000);
       const staleConversations = await this.prisma.conversation.findMany({
         where: {
           status: { in: ['active', 'ai'] },
@@ -357,17 +380,42 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   private resetInactivityTimer(conversationId: string) {
     this.clearInactivityTimer(conversationId);
 
-    // Set 3 minute warning
-    this.inactivityWarnings.set(conversationId, setTimeout(() => {
-      this.server.to(`conv:${conversationId}`).emit('inactivity_warning', {
-        conversationId,
-        message: 'Chat will automatically close in 2 minutes due to inactivity.',
-      });
-    }, 3 * 60 * 1000));
+    // Read the configured window asynchronously; the token guarantees a newer
+    // reset (or a clear) supersedes this schedule while the config loads.
+    const token = {};
+    this.inactivityScheduleTokens.set(conversationId, token);
+    void this.scheduleInactivityTimers(conversationId, token);
+  }
 
-    // Set 5 minute resolve
+  /** Arm the warning/resolve timers for the configured inactivity window. */
+  private async scheduleInactivityTimers(conversationId: string, token: object) {
+    const minutes = await this.autoResolveMinutes();
+    if (this.inactivityScheduleTokens.get(conversationId) !== token) return;
+    this.inactivityScheduleTokens.delete(conversationId);
+    if (minutes === null) return;
+
+    const totalMs = minutes * 60_000;
+    const warnMs = totalMs - 2 * 60_000;
+
+    // Warn exactly 2 minutes before the close so the visitor countdown is accurate.
+    if (warnMs >= 0) {
+      this.inactivityWarnings.set(conversationId, setTimeout(() => {
+        this.server.to(`conv:${conversationId}`).emit('inactivity_warning', {
+          conversationId,
+          message: 'Chat will automatically close in 2 minutes due to inactivity.',
+        });
+      }, warnMs));
+    }
+
+    // Set the resolve timer
     this.inactivityResolves.set(conversationId, setTimeout(async () => {
       try {
+        // Re-read the setting when the timer fires: clearing the field must
+        // stop timers that were armed before the admin changed it.
+        if ((await this.autoResolveMinutes()) === null) {
+          this.clearInactivityTimer(conversationId);
+          return;
+        }
         const conversation = await this.chatService.resolveConversation(conversationId, 'System (Inactivity)');
         
         // Notify the room
@@ -390,10 +438,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         this.logger.error(`Failed to auto-resolve ${conversationId}: ${err.message}`);
       }
       this.clearInactivityTimer(conversationId);
-    }, 5 * 60 * 1000));
+    }, totalMs));
+  }
+
+  /** Read the configured inactivity window, cached briefly to avoid one DB read per message. */
+  private async autoResolveMinutes(): Promise<number | null> {
+    const cached = this.autoResolveCache;
+    if (cached && Date.now() - cached.at < ChatGateway.AUTO_RESOLVE_CONFIG_TTL_MS) return cached.minutes;
+    try {
+      const config = await this.siteConfigService.getActiveConfig();
+      const minutes = normalizeAutoResolveMinutes(config?.autoResolveMinutes);
+      this.autoResolveCache = { minutes, at: Date.now() };
+      return minutes;
+    } catch (err) {
+      this.logger.warn(`Failed to read auto-resolve setting: ${err.message}`);
+      // Fail safe: keep the last known window instead of closing chats unexpectedly.
+      return cached?.minutes ?? null;
+    }
   }
 
   private clearInactivityTimer(conversationId: string) {
+    this.inactivityScheduleTokens.delete(conversationId);
     if (this.inactivityWarnings.has(conversationId)) clearTimeout(this.inactivityWarnings.get(conversationId));
     if (this.inactivityResolves.has(conversationId)) clearTimeout(this.inactivityResolves.get(conversationId));
     this.inactivityWarnings.delete(conversationId);
@@ -1201,6 +1266,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @MessageBody() payload: ResolveConversationPayload,
   ) {
     const { conversationId } = payload;
+
+    // Visitors may only end the chat when the site allows it.
+    if (client.data.isVisitor) {
+      let allowVisitorResolve = true;
+      try {
+        const config = await this.siteConfigService.getActiveConfig();
+        allowVisitorResolve = config?.allowVisitorResolve !== false;
+      } catch (err) {
+        this.logger.warn(`Failed to read visitor-resolve setting: ${err.message}`);
+      }
+      if (!allowVisitorResolve) {
+        client.emit('error', { message: 'Ending the chat is disabled by the site administrator.' });
+        return;
+      }
+    }
 
     const resolvedByUsername = client.data.isVisitor
       ? 'Visitor'

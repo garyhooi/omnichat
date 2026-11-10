@@ -64,6 +64,10 @@ export interface SiteConfig {
   isActive: boolean
   isOfflineMode: boolean
   enableReadReceipts: boolean
+  /** Whether visitors may end their own chat (default true; false = only agents can resolve). */
+  allowVisitorResolve?: boolean
+  /** Minutes of inactivity before a chat is auto-resolved (null = never auto-resolve). */
+  autoResolveMinutes?: number | null
   /** Sound played on the visitor widget/chat page when an agent/AI replies. */
   visitorNotificationSoundUrl?: string | null
   /** Sound played on the agent console/widget when a new message arrives. Falls back to visitorNotificationSoundUrl when unset. */
@@ -104,6 +108,8 @@ export interface CreateSiteConfigRequest {
   showVisitorWidget?: boolean
   adminAllowedIps?: string
   enableReadReceipts?: boolean
+  allowVisitorResolve?: boolean
+  autoResolveMinutes?: number | null
   isOfflineMode?: boolean
 }
 

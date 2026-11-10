@@ -38,6 +38,8 @@ export class SiteConfigService {
     visitorAvatar?: string;
     visitorNotificationSoundUrl?: string;
     agentNotificationSoundUrl?: string;
+    allowVisitorResolve?: boolean;
+    autoResolveMinutes?: number | null;
     allowedOrigins: string;
     adminAllowedIps?: string;
     enableReadReceipts?: boolean;
@@ -67,6 +69,8 @@ export class SiteConfigService {
       visitorAvatar?: string;
       visitorNotificationSoundUrl?: string;
       agentNotificationSoundUrl?: string;
+      allowVisitorResolve?: boolean;
+      autoResolveMinutes?: number | null;
       allowedOrigins?: string;
       adminAllowedIps?: string;
       isActive?: boolean;

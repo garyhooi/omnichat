@@ -161,7 +161,7 @@ export function ChatPanel({ session, serverUrl, accentColor, title = 'OmniChat',
         onToggleMute={toggleMuted}
         showClose={!!showCloseButton}
         onClose={onClose}
-        showEndChat={!!conversationId && !isResolved}
+        showEndChat={!!conversationId && !isResolved && siteConfig?.allowVisitorResolve !== false}
         onEndChat={() => setShowEndConfirm(true)}
         showNewChat={!!conversationId && isResolved}
         onNewChat={session.startNewChat}

@@ -57,6 +57,8 @@ const CONFIG = {
   isActive: true,
   isOfflineMode: false,
   enableReadReceipts: true,
+  allowVisitorResolve: true,
+  autoResolveMinutes: 5,
   visitorNotificationSoundUrl: null,
   agentNotificationSoundUrl: null,
   showAdminWidget: true,
@@ -131,5 +133,95 @@ describe('Settings — bubble icon picker', () => {
     expect(patchBody!.bubbleIcon).toBe('svg:bot')
     // The bug: the stale callback sent the previous icon back.
     expect(patchBody!.bubbleIcon).not.toBe('svg:headset')
+  })
+})
+
+/** React tracks input values internally — write through the native setter, then notify. */
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  if (!setter) throw new Error('native input value setter unavailable')
+  setter.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+function behaviorCard(): HTMLElement {
+  const card = [...container.querySelectorAll<HTMLElement>('.adm-card')].find(
+    (el) => el.querySelector('.adm-card-title')?.textContent === 'admin.behavior',
+  )
+  if (!card) throw new Error('behavior card not rendered')
+  return card
+}
+
+function checkboxByLabel(key: string): HTMLInputElement {
+  const label = [...behaviorCard().querySelectorAll<HTMLElement>('label.adm-row')].find((el) => el.textContent?.includes(key))
+  const input = label?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+  if (!input) throw new Error(`${key} checkbox not rendered`)
+  return input
+}
+
+async function clickSave() {
+  const saveButton = await waitForSelector('button.adm-btn-primary')
+  await act(async () => {
+    saveButton.click()
+  })
+  for (let i = 0; i < 40 && !patchBody; i++) await flush(5)
+}
+
+describe('Settings — visitor resolve & auto-resolve window', () => {
+  it('saves the disabled visitor-resolve toggle and the auto-resolve minutes', async () => {
+    const minutes = (await waitForSelector('#adm-auto-resolve-minutes')) as HTMLInputElement
+    const checkbox = checkboxByLabel('admin.allowVisitorResolve')
+    expect(checkbox.checked).toBe(true)
+
+    await act(async () => {
+      checkbox.click()
+    })
+    await act(async () => {
+      setInputValue(minutes, '12')
+    })
+
+    await clickSave()
+
+    expect(patchBody, 'PATCH /config/:id was not sent').not.toBeNull()
+    expect(patchBody!.allowVisitorResolve).toBe(false)
+    expect(patchBody!.autoResolveMinutes).toBe(12)
+  })
+
+  it('caps autoResolveMinutes at the backend maximum of 1440', async () => {
+    const minutes = (await waitForSelector('#adm-auto-resolve-minutes')) as HTMLInputElement
+    await act(async () => {
+      setInputValue(minutes, '2000')
+    })
+
+    await clickSave()
+
+    expect(patchBody, 'PATCH /config/:id was not sent').not.toBeNull()
+    expect(patchBody!.autoResolveMinutes).toBe(1440)
+  })
+
+  it('clamps values below the minimum up to 1 minute', async () => {
+    const minutes = (await waitForSelector('#adm-auto-resolve-minutes')) as HTMLInputElement
+    await act(async () => {
+      setInputValue(minutes, '0')
+    })
+
+    await clickSave()
+
+    expect(patchBody, 'PATCH /config/:id was not sent').not.toBeNull()
+    expect(patchBody!.autoResolveMinutes).toBe(1)
+  })
+
+  it('sends null for autoResolveMinutes when the input is cleared', async () => {
+    const minutes = (await waitForSelector('#adm-auto-resolve-minutes')) as HTMLInputElement
+    expect(minutes.value).toBe('5')
+
+    await act(async () => {
+      setInputValue(minutes, '')
+    })
+
+    await clickSave()
+
+    expect(patchBody, 'PATCH /config/:id was not sent').not.toBeNull()
+    expect(patchBody!.autoResolveMinutes).toBeNull()
   })
 })

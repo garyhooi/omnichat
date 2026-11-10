@@ -65,7 +65,7 @@
    * Built-in UI Lightbox for viewing high-res images.
    * Cross-platform HEIC conversion (macOS, Ubuntu, Windows Server).
 * **⚡ Quick Replies**: Admins can configure canned responses and trigger them in chat by simply typing `/`.
-* **⏱️ Auto-Resolution**: Automatically sends a 3-minute inactivity warning and resolves inactive chats after 5 minutes.
+* **⏱️ Auto-Resolution**: Sends an inactivity warning and resolves inactive chats after an admin-configurable timeout (default 5 minutes; disable it by leaving the field empty). Visitors can end their own chat unless that is turned off in Widget Setup.
 * **🎨 Highly Customizable Widget**: Change bubble colors, patterns, sizes, icons, and welcome messages directly from the Admin UI. Dynamic CORS configuration stored in the database.
 * **⭐ Post-Chat Reviews**: Collect visitor feedback and star ratings after a conversation is resolved.
 * **🌎 AI Translation**: Translate messages inline into 20+ languages (English, 中文, 日本語, 한국어, Français, Español, العربية, etc.). Per-message toggle between original and translated text with IndexedDB caching. Available in both the Admin Portal and Admin Floating Widget.

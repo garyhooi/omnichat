@@ -13,7 +13,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { SiteConfigService } from './site-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { AdminIpAllowlistGuard } from '../auth/admin-ip-allowlist.guard';
 
 /** A bad zone makes every Intl formatter throw — reject it at the door. */
@@ -113,6 +113,18 @@ class CreateSiteConfigDto {
   @IsOptional()
   showVisitorWidget?: boolean;
 
+  /** Whether visitors may end (resolve) their own conversation from the widget. */
+  @IsBoolean()
+  @IsOptional()
+  allowVisitorResolve?: boolean;
+
+  /** Minutes of inactivity before auto-resolve; null/omitted = never auto-resolve. */
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Max(1440)
+  autoResolveMinutes?: number | null;
+
   @IsString()
   @IsNotEmpty()
   allowedOrigins: string;
@@ -199,6 +211,18 @@ class UpdateSiteConfigDto {
   @IsBoolean()
   @IsOptional()
   showVisitorWidget?: boolean;
+
+  /** Whether visitors may end (resolve) their own conversation from the widget. */
+  @IsBoolean()
+  @IsOptional()
+  allowVisitorResolve?: boolean;
+
+  /** Minutes of inactivity before auto-resolve; null/omitted = never auto-resolve. */
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Max(1440)
+  autoResolveMinutes?: number | null;
 
   @IsString()
   @IsOptional()
