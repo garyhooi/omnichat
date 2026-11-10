@@ -157,7 +157,8 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (config && !form) {
-      setForm(config)
+      // Visitors may end their own chat by default unless an admin disables it.
+      setForm({ ...config, allowVisitorResolve: config.allowVisitorResolve ?? true })
       // Legacy single-sound continuity: until a distinct agent sound is
       // uploaded, show the configured visitor sound in the agent row too
       // (the agent console falls back to it at runtime). They become fully
@@ -194,7 +195,7 @@ export function SettingsPage() {
   }, [config])
 
   const set = useCallback(
-    (key: keyof SiteConfig, value: string | boolean) => {
+    (key: keyof SiteConfig, value: string | boolean | number | null) => {
       setForm((f) => (f ? { ...f, [key]: value } : f))
       setSaved(false)
     },
@@ -211,8 +212,15 @@ export function SettingsPage() {
       // them here trips the backend's developer-role check and 403s every save for
       // agent/admin users. isActive must not be toggled by widget settings either.
       const { id, createdAt, updatedAt, allowedOrigins, adminAllowedIps, isActive, ...rest } = form as SiteConfig
+      // Empty or invalid minutes mean "never auto-resolve" (sent as an explicit null).
+      const minutesRaw = form.autoResolveMinutes
+      const autoResolveMinutes =
+        typeof minutesRaw === 'number' && Number.isFinite(minutesRaw)
+          ? Math.min(1440, Math.max(1, Math.round(minutesRaw)))
+          : null
       const body = {
         ...rest,
+        autoResolveMinutes,
         websitePosition: `xy:${Math.round(posX)},${Math.round(posY)}`,
         bubbleIcon:
           iconType === 'icon'
@@ -924,6 +932,7 @@ export function SettingsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {(
                 [
+                  ['allowVisitorResolve', 'admin.allowVisitorResolve'],
                   ['isOfflineMode', 'admin.offlineMode'],
                   ['enableReadReceipts', 'admin.enableReadReceipts'],
                   ['showVisitorWidget', 'admin.showVisitorWidget'],
@@ -941,6 +950,28 @@ export function SettingsPage() {
                   <span style={{ fontSize: 13 }}>{t(labelKey)}</span>
                 </label>
               ))}
+              <div>
+                <label className="adm-label" htmlFor="adm-auto-resolve-minutes">
+                  {t('admin.autoResolveMinutes')}
+                </label>
+                <input
+                  id="adm-auto-resolve-minutes"
+                  className="adm-input adm-mono"
+                  style={{ width: 160 }}
+                  type="number"
+                  min={1}
+                  max={1440}
+                  step={1}
+                  value={form.autoResolveMinutes ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    set('autoResolveMinutes', raw === '' ? null : Number.parseInt(raw, 10))
+                  }}
+                />
+                <span className="adm-muted" style={{ fontSize: 11, display: 'block', marginTop: 3 }}>
+                  {t('admin.autoResolveMinutesHint')}
+                </span>
+              </div>
             </div>
           </div>
 

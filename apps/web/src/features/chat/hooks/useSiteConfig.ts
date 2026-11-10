@@ -24,6 +24,10 @@ export interface SiteConfig {
   /** Sound played on the agent console/widget on incoming messages. */
   agentNotificationSoundUrl?: string
   enableReadReceipts?: boolean
+  /** Whether visitors may end their own chat (default true). */
+  allowVisitorResolve?: boolean
+  /** Minutes of inactivity before the chat auto-resolves (null = never). */
+  autoResolveMinutes?: number | null
   isOfflineMode?: boolean
   showVisitorWidget?: boolean
   showAdminWidget?: boolean
