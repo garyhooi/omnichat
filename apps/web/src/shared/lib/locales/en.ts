@@ -11,6 +11,7 @@ export const en: Record<string, string> = {
   'common.edit': 'Edit',
   'common.uiLanguage': 'Interface language',
   'common.online': 'Online',
+  'common.offline': 'Offline',
   'common.connecting': 'Connecting…',
   'common.unknown': 'Unknown',
   'common.mute': 'Mute notifications',

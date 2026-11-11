@@ -299,6 +299,7 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
                 onTabChange={setActiveTab}
                 onSelect={socket.openConversation}
                 timeZone={siteConfig?.displayTimezone || undefined}
+                visitorOnline={socket.visitorOnline}
               />
             ) : (
               <div className="aw-offline">
@@ -313,6 +314,7 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
                 serverUrl={serverUrl}
                 conversationId={openConversationId}
                 conversation={openConversation}
+                isVisitorOnline={socket.visitorOnline[openConversationId] ?? openConversation?.isVisitorOnline}
                 agents={agentList.map((a) => ({ username: a.username, displayName: a.displayName }))}
                 currentUserUsername={currentUser?.username ?? ''}
                 accentColor={accent}

@@ -160,6 +160,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   // Track which conversation each socket is participating in (socketId -> conversationId)
   private socketConversations = new Map<string, string>();
 
+  // Visitor presence: conversationId -> ids of the visitor sockets currently in it.
+  private visitorSockets = new Map<string, Set<string>>();
+
   // Inactivity Timers
   private inactivityWarnings = new Map<string, NodeJS.Timeout>();
   private inactivityResolves = new Map<string, NodeJS.Timeout>();
@@ -250,6 +253,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       clearInterval(this.rateLimitCleanupInterval);
       this.rateLimitCleanupInterval = null;
     }
+    // Clear visitor presence tracking.
+    this.visitorSockets.clear();
+
     // Clear armed inactivity timers and any in-flight schedules.
     for (const conversationId of new Set([
       ...this.inactivityWarnings.keys(),
@@ -465,6 +471,35 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.inactivityResolves.delete(conversationId);
   }
 
+  // VISITOR PRESENCE
+
+  /** True while at least one visitor socket is connected for the conversation. */
+  private isVisitorOnline(conversationId: string): boolean {
+    return (this.visitorSockets.get(conversationId)?.size ?? 0) > 0;
+  }
+
+  /** Register a visitor socket in a conversation; announce the first one. */
+  private trackVisitorPresence(conversationId: string, socketId: string) {
+    const sockets = this.visitorSockets.get(conversationId) ?? new Set<string>();
+    const wasEmpty = sockets.size === 0;
+    sockets.add(socketId);
+    this.visitorSockets.set(conversationId, sockets);
+    if (wasEmpty) {
+      this.server.to('agents').emit('visitor_presence', { conversationId, online: true });
+    }
+  }
+
+  /** Remove a socket from every conversation it was tracked in; announce the last leave. */
+  private untrackVisitorSocket(socketId: string) {
+    for (const [conversationId, sockets] of this.visitorSockets) {
+      if (!sockets.delete(socketId)) continue;
+      if (sockets.size === 0) {
+        this.visitorSockets.delete(conversationId);
+        this.server.to('agents').emit('visitor_presence', { conversationId, online: false });
+      }
+    }
+  }
+
   // CONNECTION LIFECYCLE
 
   /** Handle new socket connections — authenticate agents, mark visitors. */
@@ -546,8 +581,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
             ? await this.securityService.isIpBlacklisted(c.visitorIp)
             : false,
         })));
+        // Presence is snapshot as late as possible (synchronously with the emit), so a
+        // visitor_presence event arriving during the awaited blacklist scan cannot be
+        // clobbered by a stale snapshot.
         client.emit('conversations_list', { 
-          conversations: conversationsWithBlacklist,
+          conversations: conversationsWithBlacklist.map((c) => ({
+            ...c,
+            isVisitorOnline: this.isVisitorOnline(c.id),
+          })),
           currentUser: {
             id: user.id,
             username: user.username,
@@ -684,6 +725,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         `Agent disconnected: ${client.data.user.displayName} (${client.id})`,
       );
     } else {
+      this.untrackVisitorSocket(client.id);
       this.logger.log(
         `Visitor disconnected: ${client.data.visitorId} (${client.id})`,
       );
@@ -808,10 +850,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     // Track socket-conversation mapping for disconnect cleanup
     if (client.data.isVisitor) {
       this.socketConversations.set(client.id, conversation.id);
+      // The socket may have dropped during createConversation; a dead id left in the
+      // presence set would never be removed (its disconnect already fired).
+      if (client.connected) this.trackVisitorPresence(conversation.id, client.id);
     }
 
     // Notify all agents of the new conversation
-    this.server.to('agents').emit('new_conversation', { conversation });
+    this.server.to('agents').emit('new_conversation', {
+      conversation: { ...conversation, isVisitorOnline: this.isVisitorOnline(conversation.id) },
+    });
 
     client.emit('conversation_started', { conversation });
 
@@ -925,6 +972,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const roomName = `conv:${conversationId}`;
     client.join(roomName);
 
+    // Visitor presence: presence is per conversation room and is announced to agents.
+    // Guard on client.connected: the socket can drop during the history read above.
+    if (client.data.isVisitor && client.connected) {
+      this.trackVisitorPresence(conversationId, client.id);
+    }
+
     // If this is an agent joining, also join the agent-specific room for presence
     if (client.data.user) {
       client.join(`agent:${client.data.user.id}`);
@@ -936,6 +989,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       : false;
     client.emit('conversation_history', {
       conversation,
+      isVisitorOnline: this.isVisitorOnline(conversationId),
       isIpBlacklisted,
       hasMoreMessages: conversation.hasMoreMessages,
     });
@@ -1382,8 +1436,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         ? await this.securityService.isIpBlacklisted(c.visitorIp)
         : false,
     })));
+    // Snapshot presence synchronously with the emit (see the connect-time list).
     client.emit('conversations_list', { 
-      conversations: conversationsWithBlacklist,
+      conversations: conversationsWithBlacklist.map((c) => ({
+        ...c,
+        isVisitorOnline: this.isVisitorOnline(c.id),
+      })),
       currentUser: {
         id: client.data.user.id,
         username: client.data.user.username,

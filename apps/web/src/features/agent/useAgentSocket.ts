@@ -71,6 +71,8 @@ export type AgentServerEventListener = (
 export interface AgentSocket {
   connected: boolean
   currentUser: CurrentUser | null
+  /** conversationId -> visitor has a live socket. */
+  visitorOnline: Record<string, boolean>
   /** The conversation whose room this socket has joined. */
   openConversationId: string | null
   openConversation: (id: string) => void
@@ -105,6 +107,8 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   const [connected, setConnected] = useState(false)
   const connectedRef = useRef(false)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  /** Live visitor presence per conversation (seeded by snapshots, then events). */
+  const [visitorOnline, setVisitorOnline] = useState<Record<string, boolean>>({})
   const [openConversationId, setOpenConversationIdState] = useState<string | null>(null)
   const openConversationIdRef = useRef<string | null>(null)
   const optionsRef = useRef(options)
@@ -227,6 +231,14 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
       switch (event) {
         case SERVER_EVENTS.conversationsList: {
           const { conversations, currentUser: cu, truncated } = payload as ServerEventMap['conversations_list']
+          // Merge-seed the live presence map from the authoritative snapshot.
+          setVisitorOnline((prev) => {
+            const next = { ...prev }
+            for (const c of conversations) {
+              if (typeof c.isVisitorOnline === 'boolean') next[c.id] = c.isVisitorOnline
+            }
+            return next
+          })
           setConversations((s) => ({
             ...s,
             conversations: conversations.map((c) => ({
@@ -243,6 +255,10 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
 
         case SERVER_EVENTS.newConversation: {
           const { conversation } = payload as ServerEventMap['new_conversation']
+          const isVisitorOnline = conversation.isVisitorOnline
+          if (typeof isVisitorOnline === 'boolean') {
+            setVisitorOnline((prev) => ({ ...prev, [conversation.id]: isVisitorOnline }))
+          }
           setConversations((s) => {
             if (s.conversations.some((c) => c.id === conversation.id)) return s
             return {
@@ -350,9 +366,16 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
         }
 
         case SERVER_EVENTS.conversationHistory: {
-          const { conversation, isIpBlacklisted, hasMoreMessages } =
-            payload as ServerEventMap['conversation_history']
+          const {
+            conversation,
+            isIpBlacklisted,
+            hasMoreMessages,
+            isVisitorOnline: historyVisitorOnline,
+          } = payload as ServerEventMap['conversation_history']
           const id = conversation.id
+          if (typeof historyVisitorOnline === 'boolean') {
+            setVisitorOnline((prev) => ({ ...prev, [id]: historyVisitorOnline }))
+          }
           setConversationState(id, (s) =>
             applyHistory(s, conversation, isIpBlacklisted, hasMoreMessages ?? false),
           )
@@ -368,6 +391,12 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
               })
             }
           }
+          break
+        }
+
+        case SERVER_EVENTS.visitorPresence: {
+          const { conversationId, online } = payload as ServerEventMap['visitor_presence']
+          setVisitorOnline((prev) => ({ ...prev, [conversationId]: online }))
           break
         }
 
@@ -716,6 +745,7 @@ export function useAgentSocket(options: AgentSocketOptions): AgentSocket {
   return {
     connected,
     currentUser,
+    visitorOnline,
     openConversationId,
     openConversation,
     closeConversation,

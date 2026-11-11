@@ -46,6 +46,8 @@ export interface AgentChatViewProps {
   serverUrl: string
   conversationId: string
   conversation: Conversation | null
+  /** Live visitor presence for this conversation (socket map, then snapshot). */
+  isVisitorOnline?: boolean
   /** Online agents for the transfer dropdown (excluding self). */
   agents: { username: string; displayName: string }[]
   currentUserUsername: string
@@ -65,6 +67,7 @@ export function AgentChatView({
   serverUrl,
   conversationId,
   conversation,
+  isVisitorOnline,
   agents,
   currentUserUsername,
   accentColor,
@@ -392,6 +395,13 @@ export function AgentChatView({
                     : status === 'resolved'
                       ? t('common.statusResolved')
                       : t('common.statusActive')}
+              </span>
+              <span
+                className={`aw-presence ${isVisitorOnline ? 'is-online' : ''}`}
+                title={t(isVisitorOnline ? 'common.online' : 'common.offline')}
+              >
+                <span className="aw-presence-dot" />
+                {isVisitorOnline ? t('common.online') : t('common.offline')}
               </span>
             </div>
             <div className="aw-chat-sub" title={`${meta.visitorEmail || t('agent.noEmail')} · ${conversation?.visitorBrowser || t('agent.unknownBrowser')}`}>

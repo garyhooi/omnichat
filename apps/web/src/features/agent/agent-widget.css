@@ -842,3 +842,34 @@
     transform: rotate(360deg);
   }
 }
+
+/* Visitor online presence — dot in conversation rows and a compact label in
+   the chat header (green = visitor has a live socket right now). */
+.aw-presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex: none;
+  display: inline-block;
+}
+
+.aw-presence-dot.is-online {
+  background: #22c55e;
+}
+
+.aw-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #8a8fa3;
+}
+
+.aw-presence.is-online {
+  color: #16a34a;
+}
+
+.aw-presence.is-online .aw-presence-dot {
+  background: #22c55e;
+}

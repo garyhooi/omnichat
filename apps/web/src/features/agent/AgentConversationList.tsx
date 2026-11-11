@@ -15,6 +15,8 @@ export interface AgentConversationListProps {
   onSelect: (conversationId: string) => void
   /** Display timezone for row times (undefined = viewer's zone). */
   timeZone?: string
+  /** conversationId -> live visitor presence (overrides the row snapshot). */
+  visitorOnline?: Record<string, boolean>
 }
 
 const TABS: { key: AgentTab; labelKey: string }[] = [
@@ -42,6 +44,7 @@ export function AgentConversationList({
   onTabChange,
   onSelect,
   timeZone,
+  visitorOnline,
 }: AgentConversationListProps) {
   const { t } = useTranslation()
   const tabs: { key: AgentTab; label: string }[] = useMemo(
@@ -103,40 +106,49 @@ export function AgentConversationList({
                 : t('agent.noActiveConvs')}
           </div>
         ) : (
-          visible.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`aw-conv-item ${c.isIpBlacklisted ? 'aw-conv-blacklisted' : ''}`}
-              onClick={() => onSelect(c.id)}
-            >
-              <div className="aw-conv-item-top">
-                <span className="aw-conv-name">{visitorLabel(c) || t('agent.visitor')}</span>
-                <span className={`aw-status-chip aw-status-${c.status}`}>
-                  {c.status === 'ai'
-                    ? t('common.statusAi')
-                    : c.status === 'specialist'
-                      ? t('common.statusSpecialist')
-                      : t('common.statusActive')}
-                </span>
-                <span className="aw-conv-time">{timeAgo(c.updatedAt, timeZone)}</span>
-              </div>
-              <div className="aw-conv-item-bottom">
-                <span className="aw-conv-preview">
-                  {c.isIpBlacklisted && (
-                    <ShieldAlert
-                      size={12}
-                      style={{ verticalAlign: '-2px', marginRight: 4, color: '#ef4444' }}
-                    />
+          visible.map((c) => {
+            const online = visitorOnline?.[c.id] ?? c.isVisitorOnline ?? false
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className={`aw-conv-item ${c.isIpBlacklisted ? 'aw-conv-blacklisted' : ''}`}
+                onClick={() => onSelect(c.id)}
+              >
+                <div className="aw-conv-item-top">
+                  <span
+                    className={`aw-presence-dot ${online ? 'is-online' : ''}`}
+                    role="img"
+                    title={t(online ? 'common.online' : 'common.offline')}
+                    aria-label={t(online ? 'common.online' : 'common.offline')}
+                  />
+                  <span className="aw-conv-name">{visitorLabel(c) || t('agent.visitor')}</span>
+                  <span className={`aw-status-chip aw-status-${c.status}`}>
+                    {c.status === 'ai'
+                      ? t('common.statusAi')
+                      : c.status === 'specialist'
+                        ? t('common.statusSpecialist')
+                        : t('common.statusActive')}
+                  </span>
+                  <span className="aw-conv-time">{timeAgo(c.updatedAt, timeZone)}</span>
+                </div>
+                <div className="aw-conv-item-bottom">
+                  <span className="aw-conv-preview">
+                    {c.isIpBlacklisted && (
+                      <ShieldAlert
+                        size={12}
+                        style={{ verticalAlign: '-2px', marginRight: 4, color: '#ef4444' }}
+                      />
+                    )}
+                    {previewOf(c) || t('common.noMessages')}
+                  </span>
+                  {(c.unreadCount ?? 0) > 0 && (
+                    <span className="aw-conv-unread">{Math.min(c.unreadCount ?? 0, 99)}</span>
                   )}
-                  {previewOf(c) || t('common.noMessages')}
-                </span>
-                {(c.unreadCount ?? 0) > 0 && (
-                  <span className="aw-conv-unread">{Math.min(c.unreadCount ?? 0, 99)}</span>
-                )}
-              </div>
-            </button>
-          ))
+                </div>
+              </button>
+            )
+          })
         )}
       </div>
     </>

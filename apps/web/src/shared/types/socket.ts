@@ -87,6 +87,14 @@ export interface ConversationHistoryPayload {
   isIpBlacklisted: boolean
   /** Older messages exist and can be paged in with load_messages. */
   hasMoreMessages?: boolean
+  /** Agent-side: is the visitor currently connected? */
+  isVisitorOnline?: boolean
+}
+
+/** Sent to agents when a visitor's first socket joins (online) or last leaves (offline). */
+export interface VisitorPresencePayload {
+  conversationId: string
+  online: boolean
 }
 
 export interface LoadMessagesPayload {
@@ -211,6 +219,7 @@ export const SERVER_EVENTS = {
   reviewSubmitted: 'review_submitted',
   newConversation: 'new_conversation',
   agentPresence: 'agent_presence',
+  visitorPresence: 'visitor_presence',
   aiHandoff: 'ai_handoff',
   ipBlacklisted: 'ip_blacklisted',
   inactivityWarning: 'inactivity_warning',
@@ -235,6 +244,7 @@ export type ServerEventMap = {
   review_submitted: ReviewSubmittedPayload
   new_conversation: { conversation: Conversation }
   agent_presence: AgentPresencePayload
+  visitor_presence: VisitorPresencePayload
   ai_handoff: AiHandoffPayload
   ip_blacklisted: IpBlacklistedPayload
   inactivity_warning: InactivityWarningPayload
