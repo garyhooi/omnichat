@@ -78,10 +78,11 @@ vi.mock('../../shared/lib/storage', () => ({
 }))
 
 import { ACCESS_TOKEN_KEY } from '../../shared/lib/storage'
-import { useAgentSocket } from './useAgentSocket'
+import { useAgentSocket, type AgentSocket } from './useAgentSocket'
 
-function Harness() {
-  useAgentSocket({ serverUrl: 'http://api.test' })
+function Harness({ onSocket }: { onSocket?: (socket: AgentSocket) => void } = {}) {
+  const socket = useAgentSocket({ serverUrl: 'http://api.test' })
+  onSocket?.(socket)
   return null
 }
 
@@ -105,12 +106,12 @@ afterEach(() => {
   container.remove()
 })
 
-async function mount() {
+async function mount(onSocket?: (socket: AgentSocket) => void) {
   await act(async () => {
     root = createRoot(container)
     root.render(
       <QueryClientProvider client={queryClient}>
-        <Harness />
+        <Harness onSocket={onSocket} />
       </QueryClientProvider>,
     )
   })
@@ -234,5 +235,44 @@ describe('useAgentSocket — credential appearing after the socket exists', () =
     })
 
     expect(socket.connect).not.toHaveBeenCalled()
+  })
+})
+
+describe('useAgentSocket — visitor presence', () => {
+  it('seeds the map from conversations_list and applies visitor_presence events', async () => {
+    let latest: AgentSocket | null = null
+    await mount((socket) => {
+      latest = socket
+    })
+    const socket = mocks.sockets[0]
+
+    await act(async () => {
+      socket.trigger('conversations_list', {
+        conversations: [
+          { id: 'c-online', isVisitorOnline: true },
+          { id: 'c-offline', isVisitorOnline: false },
+          // No flag = no presence information: must not enter the map.
+          { id: 'c-unknown' },
+        ],
+        currentUser: { id: 'u-1', username: 'agent', displayName: 'Agent', role: 'agent' },
+      })
+    })
+
+    expect(latest!.visitorOnline).toEqual({ 'c-online': true, 'c-offline': false })
+
+    // A live event overrides the initial snapshot.
+    await act(async () => {
+      socket.trigger('visitor_presence', { conversationId: 'c-online', online: false })
+    })
+    expect(latest!.visitorOnline).toEqual({ 'c-online': false, 'c-offline': false })
+
+    await act(async () => {
+      socket.trigger('visitor_presence', { conversationId: 'c-unknown', online: true })
+    })
+    expect(latest!.visitorOnline).toEqual({
+      'c-online': false,
+      'c-offline': false,
+      'c-unknown': true,
+    })
   })
 })

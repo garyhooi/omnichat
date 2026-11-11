@@ -273,59 +273,76 @@ export function ConversationsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((c) => (
-                    <tr
-                      key={c.id}
-                      className={`clickable ${c.id === openId ? 'adm-row-active' : ''}`}
-                      onClick={() => handleOpen(c.id)}
-                    >
-                      <td>
-                        <strong>{visitorLabel(c) || t('agent.visitor')}</strong>
-                        <div className="adm-muted" style={{ fontSize: 12 }}>
-                          {visitorEmail(c) ?? t('agent.noEmail')}
-                        </div>
-                      </td>
-                      <td className="adm-mono">#{formatTicketId(c.id)}</td>
-                      <td style={{ maxWidth: 260 }}>
-                        <span className="adm-muted">
-                          {c.isIpBlacklisted && (
-                            <ShieldAlert size={12} style={{ verticalAlign: '-2px', marginRight: 4, color: '#ef4444' }} />
-                          )}
-                          {truncate(c.messages?.[0]?.content || t('common.noMessages'), 60)}
-                        </span>
-                        {c.agentRemarks && (
-                          <div
-                            className="adm-muted"
-                            style={{ fontSize: 11, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--adm-accent)' }}
-                            title={c.agentRemarks}
-                          >
-                            📝 {c.agentRemarks}
+                  filtered.map((c) => {
+                    const online = socket.visitorOnline[c.id] ?? c.isVisitorOnline ?? false
+                    return (
+                      <tr
+                        key={c.id}
+                        className={`clickable ${c.id === openId ? 'adm-row-active' : ''}`}
+                        onClick={() => handleOpen(c.id)}
+                      >
+                        <td>
+                          <span
+                            role="img"
+                            title={t(online ? 'common.online' : 'common.offline')}
+                            aria-label={t(online ? 'common.online' : 'common.offline')}
+                            style={{
+                              display: 'inline-block',
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: online ? '#22c55e' : '#cbd5e1',
+                              marginRight: 6,
+                              verticalAlign: 'middle',
+                            }}
+                          />
+                          <strong>{visitorLabel(c) || t('agent.visitor')}</strong>
+                          <div className="adm-muted" style={{ fontSize: 12 }}>
+                            {visitorEmail(c) ?? t('agent.noEmail')}
                           </div>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`adm-badge adm-badge-${c.status}`}>
-                          {c.status === 'ai'
-                            ? t('common.statusAi')
-                            : c.status === 'active'
-                              ? t('common.statusActive')
-                              : c.status === 'specialist'
-                                ? t('common.statusSpecialist')
-                                : t('common.statusResolved')}
-                        </span>
-                      </td>
-                      {/* assignedUsername is the visitor's own account username
-                          (verified external JWT / details field), never an agent. */}
-                      <td className="adm-muted">{c.agent?.displayName || c.specialistUsername || '—'}</td>
-                      <td className="adm-muted">{formatTime(c.createdAt, timeZone)}</td>
-                      <td className="adm-muted">{timeAgo(c.updatedAt, timeZone)}</td>
-                      <td>
-                        {(c.unreadCount ?? 0) > 0 && (
-                          <span className="adm-badge adm-badge-danger">{c.unreadCount}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="adm-mono">#{formatTicketId(c.id)}</td>
+                        <td style={{ maxWidth: 260 }}>
+                          <span className="adm-muted">
+                            {c.isIpBlacklisted && (
+                              <ShieldAlert size={12} style={{ verticalAlign: '-2px', marginRight: 4, color: '#ef4444' }} />
+                            )}
+                            {truncate(c.messages?.[0]?.content || t('common.noMessages'), 60)}
+                          </span>
+                          {c.agentRemarks && (
+                            <div
+                              className="adm-muted"
+                              style={{ fontSize: 11, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--adm-accent)' }}
+                              title={c.agentRemarks}
+                            >
+                              📝 {c.agentRemarks}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`adm-badge adm-badge-${c.status}`}>
+                            {c.status === 'ai'
+                              ? t('common.statusAi')
+                              : c.status === 'active'
+                                ? t('common.statusActive')
+                                : c.status === 'specialist'
+                                  ? t('common.statusSpecialist')
+                                  : t('common.statusResolved')}
+                          </span>
+                        </td>
+                        {/* assignedUsername is the visitor's own account username
+                            (verified external JWT / details field), never an agent. */}
+                        <td className="adm-muted">{c.agent?.displayName || c.specialistUsername || '—'}</td>
+                        <td className="adm-muted">{formatTime(c.createdAt, timeZone)}</td>
+                        <td className="adm-muted">{timeAgo(c.updatedAt, timeZone)}</td>
+                        <td>
+                          {(c.unreadCount ?? 0) > 0 && (
+                            <span className="adm-badge adm-badge-danger">{c.unreadCount}</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -349,6 +366,7 @@ export function ConversationsPage() {
                 serverUrl={serverUrl}
                 conversationId={openConversation.id}
                 conversation={openConversation}
+                isVisitorOnline={socket.visitorOnline[openConversation.id] ?? openConversation.isVisitorOnline}
                 agents={agents.map((a) => ({ username: a.username, displayName: a.displayName }))}
                 currentUserUsername={socket.currentUser?.username ?? ''}
                 accentColor={accentColor}

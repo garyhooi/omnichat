@@ -71,6 +71,8 @@ export interface Conversation {
   unreadCount?: number
   /** Added by the gateway for list/history payloads. */
   isIpBlacklisted?: boolean
+  /** Live visitor presence for this conversation (decorated by the gateway). */
+  isVisitorOnline?: boolean
 }
 
 export interface ConversationMetadata {
