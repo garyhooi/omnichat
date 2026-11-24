@@ -42,6 +42,15 @@ export function ConversationsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // The shell can open a conversation from outside this page's own click
+  // handlers (clicking a desktop notification). Adopt the socket's choice so
+  // the row/drawer follow, instead of only the shell's alert state.
+  useEffect(() => {
+    if (socket.openConversationId && socket.openConversationId !== openId) {
+      setOpenId(socket.openConversationId)
+    }
+  }, [socket.openConversationId, openId])
+
   // The shell-level notification sound + read receipts key off the socket's
   // open conversation. Leaving this page must release it, otherwise alerts for
   // that conversation would stay suppressed while the operator is elsewhere and

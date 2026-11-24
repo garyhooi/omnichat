@@ -2,56 +2,30 @@
 // Notification sound — plays the site-configured audio file, falling back to
 // a synthesized two-tone "ding" (WebAudio) when none is configured or the
 // audio file fails. Muted state is persisted in localStorage (per entry point).
+//
+// The audio plumbing itself lives in shared/lib/notificationSound: one shared
+// AudioContext unlocked by the first user gesture on the page, so playback
+// keeps working while the operator is looking at another tab — see the header
+// there for why a gesture is unavoidable and what is done around it.
 // =============================================================================
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useLocalStorageBoolean } from '../../../shared/hooks/useLocalStorage'
+import { playNotificationSound, primeNotificationSound } from '../../../shared/lib/notificationSound'
 
 export function useSound(serverUrl: string, mutedKey: string, soundUrl?: string | null) {
   const [muted, setMuted] = useLocalStorageBoolean(mutedKey, false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Unlock audio at the first click anywhere on the page, not at the first
+  // notification — the earlier that happens, the fewer alerts are missed.
+  useEffect(() => {
+    primeNotificationSound()
+  }, [])
 
   const play = useCallback(() => {
     if (muted) return
-    if (soundUrl) {
-      const base = serverUrl.replace(/\/$/, '')
-      const src = soundUrl.startsWith('http')
-        ? soundUrl
-        : base + soundUrl
-      try {
-        if (!audioRef.current) audioRef.current = new Audio()
-        const player = audioRef.current
-        if (player.src !== src) player.src = src
-        player.currentTime = 0
-        void player.play().catch(() => playFallback())
-        return
-      } catch {
-        /* fall through to synthesized beep */
-      }
-    }
-    playFallback()
+    playNotificationSound(serverUrl, soundUrl)
   }, [muted, soundUrl, serverUrl])
 
   return { muted, toggleMuted: () => setMuted(!muted), playSound: play }
-}
-
-/** Short descending sine beep — no asset required, works in sandboxed frames. */
-function playFallback() {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new Ctx()
-    const gain = ctx.createGain()
-    const osc = ctx.createOscillator()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(880, ctx.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.12)
-    gain.gain.setValueAtTime(0.35, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.12)
-  } catch {
-    /* audio unavailable — silent */
-  }
 }

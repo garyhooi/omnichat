@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { shouldPlayForConversation, shouldPlayForMessage } from './useAgentIncomingSound'
+import type { Conversation, Message } from '../../shared/types/models'
+import { conversationTag } from '../../shared/lib/desktopAlerts'
+import {
+  describeConversationAlert,
+  describeMessageAlert,
+  plainPreview,
+  shouldPlayForConversation,
+  shouldPlayForMessage,
+} from './useAgentIncomingSound'
 
 const ME = 'user-1'
 
@@ -50,5 +58,89 @@ describe('agent incoming notification sound — new_conversation', () => {
   it('stays silent for AI-owned conversations and the open one', () => {
     expect(shouldPlayForConversation('conv-new', 'ai', null)).toBe(false)
     expect(shouldPlayForConversation('conv-new', 'active', 'conv-new')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Desktop banner content
+// ---------------------------------------------------------------------------
+
+const LABELS = { visitor: 'Visitor', image: '📷 Image', newConversation: 'New conversation' }
+
+function conversation(over: Partial<Conversation> = {}): Conversation {
+  return {
+    id: 'conv-a',
+    visitorId: 'v1',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  }
+}
+
+function message(over: Partial<Message> = {}): Message {
+  return {
+    id: 'm1',
+    conversationId: 'conv-a',
+    senderType: 'visitor',
+    messageType: 'text',
+    content: 'hello there',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  }
+}
+
+describe('desktop banner — plainPreview', () => {
+  it('flattens markdown into one line', () => {
+    expect(plainPreview('**Hi** there\n\nsee [the docs](https://example.com)')).toBe('Hi there see the docs')
+    expect(plainPreview('- # Order **10**')).toBe('Order 10')
+  })
+
+  it('truncates with an ellipsis instead of dumping a wall of text', () => {
+    const out = plainPreview('a'.repeat(200), 20)
+    expect(out).toHaveLength(20)
+    expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('tolerates an empty body', () => {
+    expect(plainPreview(null)).toBe('')
+    expect(plainPreview('  ')).toBe('')
+  })
+})
+
+describe('desktop banner — new_message', () => {
+  it('names the visitor from the conversation metadata', () => {
+    const alert = describeMessageAlert(message(), conversation({ metadata: JSON.stringify({ visitorName: 'Aiman' }) }), LABELS)
+    expect(alert.title).toBe('Aiman')
+    expect(alert.body).toBe('hello there')
+    expect(alert.tag).toBe(conversationTag('conv-a'))
+  })
+
+  it('prefers the emitting agent name over the visitor, for peer replies', () => {
+    const alert = describeMessageAlert(
+      message({ senderType: 'agent', senderId: 'user-2', senderDisplayName: 'Bala' }),
+      conversation({ metadata: JSON.stringify({ visitorName: 'Aiman' }) }),
+      LABELS,
+    )
+    expect(alert.title).toBe('Bala')
+  })
+
+  it('falls back to a generic visitor label when no name was given', () => {
+    expect(describeMessageAlert(message(), conversation(), LABELS).title).toBe('Visitor')
+    expect(describeMessageAlert(message(), undefined, LABELS).title).toBe('Visitor')
+  })
+
+  it('labels image messages instead of showing an empty body', () => {
+    const alert = describeMessageAlert(message({ messageType: 'image', content: null }), conversation(), LABELS)
+    expect(alert.body).toBe('📷 Image')
+  })
+})
+
+describe('desktop banner — new_conversation', () => {
+  it('announces the visitor and the new-conversation notice', () => {
+    const alert = describeConversationAlert(conversation({ id: 'conv-new', metadata: JSON.stringify({ visitorName: 'Aiman' }) }), LABELS)
+    expect(alert.title).toBe('Aiman')
+    expect(alert.body).toBe('New conversation')
+    expect(alert.tag).toBe(conversationTag('conv-new'))
   })
 })

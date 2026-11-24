@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { I18nScope } from '../../shared/components/I18nScope'
 import { useApplyUiLang } from '../../shared/hooks/useUiLang'
-import { Headset, X } from 'lucide-react'
+import { Headset, Monitor, X } from 'lucide-react'
 import { BubbleSvgIcon, DEFAULT_BUBBLE_ICON, parseSvgIcon } from '../../shared/lib/bubbleIcons'
 import {
   useAgentSocket,
@@ -95,21 +95,6 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
   const conversations = convsState?.conversations ?? []
   const currentUser = socket.currentUser ?? convsState?.currentUser ?? null
 
-  // Incoming-message notification sound — beeps while the panel is closed or
-  // the operator is viewing a different conversation (see hook for the rules).
-  // When an admin portal is embedded on the same page it already alerts, so the
-  // widget stays silent there and the operator hears a single ding.
-  const { muted, toggleMuted } = useAgentIncomingSound({
-    serverUrl,
-    mutedKey: AGENT_WIDGET_MUTED_KEY,
-    soundUrl: siteConfig?.agentNotificationSoundUrl || siteConfig?.visitorNotificationSoundUrl || null,
-    socket,
-    conversations,
-    openConversationId: socket.openConversationId,
-    shouldAlert: () =>
-      typeof document === 'undefined' || !document.querySelector('omnichat-admin-portal'),
-  })
-
   const { data: agents } = useQuery<AgentPresenceEntry[]>({
     queryKey: agentPresenceQueryKey(serverUrl),
     staleTime: Infinity,
@@ -128,6 +113,31 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
     openRef.current = next
     setOpen(next)
   }, [])
+
+  // Incoming-message notifications — sound plus, while the operator is away
+  // from the tab, a browser-native banner (see the hook for the rules). When an
+  // admin portal is embedded on the same page it already alerts, so the widget
+  // stays quiet there and the operator hears a single ding.
+  const { muted, toggleMuted, desktop } = useAgentIncomingSound({
+    serverUrl,
+    mutedKey: AGENT_WIDGET_MUTED_KEY,
+    soundUrl: siteConfig?.agentNotificationSoundUrl || siteConfig?.visitorNotificationSoundUrl || null,
+    socket,
+    conversations,
+    openConversationId: socket.openConversationId,
+    shouldAlert: () =>
+      typeof document === 'undefined' || !document.querySelector('omnichat-admin-portal'),
+    onOpenConversation: (conversationId) => {
+      setOpenState(true)
+      socket.openConversation(conversationId)
+    },
+  })
+
+  const desktopAlertTitle = desktop.blocked
+    ? t('common.desktopAlertsBlocked')
+    : desktop.enabled
+      ? t('common.desktopAlertsOff')
+      : t('common.desktopAlertsOn')
 
   // Total unread badge over active/ai/specialist conversations.
   const unreadTotal = useMemo(
@@ -271,6 +281,18 @@ export function AgentWidgetApp({ serverUrl, accentColor, lang }: AgentWidgetAppP
             <span style={{ fontSize: 11, opacity: 0.7 }}>
               {socket.connected ? `● ${t('common.online')}` : `… ${t('common.connecting')}`}
             </span>
+            {desktop.supported && (
+              <button
+                type="button"
+                className="aw-icon-btn"
+                title={desktopAlertTitle}
+                aria-label={desktopAlertTitle}
+                style={desktop.enabled ? undefined : { opacity: 0.45 }}
+                onClick={() => void desktop.toggle()}
+              >
+                <Monitor size={16} />
+              </button>
+            )}
             <button
               type="button"
               className="aw-icon-btn"

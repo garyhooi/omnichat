@@ -15,6 +15,7 @@ import {
   Headset,
   LogOut,
   MessageSquare,
+  Monitor,
   Settings,
   Users,
 } from 'lucide-react'
@@ -77,14 +78,24 @@ function Shell({ lang }: { lang?: string }) {
   // Conversations page) so alerts keep ringing while the operator is on any
   // page (Settings, Users, Logs…). Mute toggle lives in the sidebar footer
   // (persisted under the legacy omnichat_admin_muted key).
-  const { muted, toggleMuted } = useAgentIncomingSound({
+  const { muted, toggleMuted, desktop } = useAgentIncomingSound({
     serverUrl,
     mutedKey: ADMIN_MUTED_KEY,
     soundUrl: siteConfig?.agentNotificationSoundUrl || siteConfig?.visitorNotificationSoundUrl || null,
     socket,
     conversations,
     openConversationId: socket.openConversationId,
+    onOpenConversation: (conversationId) => {
+      setPage('conversations')
+      socket.openConversation(conversationId)
+    },
   })
+
+  const desktopAlertTitle = desktop.blocked
+    ? t('common.desktopAlertsBlocked')
+    : desktop.enabled
+      ? t('common.desktopAlertsOff')
+      : t('common.desktopAlertsOn')
 
   const user = currentUser!
   const totalUnread = useMemo(
@@ -156,6 +167,18 @@ function Shell({ lang }: { lang?: string }) {
               <strong>{user.displayName || user.username}</strong>
               <span>{user.role}</span>
             </div>
+          )}
+          {desktop.supported && (
+            <button
+              type="button"
+              className="adm-btn adm-btn-sm"
+              style={{ background: 'none', border: 'none', color: '#9ca3af', opacity: desktop.enabled ? 1 : 0.45 }}
+              onClick={() => void desktop.toggle()}
+              title={desktopAlertTitle}
+              aria-label={desktopAlertTitle}
+            >
+              <Monitor size={16} />
+            </button>
           )}
           <button
             type="button"
